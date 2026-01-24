@@ -49,7 +49,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     // Input field
     let input_text = format!("{}_", app.input_buffer);
     let input = Paragraph::new(input_text)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(Color::Gray))
         .block(
             Block::default()
                 .borders(Borders::ALL)

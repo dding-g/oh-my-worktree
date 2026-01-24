@@ -103,7 +103,7 @@ impl App {
                 main_view::render(frame, self);
                 confirm_modal::render(frame, self);
             }
-            AppState::ConfigModal => {
+            AppState::ConfigModal { .. } => {
                 main_view::render(frame, self);
                 config_modal::render(frame, self);
             }
@@ -131,7 +131,9 @@ impl App {
                         AppState::ConfirmDelete { delete_branch } => {
                             self.handle_confirm_delete_input(key.code, delete_branch)
                         }
-                        AppState::ConfigModal => self.handle_config_modal_input(key.code),
+                        AppState::ConfigModal { selected_index, editing } => {
+                            self.handle_config_modal_input(key.code, selected_index, editing)
+                        }
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
                         AppState::Fetching | AppState::Adding | AppState::Deleting => {
                             // Ignore input during operations
@@ -179,7 +181,10 @@ impl App {
             KeyCode::Char('f') => self.fetch_all(),
             KeyCode::Char('r') => self.refresh_worktrees(),
             KeyCode::Char('c') => {
-                self.state = AppState::ConfigModal;
+                self.state = AppState::ConfigModal {
+                    selected_index: 0,
+                    editing: false,
+                };
             }
             KeyCode::Char('?') => {
                 self.state = AppState::HelpModal;
@@ -225,12 +230,164 @@ impl App {
         }
     }
 
-    fn handle_config_modal_input(&mut self, code: KeyCode) {
-        match code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.state = AppState::List;
+    fn handle_config_modal_input(&mut self, code: KeyCode, selected: usize, editing: bool) {
+        use crate::ui::config_modal::CONFIG_ITEM_COUNT;
+
+        if editing {
+            match code {
+                KeyCode::Esc => {
+                    // Cancel editing, restore to navigation mode
+                    self.input_buffer.clear();
+                    self.state = AppState::ConfigModal {
+                        selected_index: selected,
+                        editing: false,
+                    };
+                }
+                KeyCode::Enter => {
+                    // Save the edited value
+                    self.apply_config_edit(selected);
+                    self.input_buffer.clear();
+                    self.state = AppState::ConfigModal {
+                        selected_index: selected,
+                        editing: false,
+                    };
+                }
+                KeyCode::Char(c) => {
+                    self.input_buffer.push(c);
+                }
+                KeyCode::Backspace => {
+                    self.input_buffer.pop();
+                }
+                _ => {}
+            }
+        } else {
+            match code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.state = AppState::List;
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    let new_index = if selected > 0 { selected - 1 } else { 0 };
+                    self.state = AppState::ConfigModal {
+                        selected_index: new_index,
+                        editing: false,
+                    };
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    let new_index = if selected < CONFIG_ITEM_COUNT - 1 {
+                        selected + 1
+                    } else {
+                        CONFIG_ITEM_COUNT - 1
+                    };
+                    self.state = AppState::ConfigModal {
+                        selected_index: new_index,
+                        editing: false,
+                    };
+                }
+                KeyCode::Enter => {
+                    if selected == 3 {
+                        // post_add_script - open with $EDITOR
+                        self.open_post_add_script_editor();
+                    } else {
+                        // Enter inline editing mode
+                        self.input_buffer = self.get_config_value_for_editing(selected);
+                        self.state = AppState::ConfigModal {
+                            selected_index: selected,
+                            editing: true,
+                        };
+                    }
+                }
+                KeyCode::Char('s') => {
+                    // Save config to file
+                    self.save_config();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn get_config_value_for_editing(&self, index: usize) -> String {
+        match index {
+            0 => self.config.editor.clone().unwrap_or_default(),
+            1 => self.config.terminal.clone().unwrap_or_default(),
+            2 => self.config.copy_files.join(", "),
+            _ => String::new(),
+        }
+    }
+
+    fn apply_config_edit(&mut self, index: usize) {
+        let value = self.input_buffer.trim().to_string();
+        match index {
+            0 => {
+                // editor
+                self.config.editor = if value.is_empty() { None } else { Some(value) };
+            }
+            1 => {
+                // terminal
+                self.config.terminal = if value.is_empty() { None } else { Some(value) };
+            }
+            2 => {
+                // copy_files
+                self.config.copy_files = value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             _ => {}
+        }
+        self.message = Some(AppMessage::info("Setting updated (press 's' to save to file)"));
+    }
+
+    fn save_config(&mut self) {
+        match self.config.save() {
+            Ok(()) => {
+                self.message = Some(AppMessage::info("Config saved"));
+            }
+            Err(e) => {
+                self.message = Some(AppMessage::error(format!("Failed to save config: {}", e)));
+            }
+        }
+    }
+
+    fn open_post_add_script_editor(&mut self) {
+        let script_path = Config::post_add_script_path(&self.bare_repo_path);
+        let editor = self.config.get_editor();
+
+        // Create .owt directory and script file if they don't exist
+        if let Some(parent) = script_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if !script_path.exists() {
+            let default_content = "#!/bin/bash\n# Post-add script: runs after creating a new worktree\n# Working directory is the new worktree path\n\n";
+            let _ = fs::write(&script_path, default_content);
+        }
+
+        // Restore terminal before opening editor
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen
+        );
+
+        let status = Command::new(&editor).arg(&script_path).status();
+
+        // Restore terminal after editor closes
+        let _ = crossterm::terminal::enable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::EnterAlternateScreen
+        );
+
+        match status {
+            Ok(s) if s.success() => {
+                self.message = Some(AppMessage::info("Script editor closed"));
+            }
+            Ok(_) => {
+                self.message = Some(AppMessage::error("Editor exited with error"));
+            }
+            Err(e) => {
+                self.message = Some(AppMessage::error(format!("Failed to open editor: {}", e)));
+            }
         }
     }
 

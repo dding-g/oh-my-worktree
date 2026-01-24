@@ -8,9 +8,17 @@ use ratatui::{
 
 use crate::app::App;
 use crate::config::Config;
+use crate::types::AppState;
+
+pub const CONFIG_ITEM_COUNT: usize = 4;
 
 pub fn render(frame: &mut Frame, app: &App) {
-    let area = centered_rect(70, 50, frame.area());
+    let (selected_index, editing) = match app.state {
+        AppState::ConfigModal { selected_index, editing } => (selected_index, editing),
+        _ => (0, false),
+    };
+
+    let area = centered_rect(60, 60, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
@@ -55,59 +63,114 @@ pub fn render(frame: &mut Frame, app: &App) {
 
     // Settings header
     let settings_header = Paragraph::new(Line::from(vec![Span::styled(
-        "Current Settings:",
+        "Settings:",
         Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
     )]));
     frame.render_widget(settings_header, chunks[4]);
 
-    // Editor
-    let editor_value = app.config.editor.as_deref().unwrap_or("(not set, using $EDITOR or vim)");
-    let editor = Paragraph::new(Line::from(vec![
-        Span::styled("  editor: ", Style::default().fg(Color::Cyan)),
-        Span::styled(editor_value, Style::default().fg(Color::White)),
-    ]));
-    frame.render_widget(editor, chunks[5]);
+    // Render each config item
+    render_config_item(frame, chunks[5], "editor", &get_editor_display(app, editing), selected_index == 0, editing && selected_index == 0, &app.input_buffer);
+    render_config_item(frame, chunks[6], "terminal", &get_terminal_display(app, editing), selected_index == 1, editing && selected_index == 1, &app.input_buffer);
+    render_config_item(frame, chunks[7], "copy_files", &get_copy_files_display(app, editing), selected_index == 2, editing && selected_index == 2, &app.input_buffer);
+    render_config_item(frame, chunks[8], "post_add_script", &get_script_display(app), selected_index == 3, false, &app.input_buffer);
 
-    // Terminal
-    let terminal_value = app.config.terminal.as_deref().unwrap_or("(not set, using $TERMINAL or default)");
-    let terminal = Paragraph::new(Line::from(vec![
-        Span::styled("  terminal: ", Style::default().fg(Color::Cyan)),
-        Span::styled(terminal_value, Style::default().fg(Color::White)),
-    ]));
-    frame.render_widget(terminal, chunks[6]);
+    // Help text
+    let help_text = if editing {
+        vec![
+            Span::styled("Enter", Style::default().fg(Color::Cyan)),
+            Span::raw(" save  "),
+            Span::styled("Esc", Style::default().fg(Color::Cyan)),
+            Span::raw(" cancel"),
+        ]
+    } else {
+        vec![
+            Span::styled("j/k", Style::default().fg(Color::Cyan)),
+            Span::raw(" nav  "),
+            Span::styled("Enter", Style::default().fg(Color::Cyan)),
+            Span::raw(" edit  "),
+            Span::styled("s", Style::default().fg(Color::Cyan)),
+            Span::raw(" save  "),
+            Span::styled("Esc", Style::default().fg(Color::Cyan)),
+            Span::raw(" close"),
+        ]
+    };
+    let help = Paragraph::new(Line::from(help_text))
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(help, chunks[10]);
+}
 
-    // Copy files
-    let copy_files_value = if app.config.copy_files.is_empty() {
+fn render_config_item(
+    frame: &mut Frame,
+    area: Rect,
+    label: &str,
+    value: &str,
+    is_selected: bool,
+    is_editing: bool,
+    input_buffer: &str,
+) {
+    let cursor = if is_selected { "> " } else { "  " };
+    let label_style = if is_selected {
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Cyan)
+    };
+
+    let spans = if is_editing {
+        // Show input buffer with cursor indicator
+        let display_value = format!("[{}█]", input_buffer);
+        vec![
+            Span::styled(cursor, label_style),
+            Span::styled(format!("{}: ", label), label_style),
+            Span::styled(display_value, Style::default().fg(Color::Yellow)),
+        ]
+    } else if label == "post_add_script" && is_selected {
+        // Special hint for post_add_script
+        vec![
+            Span::styled(cursor, label_style),
+            Span::styled(format!("{}: ", label), label_style),
+            Span::styled(value, Style::default().fg(Color::White)),
+            Span::styled(" (Enter to edit with $EDITOR)", Style::default().fg(Color::DarkGray)),
+        ]
+    } else {
+        let value_style = if is_selected {
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        vec![
+            Span::styled(cursor, label_style),
+            Span::styled(format!("{}: ", label), label_style),
+            Span::styled(value, value_style),
+        ]
+    };
+
+    let line = Paragraph::new(Line::from(spans));
+    frame.render_widget(line, area);
+}
+
+fn get_editor_display(app: &App, _editing: bool) -> String {
+    app.config.editor.as_deref().unwrap_or("(not set)").to_string()
+}
+
+fn get_terminal_display(app: &App, _editing: bool) -> String {
+    app.config.terminal.as_deref().unwrap_or("(not set)").to_string()
+}
+
+fn get_copy_files_display(app: &App, _editing: bool) -> String {
+    if app.config.copy_files.is_empty() {
         "(none)".to_string()
     } else {
         app.config.copy_files.join(", ")
-    };
-    let copy_files = Paragraph::new(Line::from(vec![
-        Span::styled("  copy_files: ", Style::default().fg(Color::Cyan)),
-        Span::styled(copy_files_value, Style::default().fg(Color::White)),
-    ]));
-    frame.render_widget(copy_files, chunks[7]);
+    }
+}
 
-    // Post-add script
+fn get_script_display(app: &App) -> String {
     let script_path = Config::post_add_script_path(&app.bare_repo_path);
-    let script_status = if script_path.exists() {
+    if script_path.exists() {
         format!("{}", script_path.display())
     } else {
         "(not found)".to_string()
-    };
-    let post_add = Paragraph::new(Line::from(vec![
-        Span::styled("  post_add_script: ", Style::default().fg(Color::Cyan)),
-        Span::styled(script_status, Style::default().fg(Color::White)),
-    ]));
-    frame.render_widget(post_add, chunks[8]);
-
-    // Help text
-    let help = Paragraph::new(Line::from(vec![
-        Span::styled("Esc", Style::default().fg(Color::Cyan)),
-        Span::raw(" close"),
-    ]))
-    .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(help, chunks[10]);
+    }
 }
 
 fn get_config_path() -> String {

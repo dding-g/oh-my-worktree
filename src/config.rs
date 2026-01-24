@@ -22,9 +22,41 @@ impl Config {
         Self::parse(&content)
     }
 
-    fn config_path() -> PathBuf {
+    pub fn config_path() -> PathBuf {
         let config_dir = dirs_config_dir().join("owt");
         config_dir.join("config.toml")
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let config_path = Self::config_path();
+        let config_dir = config_path.parent().unwrap();
+
+        if !config_dir.exists() {
+            fs::create_dir_all(config_dir)?;
+        }
+
+        let mut content = String::new();
+
+        if let Some(ref editor) = self.editor {
+            content.push_str(&format!("editor = \"{}\"\n", editor));
+        }
+        if let Some(ref terminal) = self.terminal {
+            content.push_str(&format!("terminal = \"{}\"\n", terminal));
+        }
+        if !self.copy_files.is_empty() {
+            let files = self.copy_files
+                .iter()
+                .map(|f| format!("\"{}\"", f))
+                .collect::<Vec<_>>()
+                .join(", ");
+            content.push_str(&format!("copy_files = [{}]\n", files));
+        }
+        if let Some(ref script) = self.post_add_script {
+            content.push_str(&format!("post_add_script = \"{}\"\n", script));
+        }
+
+        fs::write(&config_path, content)?;
+        Ok(())
     }
 
     fn parse(content: &str) -> Result<Self> {
@@ -137,5 +169,14 @@ editor = vim
         let config = Config::parse(content).unwrap();
         assert_eq!(config.editor, Some("vim".to_string()));
         assert!(config.terminal.is_none());
+    }
+
+    #[test]
+    fn test_parse_copy_files() {
+        let content = r#"
+copy_files = [".env", ".envrc", "config.json"]
+"#;
+        let config = Config::parse(content).unwrap();
+        assert_eq!(config.copy_files, vec![".env", ".envrc", "config.json"]);
     }
 }

@@ -62,7 +62,10 @@ pub enum AppState {
     List,
     AddModal,
     ConfirmDelete { delete_branch: bool },
-    ConfigModal,
+    ConfigModal {
+        selected_index: usize,  // 0-3 (editor, terminal, copy_files, post_add_script)
+        editing: bool,          // inline editing mode
+    },
     HelpModal,
     Fetching,
     Adding,
