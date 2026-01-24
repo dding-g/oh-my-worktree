@@ -1,0 +1,27 @@
+{
+  "git": {
+    "commitMessage": "chore: release v${version}",
+    "tagName": "v${version}",
+    "requireCleanWorkingDir": false,
+    "pushArgs": ["--follow-tags", "--no-verify"]
+  },
+  "github": {
+    "release": true,
+    "releaseName": "v${version}",
+    "releaseNotes": "git log --pretty=format:'- %s (%h)' $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD"
+  },
+  "npm": {
+    "publish": false
+  },
+  "hooks": {
+    "before:init": [
+      "cargo test"
+    ],
+    "after:bump": [
+      "sed -i '' 's/^version = \".*\"/version = \"${version}\"/' Cargo.toml",
+      "sed -i '' 's/\"version\": \".*\"/\"version\": \"${version}\"/' npm/package.json",
+      "cargo check"
+    ],
+    "after:release": "echo Successfully released ${name} v${version}"
+  }
+}

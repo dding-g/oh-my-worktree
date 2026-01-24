@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const binName = process.platform === 'win32' ? 'owt.exe' : 'owt';
+const binPath = path.join(__dirname, binName);
+
+if (!fs.existsSync(binPath)) {
+  console.error('owt binary not found. Please reinstall the package:');
+  console.error('  npm install -g oh-my-worktree');
+  process.exit(1);
+}
+
+const child = spawn(binPath, process.argv.slice(2), {
+  stdio: 'inherit',
+});
+
+child.on('error', (err) => {
+  console.error('Failed to run owt:', err.message);
+  process.exit(1);
+});
+
+child.on('close', (code) => {
+  process.exit(code || 0);
+});
