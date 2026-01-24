@@ -36,7 +36,7 @@ impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.should_quit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            self.handle_events(terminal)?;
         }
         Ok(())
     }
@@ -55,21 +55,28 @@ impl App {
         }
     }
 
-    fn handle_events(&mut self) -> Result<()> {
+    fn handle_events(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind != KeyEventKind::Press {
-                    return Ok(());
-                }
+            match event::read()? {
+                Event::Key(key) => {
+                    if key.kind != KeyEventKind::Press {
+                        return Ok(());
+                    }
 
-                // Clear message on any key press
-                self.message = None;
+                    // Clear message on any key press
+                    self.message = None;
 
-                match self.state {
-                    AppState::List => self.handle_list_input(key.code, key.modifiers),
-                    AppState::AddModal => self.handle_add_modal_input(key.code),
-                    AppState::ConfirmDelete => self.handle_confirm_delete_input(key.code),
+                    match self.state {
+                        AppState::List => self.handle_list_input(key.code, key.modifiers),
+                        AppState::AddModal => self.handle_add_modal_input(key.code),
+                        AppState::ConfirmDelete => self.handle_confirm_delete_input(key.code),
+                    }
                 }
+                Event::Resize(_, _) => {
+                    // Force a full redraw on resize
+                    terminal.clear()?;
+                }
+                _ => {}
             }
         }
         Ok(())
