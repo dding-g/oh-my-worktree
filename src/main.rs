@@ -93,6 +93,11 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
     git::add_worktree(&bare_repo_path, &default_branch, &worktree_path, None)?;
     println!("  Created worktree: {}", worktree_path.display());
 
+    // Create .git file pointing to bare repo (standard worktree pattern)
+    let git_file_path = project_dir.join(".git");
+    std::fs::write(&git_file_path, "gitdir: ./.bare\n")?;
+    println!("  Created .git file: {}", git_file_path.display());
+
     println!("\nDone! To start using owt:");
     println!("  cd {}", project_dir.display());
     println!("  owt");
