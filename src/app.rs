@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
+use crate::config::Config;
 use crate::git;
 use crate::types::{AppMessage, AppState, Worktree};
 use crate::ui::{add_modal, confirm_modal, main_view};
@@ -17,11 +18,13 @@ pub struct App {
     pub bare_repo_path: PathBuf,
     pub input_buffer: String,
     pub should_quit: bool,
+    pub config: Config,
 }
 
 impl App {
     pub fn new(bare_repo_path: PathBuf) -> Result<Self> {
         let worktrees = git::list_worktrees(&bare_repo_path)?;
+        let config = Config::load().unwrap_or_default();
         Ok(Self {
             worktrees,
             selected_index: 0,
@@ -30,6 +33,7 @@ impl App {
             bare_repo_path,
             input_buffer: String::new(),
             should_quit: false,
+            config,
         })
     }
 
@@ -234,7 +238,7 @@ impl App {
                 return;
             }
 
-            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+            let editor = self.config.get_editor();
             let path = wt.path.clone();
 
             // We need to restore terminal before opening editor
@@ -276,7 +280,7 @@ impl App {
             }
 
             let path = wt.path.clone();
-            let terminal = std::env::var("TERMINAL").ok();
+            let terminal = self.config.get_terminal();
 
             #[cfg(target_os = "macos")]
             let result = {
