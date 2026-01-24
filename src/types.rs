@@ -62,6 +62,8 @@ pub enum AppState {
     List,
     AddModal,
     ConfirmDelete { delete_branch: bool },
+    ConfigModal,
+    HelpModal,
     Fetching,
     Adding,
     Deleting,

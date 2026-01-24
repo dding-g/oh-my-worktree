@@ -6,7 +6,8 @@
   },
   "github": {
     "release": true,
-    "releaseName": "v${version}"
+    "releaseName": "v${version}",
+    "releaseNotes": "git log --pretty=format:'- %s (%h)' $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD"
   },
   "npm": {
     "publish": false
@@ -16,7 +17,6 @@
     "after:bump": [
       "sed -i '' 's/^version = \".*\"/version = \"${version}\"/' Cargo.toml",
       "sed -i '' 's/\"version\": \".*\"/\"version\": \"${version}\"/' npm/package.json",
-      "sed -i '' 's/owt v[0-9]*\\.[0-9]*\\.[0-9]*/owt v${version}/' src/main.rs",
       "cargo check"
     ],
     "after:release": "echo Successfully released ${name} v${version}"

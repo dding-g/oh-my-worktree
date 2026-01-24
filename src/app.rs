@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::config::Config;
 use crate::git;
 use crate::types::{AppMessage, AppState, ExitAction, Worktree, WorktreeStatus};
-use crate::ui::{add_modal, confirm_modal, main_view};
+use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
 
 pub struct App {
     pub worktrees: Vec<Worktree>,
@@ -103,6 +103,14 @@ impl App {
                 main_view::render(frame, self);
                 confirm_modal::render(frame, self);
             }
+            AppState::ConfigModal => {
+                main_view::render(frame, self);
+                config_modal::render(frame, self);
+            }
+            AppState::HelpModal => {
+                main_view::render(frame, self);
+                help_modal::render(frame);
+            }
         }
     }
 
@@ -123,6 +131,8 @@ impl App {
                         AppState::ConfirmDelete { delete_branch } => {
                             self.handle_confirm_delete_input(key.code, delete_branch)
                         }
+                        AppState::ConfigModal => self.handle_config_modal_input(key.code),
+                        AppState::HelpModal => self.handle_help_modal_input(key.code),
                         AppState::Fetching | AppState::Adding | AppState::Deleting => {
                             // Ignore input during operations
                         }
@@ -168,6 +178,12 @@ impl App {
             KeyCode::Char('t') => self.open_terminal(),
             KeyCode::Char('f') => self.fetch_all(),
             KeyCode::Char('r') => self.refresh_worktrees(),
+            KeyCode::Char('c') => {
+                self.state = AppState::ConfigModal;
+            }
+            KeyCode::Char('?') => {
+                self.state = AppState::HelpModal;
+            }
             _ => {}
         }
     }
@@ -204,6 +220,24 @@ impl App {
             KeyCode::Char('b') => {
                 // Toggle delete branch option
                 self.state = AppState::ConfirmDelete { delete_branch: !delete_branch };
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_config_modal_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.state = AppState::List;
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_help_modal_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('q') => {
+                self.state = AppState::List;
             }
             _ => {}
         }

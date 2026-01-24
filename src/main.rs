@@ -23,7 +23,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Version => {
-            println!("owt v0.3.1");
+            println!("owt v{}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         Command::Clone { url, path } => run_clone(&url, path),
@@ -238,6 +238,7 @@ SUBCOMMANDS:
     init                 Show conversion guide for regular repositories
 
 KEYBINDINGS (TUI):
+    Enter       Enter worktree (cd to directory)
     j/k, ↑/↓    Navigate worktrees
     a           Add new worktree
     d           Delete selected worktree
@@ -245,11 +246,26 @@ KEYBINDINGS (TUI):
     t           Open in terminal ($TERMINAL)
     f           Fetch all remotes
     r           Refresh worktree list
+    c           View config settings
     q           Quit
 
 ENVIRONMENT:
     EDITOR      Editor to use (default: vim)
     TERMINAL    Terminal app to use (default: Terminal.app on macOS)
+
+SHELL INTEGRATION:
+    To enable 'Enter' key to change directory, add this to your shell config:
+
+    # For bash (~/.bashrc) or zsh (~/.zshrc):
+    owt() {{
+      local result
+      result=$(command owt "$@")
+      if [[ -d "$result" ]]; then
+        cd "$result"
+      else
+        echo "$result"
+      fi
+    }}
 
 EXAMPLES:
     owt clone https://github.com/user/repo.git

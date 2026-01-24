@@ -25,7 +25,7 @@ pub fn render(frame: &mut Frame, app: &App) {
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
     let header_text = vec![Line::from(vec![
         Span::styled("owt ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("v0.1.0", Style::default().fg(Color::DarkGray)),
+        Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
         Span::styled(
             app.bare_repo_path.to_string_lossy().to_string(),
@@ -148,6 +148,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         ("o", "edit"),
         ("t", "term"),
         ("f", "fetch"),
+        ("?", "help"),
         ("q", "quit"),
     ];
 

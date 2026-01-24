@@ -161,6 +161,91 @@ Or run `owt init` for guided instructions.
 - Git 2.5+ (worktree support)
 - A bare repository with worktrees
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Entry["Entry Point"]
+        START([owt command]) --> PARSE[Parse CLI Args]
+        PARSE --> |"--help"| HELP[Print Help]
+        PARSE --> |"--version"| VERSION[Print Version]
+        PARSE --> |"clone URL"| CLONE[Clone as Bare]
+        PARSE --> |"init"| INIT[Show Convert Guide]
+        PARSE --> |"default/path"| TUI[Start TUI]
+    end
+
+    subgraph BareDetection["Bare Repo Detection"]
+        TUI --> CHECK_BARE{".bare folder exists?"}
+        CHECK_BARE --> |Yes| USE_BARE[Use .bare path]
+        CHECK_BARE --> |No| CHECK_GIT{Is git repo?}
+        CHECK_GIT --> |No| ERR_NOT_GIT[Error: Not a git repo]
+        CHECK_GIT --> |Yes| GET_COMMON[git rev-parse --git-common-dir]
+        GET_COMMON --> IS_BARE{Is bare repo?}
+        IS_BARE --> |No| ERR_NOT_BARE[Error: Not bare repo]
+        IS_BARE --> |Yes| USE_COMMON[Use common dir]
+        USE_BARE --> INIT_APP
+        USE_COMMON --> INIT_APP
+    end
+
+    subgraph AppInit["App Initialization"]
+        INIT_APP[Initialize App] --> LOAD_WT[Load Worktrees]
+        LOAD_WT --> LOAD_CFG[Load Config]
+        LOAD_CFG --> DETECT_CUR[Detect Current Worktree]
+        DETECT_CUR --> MAIN_LOOP[Enter Main Loop]
+    end
+
+    subgraph MainLoop["Main Event Loop"]
+        MAIN_LOOP --> RENDER[Render UI]
+        RENDER --> CHECK_ASYNC{Async op running?}
+        CHECK_ASYNC --> |is_fetching| DO_FETCH[Execute Fetch]
+        CHECK_ASYNC --> |is_adding| DO_ADD[Execute Add]
+        CHECK_ASYNC --> |is_deleting| DO_DEL[Execute Delete]
+        CHECK_ASYNC --> |None| WAIT_EVENT[Wait for Event]
+        DO_FETCH --> MAIN_LOOP
+        DO_ADD --> MAIN_LOOP
+        DO_DEL --> MAIN_LOOP
+        WAIT_EVENT --> HANDLE_KEY[Handle Key Event]
+        HANDLE_KEY --> MAIN_LOOP
+    end
+
+    subgraph States["App States"]
+        HANDLE_KEY --> |"state=List"| LIST_INPUT[List Input Handler]
+        HANDLE_KEY --> |"state=AddModal"| ADD_INPUT[Add Modal Handler]
+        HANDLE_KEY --> |"state=ConfirmDelete"| DEL_INPUT[Delete Confirm Handler]
+
+        LIST_INPUT --> |j/k/↑/↓| NAV[Navigate]
+        LIST_INPUT --> |Enter| ENTER_WT[Enter Worktree]
+        LIST_INPUT --> |a| OPEN_ADD[Open Add Modal]
+        LIST_INPUT --> |d| OPEN_DEL[Open Delete Modal]
+        LIST_INPUT --> |o| OPEN_EDIT[Open Editor]
+        LIST_INPUT --> |t| OPEN_TERM[Open Terminal]
+        LIST_INPUT --> |f| START_FETCH[Start Fetch]
+        LIST_INPUT --> |r| REFRESH[Refresh List]
+        LIST_INPUT --> |c| OPEN_CFG[Open Config Modal]
+        LIST_INPUT --> |q| QUIT[Quit App]
+
+        ADD_INPUT --> |Esc| CANCEL_ADD[Cancel → List]
+        ADD_INPUT --> |Enter| START_ADD[Start Add Worktree]
+        ADD_INPUT --> |Char| TYPE_CHAR[Append to Buffer]
+        ADD_INPUT --> |Backspace| DEL_CHAR[Delete from Buffer]
+
+        DEL_INPUT --> |y/Enter| CONFIRM_DEL[Confirm Delete]
+        DEL_INPUT --> |n/Esc| CANCEL_DEL[Cancel → List]
+        DEL_INPUT --> |b| TOGGLE_BRANCH[Toggle Delete Branch]
+    end
+
+    subgraph Exit["Exit Handling"]
+        ENTER_WT --> SET_EXIT[Set ExitAction::ChangeDirectory]
+        SET_EXIT --> QUIT_APP[should_quit = true]
+        QUIT --> QUIT_APP
+        QUIT_APP --> EXIT_LOOP[Exit Main Loop]
+        EXIT_LOOP --> CHECK_ACTION{Exit Action?}
+        CHECK_ACTION --> |ChangeDirectory| PRINT_PATH[Print worktree path]
+        CHECK_ACTION --> |Quit| END_APP[End]
+        PRINT_PATH --> END_APP
+    end
+```
+
 ## License
 
 MIT
