@@ -201,6 +201,25 @@ owt() {
         }
     }
 
+    // Check if config file is a symlink (e.g., managed by Nix/home-manager)
+    let is_symlink = fs::symlink_metadata(&config_path)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false);
+
+    if is_symlink {
+        println!("\n⚠ {} is a symlink (possibly managed by Nix/home-manager)", config_path.display());
+        println!("  Cannot modify directly.\n");
+        println!("Add this to your shell configuration manually:\n");
+        println!("{}", SHELL_FUNCTION);
+
+        // Suggest alternative
+        if shell_name == "zsh" {
+            println!("\nAlternatively, create ~/.zshrc.local and source it from your config:");
+            println!("  echo 'source ~/.zshrc.local' # add to your home-manager zsh config");
+        }
+        return Ok(());
+    }
+
     // Ask for confirmation
     print!("\nAdd owt shell integration to {}? [Y/n] ", config_path.display());
     io::stdout().flush()?;
