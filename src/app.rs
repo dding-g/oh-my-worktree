@@ -1,13 +1,14 @@
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{DefaultTerminal, Frame};
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
 use crate::config::Config;
 use crate::git;
-use crate::types::{AppMessage, AppState, ExitAction, Worktree};
+use crate::types::{AppMessage, AppState, ExitAction, Worktree, WorktreeStatus};
 use crate::ui::{add_modal, confirm_modal, main_view};
 
 pub struct App {
@@ -21,15 +22,35 @@ pub struct App {
     pub config: Config,
     pub exit_action: ExitAction,
     pub is_fetching: bool,
+    pub current_worktree_path: Option<PathBuf>, // Path where owt was launched from
+    pub is_adding: bool,
+    pub is_deleting: bool,
 }
 
 impl App {
-    pub fn new(bare_repo_path: PathBuf) -> Result<Self> {
+    pub fn new(bare_repo_path: PathBuf, launch_path: Option<PathBuf>) -> Result<Self> {
         let worktrees = git::list_worktrees(&bare_repo_path)?;
         let config = Config::load().unwrap_or_default();
+
+        // Determine current worktree from launch path
+        let current_worktree_path = launch_path.and_then(|lp| {
+            let canonical_lp = lp.canonicalize().ok()?;
+            worktrees.iter().find(|wt| {
+                if wt.is_bare { return false; }
+                wt.path.canonicalize().ok()
+                    .map(|p| canonical_lp.starts_with(&p))
+                    .unwrap_or(false)
+            }).map(|wt| wt.path.clone())
+        });
+
+        // Set initial selection to current worktree if found
+        let selected_index = current_worktree_path.as_ref()
+            .and_then(|cp| worktrees.iter().position(|wt| wt.path == *cp))
+            .unwrap_or(0);
+
         Ok(Self {
             worktrees,
-            selected_index: 0,
+            selected_index,
             state: AppState::List,
             message: None,
             bare_repo_path,
@@ -38,6 +59,9 @@ impl App {
             config,
             exit_action: ExitAction::Quit,
             is_fetching: false,
+            current_worktree_path,
+            is_adding: false,
+            is_deleting: false,
         })
     }
 
@@ -45,9 +69,19 @@ impl App {
         while !self.should_quit {
             terminal.draw(|frame| self.draw(frame))?;
 
-            // Handle async-like fetch (show UI first, then fetch)
+            // Handle async-like operations (show UI first, then execute)
             if self.is_fetching {
                 self.do_fetch();
+                continue;
+            }
+
+            if self.is_adding {
+                self.do_add_worktree();
+                continue;
+            }
+
+            if self.is_deleting {
+                self.do_delete_worktree();
                 continue;
             }
 
@@ -58,7 +92,9 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         match self.state {
-            AppState::List | AppState::Fetching => main_view::render(frame, self),
+            AppState::List | AppState::Fetching | AppState::Adding | AppState::Deleting => {
+                main_view::render(frame, self)
+            }
             AppState::AddModal => {
                 main_view::render(frame, self);
                 add_modal::render(frame, self);
@@ -87,7 +123,9 @@ impl App {
                         AppState::ConfirmDelete { delete_branch } => {
                             self.handle_confirm_delete_input(key.code, delete_branch)
                         }
-                        AppState::Fetching => {} // Ignore input during fetch
+                        AppState::Fetching | AppState::Adding | AppState::Deleting => {
+                            // Ignore input during operations
+                        }
                     }
                 }
                 Event::Resize(_, _) => {
@@ -117,6 +155,10 @@ impl App {
                 if let Some(wt) = self.selected_worktree() {
                     if wt.is_bare {
                         self.message = Some(AppMessage::error("Cannot delete bare repository"));
+                    } else if wt.status != WorktreeStatus::Clean {
+                        self.message = Some(AppMessage::error(
+                            "Cannot delete: worktree has uncommitted changes. Commit or stash changes first."
+                        ));
                     } else {
                         self.state = AppState::ConfirmDelete { delete_branch: false };
                     }
@@ -205,6 +247,14 @@ impl App {
             return;
         }
 
+        self.is_adding = true;
+        self.state = AppState::Adding;
+        self.message = Some(AppMessage::info(format!("Creating worktree: {}...", branch)));
+    }
+
+    fn do_add_worktree(&mut self) {
+        let branch = self.input_buffer.trim().to_string();
+
         // Generate worktree path: sibling to bare repo with branch name
         let worktree_path = self
             .bare_repo_path
@@ -214,15 +264,66 @@ impl App {
 
         match git::add_worktree(&self.bare_repo_path, &branch, &worktree_path, None) {
             Ok(()) => {
+                // Copy files if configured
+                self.copy_configured_files(&worktree_path);
+
+                // Run post-add script if exists
+                self.run_post_add_script(&worktree_path);
+
                 self.message = Some(AppMessage::info(format!("Created worktree: {}", branch)));
                 self.refresh_worktrees();
-                self.state = AppState::List;
-                self.input_buffer.clear();
             }
             Err(e) => {
                 self.message = Some(AppMessage::error(format!("Failed to create: {}", e)));
             }
         }
+
+        self.is_adding = false;
+        self.state = AppState::List;
+        self.input_buffer.clear();
+    }
+
+    fn copy_configured_files(&self, target_path: &PathBuf) {
+        if self.config.copy_files.is_empty() {
+            return;
+        }
+
+        // Find a source worktree to copy from (prefer current, then first non-bare)
+        let source_path = self.current_worktree_path.clone()
+            .or_else(|| {
+                self.worktrees.iter()
+                    .find(|wt| !wt.is_bare)
+                    .map(|wt| wt.path.clone())
+            });
+
+        if let Some(source) = source_path {
+            for file in &self.config.copy_files {
+                let src = source.join(file);
+                let dst = target_path.join(file);
+
+                if src.exists() {
+                    // Create parent directories if needed
+                    if let Some(parent) = dst.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    let _ = fs::copy(&src, &dst);
+                }
+            }
+        }
+    }
+
+    fn run_post_add_script(&self, worktree_path: &PathBuf) {
+        let script_path = Config::post_add_script_path(&self.bare_repo_path);
+
+        if !script_path.exists() {
+            return;
+        }
+
+        // Run the script in the worktree directory
+        let _ = Command::new("sh")
+            .arg(&script_path)
+            .current_dir(worktree_path)
+            .output();
     }
 
     fn delete_selected_worktree(&mut self, delete_branch: bool) {
@@ -233,17 +334,29 @@ impl App {
                 return;
             }
 
-            let branch_name = wt.branch.clone();
-            let force = wt.status != crate::types::WorktreeStatus::Clean;
+            // Store delete info and start async delete
+            self.is_deleting = true;
+            self.state = AppState::Deleting;
+            self.message = Some(AppMessage::info(format!("Deleting worktree: {}...", wt.display_name())));
+            // Store delete_branch flag in input_buffer (hacky but works)
+            self.input_buffer = if delete_branch { "delete_branch".to_string() } else { String::new() };
+        }
+    }
 
-            match git::remove_worktree(&self.bare_repo_path, &wt.path, force) {
+    fn do_delete_worktree(&mut self) {
+        let delete_branch = self.input_buffer == "delete_branch";
+
+        if let Some(wt) = self.selected_worktree().cloned() {
+            let branch_name = wt.branch.clone();
+
+            match git::remove_worktree(&self.bare_repo_path, &wt.path, false) {
                 Ok(()) => {
                     let mut msg = format!("Deleted worktree: {}", wt.display_name());
 
                     // Delete branch if requested
                     if delete_branch {
                         if let Some(ref branch) = branch_name {
-                            match git::delete_branch(&self.bare_repo_path, branch, force) {
+                            match git::delete_branch(&self.bare_repo_path, branch, false) {
                                 Ok(()) => {
                                     msg.push_str(&format!(" (branch '{}' deleted)", branch));
                                 }
@@ -262,7 +375,10 @@ impl App {
                 }
             }
         }
+
+        self.is_deleting = false;
         self.state = AppState::List;
+        self.input_buffer.clear();
     }
 
     fn open_editor(&mut self) {
@@ -360,19 +476,29 @@ impl App {
     }
 
     fn fetch_all(&mut self) {
-        self.is_fetching = true;
-        self.state = AppState::Fetching;
-        self.message = Some(AppMessage::info("Fetching..."));
+        let wt_info = self.selected_worktree().map(|wt| (wt.is_bare, wt.display_name()));
+
+        if let Some((is_bare, name)) = wt_info {
+            if is_bare {
+                self.message = Some(AppMessage::error("Cannot fetch bare repository"));
+                return;
+            }
+            self.is_fetching = true;
+            self.state = AppState::Fetching;
+            self.message = Some(AppMessage::info(format!("Fetching: {}...", name)));
+        }
     }
 
     pub fn do_fetch(&mut self) {
-        match git::fetch_all(&self.bare_repo_path) {
-            Ok(()) => {
-                self.message = Some(AppMessage::info("Fetch completed"));
-                self.refresh_worktrees();
-            }
-            Err(e) => {
-                self.message = Some(AppMessage::error(format!("Fetch failed: {}", e)));
+        if let Some(wt) = self.selected_worktree().cloned() {
+            match git::fetch_worktree(&wt.path) {
+                Ok(()) => {
+                    self.message = Some(AppMessage::info(format!("Fetch completed: {}", wt.display_name())));
+                    self.refresh_worktrees();
+                }
+                Err(e) => {
+                    self.message = Some(AppMessage::error(format!("Fetch failed: {}", e)));
+                }
             }
         }
         self.is_fetching = false;

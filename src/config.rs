@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub struct Config {
     pub editor: Option<String>,
     pub terminal: Option<String>,
+    pub copy_files: Vec<String>,        // Files to copy when adding worktree
+    pub post_add_script: Option<String>, // Script to run after adding worktree
 }
 
 impl Config {
@@ -43,6 +45,17 @@ impl Config {
                 match key {
                     "editor" => config.editor = Some(value.to_string()),
                     "terminal" => config.terminal = Some(value.to_string()),
+                    "post_add_script" => config.post_add_script = Some(value.to_string()),
+                    "copy_files" => {
+                        // Parse comma-separated list or array-like syntax
+                        let files: Vec<String> = value
+                            .trim_matches('[').trim_matches(']')
+                            .split(',')
+                            .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        config.copy_files = files;
+                    }
                     _ => {}
                 }
             }
@@ -62,6 +75,28 @@ impl Config {
         self.terminal
             .clone()
             .or_else(|| std::env::var("TERMINAL").ok())
+    }
+
+    /// Get the .owt directory path (in bare repo parent)
+    pub fn owt_dir(bare_repo_path: &std::path::Path) -> PathBuf {
+        bare_repo_path
+            .parent()
+            .map(|p| p.join(".owt"))
+            .unwrap_or_else(|| PathBuf::from(".owt"))
+    }
+
+    /// Get the post-add script path
+    pub fn post_add_script_path(bare_repo_path: &std::path::Path) -> PathBuf {
+        Self::owt_dir(bare_repo_path).join("post-add.sh")
+    }
+
+    /// Ensure .owt directory exists
+    pub fn ensure_owt_dir(bare_repo_path: &std::path::Path) -> Result<PathBuf> {
+        let owt_dir = Self::owt_dir(bare_repo_path);
+        if !owt_dir.exists() {
+            fs::create_dir_all(&owt_dir)?;
+        }
+        Ok(owt_dir)
     }
 }
 

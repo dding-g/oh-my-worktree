@@ -59,7 +59,20 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
         .enumerate()
         .map(|(i, wt)| {
             let is_selected = i == app.selected_index;
-            let cursor = if is_selected { ">" } else { " " };
+            let is_current = app.current_worktree_path.as_ref()
+                .map(|cp| cp == &wt.path)
+                .unwrap_or(false);
+
+            // Show cursor and current indicator
+            let cursor = if is_selected && is_current {
+                ">●"
+            } else if is_selected {
+                "> "
+            } else if is_current {
+                " ●"
+            } else {
+                "  "
+            };
 
             let status_color = match wt.status {
                 WorktreeStatus::Clean => Color::Green,
@@ -77,28 +90,31 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 Style::default()
             };
 
-            // Show "Fetching..." when fetching
-            let last_commit = if app.is_fetching {
-                "Fetching...".to_string()
+            // Show operation status in last commit column
+            let (last_commit, last_commit_style) = if app.is_fetching && is_selected {
+                ("Fetching...".to_string(), Style::default().fg(Color::Yellow))
+            } else if app.is_adding {
+                ("Adding...".to_string(), Style::default().fg(Color::Yellow))
+            } else if app.is_deleting && is_selected {
+                ("Deleting...".to_string(), Style::default().fg(Color::Red))
             } else {
-                wt.last_commit_time
-                    .clone()
-                    .unwrap_or_else(|| "-".to_string())
+                (
+                    wt.last_commit_time.clone().unwrap_or_else(|| "-".to_string()),
+                    Style::default().fg(Color::DarkGray),
+                )
             };
 
-            let last_commit_style = if app.is_fetching {
-                Style::default().fg(Color::Yellow)
+            let name_style = if wt.is_bare {
+                Style::default().fg(Color::DarkGray).italic()
+            } else if is_current {
+                Style::default().fg(Color::Green)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::White)
             };
 
             Row::new(vec![
                 Cell::from(cursor).style(Style::default().fg(Color::Cyan)),
-                Cell::from(wt.display_name()).style(if wt.is_bare {
-                    Style::default().fg(Color::DarkGray).italic()
-                } else {
-                    Style::default().fg(Color::White)
-                }),
+                Cell::from(wt.display_name()).style(name_style),
                 Cell::from(wt.branch_display()).style(Style::default().fg(Color::Cyan)),
                 Cell::from(status_text).style(Style::default().fg(status_color)),
                 Cell::from(last_commit).style(last_commit_style),

@@ -297,6 +297,21 @@ pub fn fetch_all(bare_repo_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Fetch only the remote tracking branch for a specific worktree
+pub fn fetch_worktree(worktree_path: &Path) -> Result<()> {
+    let output = Command::new("git")
+        .args(["-C", &worktree_path.to_string_lossy(), "fetch", "origin"])
+        .output()
+        .context("Failed to fetch")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to fetch: {}", stderr.trim());
+    }
+
+    Ok(())
+}
+
 pub fn get_last_commit_time(path: &Path) -> Result<String> {
     let output = Command::new("git")
         .args([

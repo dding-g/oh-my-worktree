@@ -55,9 +55,9 @@ fn run_tui(path: PathBuf) -> Result<()> {
         std::process::exit(1);
     };
 
-    // Initialize and run the TUI
+    // Initialize and run the TUI (pass launch path for current worktree detection)
     let mut terminal = ratatui::init();
-    let mut app = app::App::new(bare_repo_path)?;
+    let mut app = app::App::new(bare_repo_path, Some(path))?;
     let result = app.run(&mut terminal);
     ratatui::restore();
 

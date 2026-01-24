@@ -63,6 +63,8 @@ pub enum AppState {
     AddModal,
     ConfirmDelete { delete_branch: bool },
     Fetching,
+    Adding,
+    Deleting,
 }
 
 /// Exit reason when quitting the app
