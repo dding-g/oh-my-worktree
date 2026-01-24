@@ -7,9 +7,31 @@ use anyhow::Result;
 use std::env;
 use std::path::PathBuf;
 
-fn main() -> Result<()> {
-    let path = parse_args();
+enum Command {
+    Tui { path: PathBuf },
+    Clone { url: String, path: Option<PathBuf> },
+    Init,
+    Help,
+    Version,
+}
 
+fn main() -> Result<()> {
+    match parse_args() {
+        Command::Help => {
+            print_help();
+            Ok(())
+        }
+        Command::Version => {
+            println!("owt v0.2.0");
+            Ok(())
+        }
+        Command::Clone { url, path } => run_clone(&url, path),
+        Command::Init => run_init(),
+        Command::Tui { path } => run_tui(path),
+    }
+}
+
+fn run_tui(path: PathBuf) -> Result<()> {
     // Check if we're in a git repository
     if !git::is_git_repo(&path) {
         print_not_git_repo_error();
@@ -33,43 +55,151 @@ fn main() -> Result<()> {
     result
 }
 
-fn parse_args() -> PathBuf {
-    let args: Vec<String> = env::args().collect();
-    let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
+    // Extract repo name from URL
+    let repo_name = extract_repo_name(url);
 
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--path" | "-p" => {
-                if i + 1 < args.len() {
-                    path = PathBuf::from(&args[i + 1]);
-                    i += 2;
-                } else {
-                    eprintln!("Error: --path requires an argument");
-                    std::process::exit(1);
-                }
-            }
-            "--help" | "-h" => {
-                print_help();
-                std::process::exit(0);
-            }
-            "--version" | "-v" => {
-                println!("owt v0.1.0");
-                std::process::exit(0);
-            }
-            arg if arg.starts_with('-') => {
-                eprintln!("Error: Unknown option: {}", arg);
+    // Determine paths
+    let base_dir = target_path.unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let bare_repo_path = base_dir.join(format!("{}.git", repo_name));
+    let worktree_path = base_dir.join(&repo_name).join("main");
+
+    println!("Cloning {} as bare repository...", url);
+
+    // Clone as bare
+    git::clone_bare(url, &bare_repo_path)?;
+    println!("  Created bare repo: {}", bare_repo_path.display());
+
+    // Get default branch
+    let default_branch = git::get_default_branch(&bare_repo_path).unwrap_or_else(|_| "main".to_string());
+
+    // Create first worktree
+    println!("Creating worktree for '{}'...", default_branch);
+    git::add_worktree(&bare_repo_path, &default_branch, &worktree_path, None)?;
+    println!("  Created worktree: {}", worktree_path.display());
+
+    println!("\nDone! To start using owt:");
+    println!("  cd {}", bare_repo_path.display());
+    println!("  owt");
+
+    Ok(())
+}
+
+fn run_init() -> Result<()> {
+    let current_dir = env::current_dir()?;
+
+    // Check if already a bare repo
+    if git::is_bare_repo(&current_dir)? {
+        println!("Already a bare repository. Run 'owt' to start.");
+        return Ok(());
+    }
+
+    // Check if it's a git repo
+    if !git::is_git_repo(&current_dir) {
+        eprintln!("Error: Not a git repository");
+        std::process::exit(1);
+    }
+
+    // Check if it's inside a worktree
+    let common_dir = git::get_git_common_dir(&current_dir)?;
+    if git::is_bare_repo(&common_dir)? {
+        println!("This is a worktree of a bare repository.");
+        println!("Bare repo: {}", common_dir.display());
+        println!("\nRun 'owt' to manage worktrees.");
+        return Ok(());
+    }
+
+    // It's a regular repo - show conversion guide
+    let repo_name = current_dir
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "myproject".to_string());
+
+    println!("This is a regular git repository.");
+    println!("\nTo convert to bare repository + worktree setup:\n");
+    println!("  # 1. Go to parent directory");
+    println!("  cd ..\n");
+    println!("  # 2. Move .git to new bare repo");
+    println!("  mv {}/.git {}.git", repo_name, repo_name);
+    println!("  rm -rf {}\n", repo_name);
+    println!("  # 3. Configure as bare");
+    println!("  cd {}.git", repo_name);
+    println!("  git config --bool core.bare true\n");
+    println!("  # 4. Create first worktree");
+    println!("  git worktree add ../{}/main main\n", repo_name);
+    println!("  # 5. Run owt");
+    println!("  owt");
+
+    Ok(())
+}
+
+fn extract_repo_name(url: &str) -> String {
+    // Handle various URL formats:
+    // https://github.com/user/repo.git
+    // git@github.com:user/repo.git
+    // /path/to/repo.git
+    // repo.git
+
+    let url = url.trim_end_matches('/');
+    let name = url
+        .rsplit('/')
+        .next()
+        .or_else(|| url.rsplit(':').next())
+        .unwrap_or(url);
+
+    name.trim_end_matches(".git").to_string()
+}
+
+fn parse_args() -> Command {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        return Command::Tui {
+            path: env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        };
+    }
+
+    match args[1].as_str() {
+        "--help" | "-h" | "help" => Command::Help,
+        "--version" | "-v" => Command::Version,
+        "clone" => {
+            if args.len() < 3 {
+                eprintln!("Error: clone requires a URL argument");
+                eprintln!("Usage: owt clone <url> [path]");
                 std::process::exit(1);
             }
-            _ => {
-                // Treat as path if no flag
-                path = PathBuf::from(&args[i]);
-                i += 1;
+            let url = args[2].clone();
+            let path = args.get(3).map(PathBuf::from);
+            Command::Clone { url, path }
+        }
+        "init" => Command::Init,
+        arg if arg.starts_with('-') => {
+            // Handle flags for TUI mode
+            let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let mut i = 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--path" | "-p" => {
+                        if i + 1 < args.len() {
+                            path = PathBuf::from(&args[i + 1]);
+                            i += 2;
+                        } else {
+                            eprintln!("Error: --path requires an argument");
+                            std::process::exit(1);
+                        }
+                    }
+                    _ => i += 1,
+                }
+            }
+            Command::Tui { path }
+        }
+        _ => {
+            // Treat as path for TUI mode
+            Command::Tui {
+                path: PathBuf::from(&args[1]),
             }
         }
     }
-
-    path
 }
 
 fn print_help() {
@@ -77,7 +207,9 @@ fn print_help() {
         r#"owt - Git Worktree Manager
 
 USAGE:
-    owt [OPTIONS] [PATH]
+    owt [OPTIONS] [PATH]         Start TUI (default)
+    owt clone <URL> [PATH]       Clone as bare repo + create main worktree
+    owt init                     Show guide to convert regular repo to bare
 
 ARGS:
     [PATH]    Path to the bare repository (default: current directory)
@@ -87,7 +219,11 @@ OPTIONS:
     -h, --help           Print help information
     -v, --version        Print version information
 
-KEYBINDINGS:
+SUBCOMMANDS:
+    clone <URL> [PATH]   Clone repository as bare and create first worktree
+    init                 Show conversion guide for regular repositories
+
+KEYBINDINGS (TUI):
     j/k, ↑/↓    Navigate worktrees
     a           Add new worktree
     d           Delete selected worktree
@@ -99,7 +235,13 @@ KEYBINDINGS:
 
 ENVIRONMENT:
     EDITOR      Editor to use (default: vim)
-    TERMINAL    Terminal app to use (default: Terminal.app on macOS)"#
+    TERMINAL    Terminal app to use (default: Terminal.app on macOS)
+
+EXAMPLES:
+    owt clone https://github.com/user/repo.git
+    owt clone git@github.com:user/repo.git ~/projects
+    owt init
+    owt --path ~/repos/myproject.git"#
     );
 }
 
@@ -117,24 +259,16 @@ fn print_not_bare_repo_error() {
         r#"Error: Not a bare repository
 
 owt requires a bare repository with worktrees.
-To convert your existing repository:
 
-  1. Move .git to a new location:
-     mv .git ../myproject.git
+Quick setup:
+  owt clone <url>           Clone as bare repo
+  owt init                  Convert existing repo
 
-  2. Configure as bare:
-     cd ../myproject.git
-     git config --bool core.bare true
-
-  3. Add your first worktree:
-     git worktree add ../myproject/main main
-
-  4. Run owt:
-     owt
-
-Or clone a new project as bare:
-  git clone --bare <url> myproject.git
-  cd myproject.git
-  git worktree add ../myproject/main main"#
+Manual setup:
+  1. mv .git ../myproject.git
+  2. cd ../myproject.git
+  3. git config --bool core.bare true
+  4. git worktree add ../myproject/main main
+  5. owt"#
     );
 }

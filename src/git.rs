@@ -287,3 +287,59 @@ pub fn get_last_commit_time(path: &Path) -> Result<String> {
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
+
+pub fn clone_bare(url: &str, path: &Path) -> Result<()> {
+    let output = Command::new("git")
+        .args(["clone", "--bare", url, &path.to_string_lossy()])
+        .output()
+        .context("Failed to clone repository")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to clone: {}", stderr.trim());
+    }
+
+    Ok(())
+}
+
+pub fn get_default_branch(bare_repo_path: &Path) -> Result<String> {
+    // Try to get the default branch from HEAD
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "symbolic-ref",
+            "HEAD",
+        ])
+        .output()
+        .context("Failed to get default branch")?;
+
+    if output.status.success() {
+        let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // refs/heads/main -> main
+        if let Some(branch) = head.strip_prefix("refs/heads/") {
+            return Ok(branch.to_string());
+        }
+    }
+
+    // Fallback: try common branch names
+    for branch in &["main", "master"] {
+        let check = Command::new("git")
+            .args([
+                "-C",
+                &bare_repo_path.to_string_lossy(),
+                "show-ref",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{}", branch),
+            ])
+            .status();
+
+        if check.map(|s| s.success()).unwrap_or(false) {
+            return Ok(branch.to_string());
+        }
+    }
+
+    // Default to main
+    Ok("main".to_string())
+}
