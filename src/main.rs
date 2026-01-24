@@ -23,7 +23,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Version => {
-            println!("owt v0.2.2");
+            println!("owt v0.3.0");
             Ok(())
         }
         Command::Clone { url, path } => run_clone(&url, path),
