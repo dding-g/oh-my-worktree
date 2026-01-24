@@ -2,7 +2,8 @@
   "git": {
     "commitMessage": "chore: release v${version}",
     "tagName": "v${version}",
-    "requireCleanWorkingDir": false
+    "requireCleanWorkingDir": false,
+    "pushArgs": ["--follow-tags", "--no-verify"]
   },
   "github": {
     "release": true,
@@ -13,7 +14,9 @@
     "publish": false
   },
   "hooks": {
-    "before:init": [],
+    "before:init": [
+      "cargo test"
+    ],
     "after:bump": [
       "sed -i '' 's/^version = \".*\"/version = \"${version}\"/' Cargo.toml",
       "sed -i '' 's/\"version\": \".*\"/\"version\": \"${version}\"/' npm/package.json",
