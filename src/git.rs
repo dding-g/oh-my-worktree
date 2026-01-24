@@ -283,20 +283,6 @@ pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result
     Ok(())
 }
 
-pub fn fetch_all(bare_repo_path: &Path) -> Result<()> {
-    let output = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "fetch", "--all"])
-        .output()
-        .context("Failed to fetch")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to fetch: {}", stderr.trim());
-    }
-
-    Ok(())
-}
-
 /// Fetch only the remote tracking branch for a specific worktree
 pub fn fetch_worktree(worktree_path: &Path) -> Result<()> {
     let output = Command::new("git")

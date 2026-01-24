@@ -89,15 +89,6 @@ impl Config {
     pub fn post_add_script_path(bare_repo_path: &std::path::Path) -> PathBuf {
         Self::owt_dir(bare_repo_path).join("post-add.sh")
     }
-
-    /// Ensure .owt directory exists
-    pub fn ensure_owt_dir(bare_repo_path: &std::path::Path) -> Result<PathBuf> {
-        let owt_dir = Self::owt_dir(bare_repo_path);
-        if !owt_dir.exists() {
-            fs::create_dir_all(&owt_dir)?;
-        }
-        Ok(owt_dir)
-    }
 }
 
 fn dirs_config_dir() -> PathBuf {
