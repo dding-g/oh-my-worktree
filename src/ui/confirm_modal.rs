@@ -7,10 +7,15 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::types::WorktreeStatus;
+use crate::types::{AppState, WorktreeStatus};
 
 pub fn render(frame: &mut Frame, app: &App) {
-    let area = centered_rect(50, 25, frame.area());
+    let delete_branch = match app.state {
+        AppState::ConfirmDelete { delete_branch } => delete_branch,
+        _ => false,
+    };
+
+    let area = centered_rect(55, 35, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
@@ -29,6 +34,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         Constraint::Length(1), // Spacing
         Constraint::Length(1), // Worktree name
         Constraint::Length(1), // Branch
+        Constraint::Length(1), // Delete branch option
         Constraint::Length(1), // Status warning
         Constraint::Min(1),    // Spacing
         Constraint::Length(1), // Help
@@ -57,13 +63,22 @@ pub fn render(frame: &mut Frame, app: &App) {
         ]));
         frame.render_widget(branch, chunks[4]);
 
+        // Delete branch option
+        let checkbox = if delete_branch { "[x]" } else { "[ ]" };
+        let checkbox_color = if delete_branch { Color::Red } else { Color::DarkGray };
+        let delete_branch_opt = Paragraph::new(Line::from(vec![
+            Span::styled(checkbox, Style::default().fg(checkbox_color)),
+            Span::raw(" Also delete local branch"),
+        ]));
+        frame.render_widget(delete_branch_opt, chunks[5]);
+
         // Status warning
         if wt.status != WorktreeStatus::Clean {
             let warning = Paragraph::new(Line::from(vec![Span::styled(
                 "Warning: Worktree has uncommitted changes!",
                 Style::default().fg(Color::Yellow),
             )]));
-            frame.render_widget(warning, chunks[5]);
+            frame.render_widget(warning, chunks[6]);
         }
     }
 
@@ -73,11 +88,13 @@ pub fn render(frame: &mut Frame, app: &App) {
         Span::raw(" yes  "),
         Span::styled("n", Style::default().fg(Color::Cyan)),
         Span::raw(" no  "),
+        Span::styled("b", Style::default().fg(Color::Yellow)),
+        Span::raw(" toggle branch  "),
         Span::styled("Esc", Style::default().fg(Color::Cyan)),
         Span::raw(" cancel"),
     ]))
     .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(help, chunks[7]);
+    frame.render_widget(help, chunks[8]);
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

@@ -52,7 +52,7 @@ impl App {
                 main_view::render(frame, self);
                 add_modal::render(frame, self);
             }
-            AppState::ConfirmDelete => {
+            AppState::ConfirmDelete { .. } => {
                 main_view::render(frame, self);
                 confirm_modal::render(frame, self);
             }
@@ -73,7 +73,9 @@ impl App {
                     match self.state {
                         AppState::List => self.handle_list_input(key.code, key.modifiers),
                         AppState::AddModal => self.handle_add_modal_input(key.code),
-                        AppState::ConfirmDelete => self.handle_confirm_delete_input(key.code),
+                        AppState::ConfirmDelete { delete_branch } => {
+                            self.handle_confirm_delete_input(key.code, delete_branch)
+                        }
                     }
                 }
                 Event::Resize(_, _) => {
@@ -103,7 +105,7 @@ impl App {
                     if wt.is_bare {
                         self.message = Some(AppMessage::error("Cannot delete bare repository"));
                     } else {
-                        self.state = AppState::ConfirmDelete;
+                        self.state = AppState::ConfirmDelete { delete_branch: false };
                     }
                 }
             }
@@ -136,13 +138,17 @@ impl App {
         }
     }
 
-    fn handle_confirm_delete_input(&mut self, code: KeyCode) {
+    fn handle_confirm_delete_input(&mut self, code: KeyCode, delete_branch: bool) {
         match code {
             KeyCode::Esc | KeyCode::Char('n') => {
                 self.state = AppState::List;
             }
             KeyCode::Char('y') | KeyCode::Enter => {
-                self.delete_selected_worktree();
+                self.delete_selected_worktree(delete_branch);
+            }
+            KeyCode::Char('b') => {
+                // Toggle delete branch option
+                self.state = AppState::ConfirmDelete { delete_branch: !delete_branch };
             }
             _ => {}
         }
@@ -206,7 +212,7 @@ impl App {
         }
     }
 
-    fn delete_selected_worktree(&mut self) {
+    fn delete_selected_worktree(&mut self, delete_branch: bool) {
         if let Some(wt) = self.selected_worktree().cloned() {
             if wt.is_bare {
                 self.message = Some(AppMessage::error("Cannot delete bare repository"));
@@ -214,13 +220,28 @@ impl App {
                 return;
             }
 
+            let branch_name = wt.branch.clone();
             let force = wt.status != crate::types::WorktreeStatus::Clean;
+
             match git::remove_worktree(&self.bare_repo_path, &wt.path, force) {
                 Ok(()) => {
-                    self.message = Some(AppMessage::info(format!(
-                        "Deleted worktree: {}",
-                        wt.display_name()
-                    )));
+                    let mut msg = format!("Deleted worktree: {}", wt.display_name());
+
+                    // Delete branch if requested
+                    if delete_branch {
+                        if let Some(ref branch) = branch_name {
+                            match git::delete_branch(&self.bare_repo_path, branch, force) {
+                                Ok(()) => {
+                                    msg.push_str(&format!(" (branch '{}' deleted)", branch));
+                                }
+                                Err(e) => {
+                                    msg.push_str(&format!(" (branch delete failed: {})", e));
+                                }
+                            }
+                        }
+                    }
+
+                    self.message = Some(AppMessage::info(msg));
                     self.refresh_worktrees();
                 }
                 Err(e) => {

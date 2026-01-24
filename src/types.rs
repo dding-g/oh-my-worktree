@@ -61,7 +61,7 @@ impl Worktree {
 pub enum AppState {
     List,
     AddModal,
-    ConfirmDelete,
+    ConfirmDelete { delete_branch: bool },
 }
 
 #[derive(Debug, Clone)]

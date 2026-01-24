@@ -255,6 +255,22 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
     Ok(())
 }
 
+pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result<()> {
+    let flag = if force { "-D" } else { "-d" };
+
+    let output = Command::new("git")
+        .args(["-C", &bare_repo_path.to_string_lossy(), "branch", flag, branch])
+        .output()
+        .context("Failed to delete branch")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to delete branch: {}", stderr.trim());
+    }
+
+    Ok(())
+}
+
 pub fn fetch_all(bare_repo_path: &Path) -> Result<()> {
     let output = Command::new("git")
         .args(["-C", &bare_repo_path.to_string_lossy(), "fetch", "--all"])
