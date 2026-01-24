@@ -3,7 +3,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 
 const REPO = 'dding-g/oh-my-worktree';
 const BINARY_NAME = 'owt';
@@ -37,25 +37,60 @@ function getPackageVersion() {
   return packageJson.version;
 }
 
-function downloadFile(url, dest) {
+function commandExists(cmd) {
+  try {
+    execSync(`which ${cmd}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Fast download using curl (if available)
+function downloadWithCurl(url, dest) {
+  return new Promise((resolve, reject) => {
+    const curl = spawn('curl', ['-fSL', '--progress-bar', '-o', dest, url], {
+      stdio: ['ignore', 'inherit', 'inherit']
+    });
+    curl.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`curl exited with code ${code}`));
+    });
+    curl.on('error', reject);
+  });
+}
+
+// Fallback: Node.js https with progress
+function downloadWithNode(url, dest) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
 
     const request = (url) => {
       https.get(url, (response) => {
         if (response.statusCode === 302 || response.statusCode === 301) {
-          // Follow redirect
           request(response.headers.location);
           return;
         }
 
         if (response.statusCode !== 200) {
-          reject(new Error(`Failed to download: ${response.statusCode}`));
+          reject(new Error(`HTTP ${response.statusCode}`));
           return;
         }
 
+        const totalSize = parseInt(response.headers['content-length'], 10);
+        let downloaded = 0;
+
+        response.on('data', (chunk) => {
+          downloaded += chunk.length;
+          if (totalSize) {
+            const percent = Math.round((downloaded / totalSize) * 100);
+            process.stdout.write(`\rDownloading... ${percent}%`);
+          }
+        });
+
         response.pipe(file);
         file.on('finish', () => {
+          process.stdout.write('\n');
           file.close();
           resolve();
         });
@@ -82,22 +117,26 @@ async function install() {
 
   const downloadUrl = `https://github.com/${REPO}/releases/download/v${version}/${binaryName}`;
 
-  console.log(`Downloading owt v${version} for ${process.platform}-${process.arch}...`);
-  console.log(`URL: ${downloadUrl}`);
+  console.log(`Installing owt v${version} for ${process.platform}-${process.arch}`);
 
   try {
-    await downloadFile(downloadUrl, binPath);
+    // Prefer curl for faster download with built-in progress
+    if (commandExists('curl')) {
+      await downloadWithCurl(downloadUrl, binPath);
+    } else {
+      await downloadWithNode(downloadUrl, binPath);
+    }
 
     // Make executable on Unix systems
     if (process.platform !== 'win32') {
       fs.chmodSync(binPath, 0o755);
     }
 
-    console.log('owt installed successfully!');
+    console.log('✓ owt installed successfully!');
   } catch (error) {
     console.error('Failed to download binary:', error.message);
     console.error('');
-    console.error('You can manually install owt using cargo:');
+    console.error('Alternative installation methods:');
     console.error('  cargo install --git https://github.com/dding-g/oh-my-worktree');
     process.exit(1);
   }
