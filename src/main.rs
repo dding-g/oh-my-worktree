@@ -75,8 +75,9 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
 
     // Determine paths
     let base_dir = target_path.unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let bare_repo_path = base_dir.join(format!("{}.git", repo_name));
-    let worktree_path = base_dir.join(&repo_name).join("main");
+    let project_dir = base_dir.join(&repo_name);
+    let bare_repo_path = project_dir.join(".bare");
+    let worktree_path = project_dir.join("main");
 
     println!("Cloning {} as bare repository...", url);
 
@@ -93,7 +94,7 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
     println!("  Created worktree: {}", worktree_path.display());
 
     println!("\nDone! To start using owt:");
-    println!("  cd {}", bare_repo_path.display());
+    println!("  cd {}", project_dir.display());
     println!("  owt");
 
     Ok(())
