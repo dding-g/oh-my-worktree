@@ -132,7 +132,12 @@ async function install() {
       fs.chmodSync(binPath, 0o755);
     }
 
+    console.log('');
     console.log('✓ owt installed successfully!');
+    console.log('');
+    console.log(`  Version:   v${version}`);
+    console.log(`  Changelog: https://github.com/${REPO}/releases/tag/v${version}`);
+    console.log('');
   } catch (error) {
     console.error('Failed to download binary:', error.message);
     console.error('');
