@@ -33,24 +33,31 @@ fn main() -> Result<()> {
 }
 
 fn run_tui(path: PathBuf) -> Result<()> {
-    // Check if we're in a git repository
-    if !git::is_git_repo(&path) {
+    // Try to find the bare repo in multiple ways:
+    // 1. Check for .bare folder in current directory (common worktree layout)
+    // 2. Check if current path is a git repo (worktree or bare)
+
+    let bare_repo_path = if let Some(bare_path) = git::find_bare_in_parent(&path) {
+        // Found .bare folder pattern
+        bare_path
+    } else if git::is_git_repo(&path) {
+        // Get the common git directory (works for both bare repos and worktrees)
+        let common_dir = git::get_git_common_dir(&path)?;
+
+        // Check if the common dir is a bare repository
+        if !git::is_bare_repo(&common_dir)? {
+            print_not_bare_repo_error();
+            std::process::exit(1);
+        }
+        common_dir
+    } else {
         print_not_git_repo_error();
         std::process::exit(1);
-    }
-
-    // Get the common git directory (works for both bare repos and worktrees)
-    let common_dir = git::get_git_common_dir(&path)?;
-
-    // Check if the common dir is a bare repository
-    if !git::is_bare_repo(&common_dir)? {
-        print_not_bare_repo_error();
-        std::process::exit(1);
-    }
+    };
 
     // Initialize and run the TUI
     let mut terminal = ratatui::init();
-    let result = app::App::new(common_dir)?.run(&mut terminal);
+    let result = app::App::new(bare_repo_path)?.run(&mut terminal);
     ratatui::restore();
 
     result

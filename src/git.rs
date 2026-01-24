@@ -4,6 +4,18 @@ use std::process::Command;
 
 use crate::types::{Worktree, WorktreeStatus};
 
+/// Check for .bare folder pattern (common worktree layout)
+/// Returns the path to .bare if found
+pub fn find_bare_in_parent(path: &Path) -> Option<PathBuf> {
+    let bare_path = path.join(".bare");
+    if bare_path.exists() && bare_path.is_dir() {
+        if is_bare_repo(&bare_path).unwrap_or(false) {
+            return Some(bare_path);
+        }
+    }
+    None
+}
+
 pub fn is_bare_repo(path: &Path) -> Result<bool> {
     let output = Command::new("git")
         .args(["-C", &path.to_string_lossy(), "rev-parse", "--is-bare-repository"])
