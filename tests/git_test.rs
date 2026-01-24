@@ -20,6 +20,16 @@ fn cleanup(path: &PathBuf) {
     let _ = fs::remove_dir_all(path);
 }
 
+/// Helper to create a git command with clean environment (no inherited GIT_* vars)
+fn git_cmd() -> Command {
+    let mut cmd = Command::new("git");
+    cmd.env_remove("GIT_DIR")
+       .env_remove("GIT_WORK_TREE")
+       .env_remove("GIT_INDEX_FILE")
+       .env_remove("GIT_COMMON_DIR");
+    cmd
+}
+
 /// Create a bare repo with initial commit
 fn create_test_bare_repo(path: &PathBuf) {
     // Create a temp regular repo first
@@ -27,7 +37,7 @@ fn create_test_bare_repo(path: &PathBuf) {
     fs::create_dir_all(&temp).unwrap();
 
     // Use current_dir instead of -C for init
-    let init_output = Command::new("git")
+    let init_output = git_cmd()
         .current_dir(&temp)
         .args(["init"])
         .output()
@@ -35,7 +45,7 @@ fn create_test_bare_repo(path: &PathBuf) {
     assert!(init_output.status.success(),
         "git init failed: {}", String::from_utf8_lossy(&init_output.stderr));
 
-    let config_email = Command::new("git")
+    let config_email = git_cmd()
         .current_dir(&temp)
         .args(["config", "user.email", "test@test.com"])
         .output()
@@ -43,7 +53,7 @@ fn create_test_bare_repo(path: &PathBuf) {
     assert!(config_email.status.success(),
         "git config email failed: {}", String::from_utf8_lossy(&config_email.stderr));
 
-    let config_name = Command::new("git")
+    let config_name = git_cmd()
         .current_dir(&temp)
         .args(["config", "user.name", "Test"])
         .output()
@@ -55,7 +65,7 @@ fn create_test_bare_repo(path: &PathBuf) {
     let readme = temp.join("README.md");
     fs::write(&readme, "# Test").unwrap();
 
-    let add_output = Command::new("git")
+    let add_output = git_cmd()
         .current_dir(&temp)
         .args(["add", "."])
         .output()
@@ -63,7 +73,7 @@ fn create_test_bare_repo(path: &PathBuf) {
     assert!(add_output.status.success(),
         "git add failed: {}", String::from_utf8_lossy(&add_output.stderr));
 
-    let commit_output = Command::new("git")
+    let commit_output = git_cmd()
         .current_dir(&temp)
         .args(["commit", "-m", "Initial commit"])
         .output()
@@ -72,7 +82,7 @@ fn create_test_bare_repo(path: &PathBuf) {
         "git commit failed: {}", String::from_utf8_lossy(&commit_output.stderr));
 
     // Clone as bare
-    let clone_output = Command::new("git")
+    let clone_output = git_cmd()
         .args(["clone", "--bare", &temp.to_string_lossy(), &path.to_string_lossy()])
         .output()
         .expect("Failed to run git clone");
@@ -90,7 +100,7 @@ fn test_is_bare_repo() {
     create_test_bare_repo(&bare_path);
 
     // Check is_bare_repo via git command
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["-C", &bare_path.to_string_lossy(), "rev-parse", "--is-bare-repository"])
         .output()
         .unwrap();
@@ -109,7 +119,7 @@ fn test_worktree_list() {
     create_test_bare_repo(&bare_path);
 
     // List worktrees
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["-C", &bare_path.to_string_lossy(), "worktree", "list", "--porcelain"])
         .output()
         .unwrap();
@@ -130,7 +140,7 @@ fn test_add_and_remove_worktree() {
     create_test_bare_repo(&bare_path);
 
     // Add worktree
-    let add_result = Command::new("git")
+    let add_result = git_cmd()
         .args([
             "-C", &bare_path.to_string_lossy(),
             "worktree", "add",
@@ -144,7 +154,7 @@ fn test_add_and_remove_worktree() {
     assert!(worktree_path.exists(), "Worktree directory should exist");
 
     // Verify worktree is listed
-    let list_output = Command::new("git")
+    let list_output = git_cmd()
         .args(["-C", &bare_path.to_string_lossy(), "worktree", "list"])
         .output()
         .unwrap();
@@ -153,7 +163,7 @@ fn test_add_and_remove_worktree() {
     assert!(list_stdout.contains("main"), "Should list the new worktree");
 
     // Remove worktree
-    let remove_result = Command::new("git")
+    let remove_result = git_cmd()
         .args([
             "-C", &bare_path.to_string_lossy(),
             "worktree", "remove",
@@ -176,7 +186,7 @@ fn test_git_status_clean() {
     create_test_bare_repo(&bare_path);
 
     // Add worktree
-    Command::new("git")
+    git_cmd()
         .args([
             "-C", &bare_path.to_string_lossy(),
             "worktree", "add",
@@ -187,7 +197,7 @@ fn test_git_status_clean() {
         .unwrap();
 
     // Check status
-    let status_output = Command::new("git")
+    let status_output = git_cmd()
         .args(["-C", &worktree_path.to_string_lossy(), "status", "--porcelain"])
         .output()
         .unwrap();
@@ -207,7 +217,7 @@ fn test_git_status_dirty() {
     create_test_bare_repo(&bare_path);
 
     // Add worktree
-    Command::new("git")
+    git_cmd()
         .args([
             "-C", &bare_path.to_string_lossy(),
             "worktree", "add",
@@ -221,7 +231,7 @@ fn test_git_status_dirty() {
     fs::write(worktree_path.join("new_file.txt"), "test content").unwrap();
 
     // Check status
-    let status_output = Command::new("git")
+    let status_output = git_cmd()
         .args(["-C", &worktree_path.to_string_lossy(), "status", "--porcelain"])
         .output()
         .unwrap();
