@@ -35,6 +35,9 @@ fn main() -> Result<()> {
 }
 
 fn run_tui(path: PathBuf) -> Result<()> {
+    use std::fs::File;
+    use std::io::IsTerminal;
+
     // Try to find the bare repo in multiple ways:
     // 1. Check for .bare folder in current directory (common worktree layout)
     // 2. Check if current path is a git repo (worktree or bare)
@@ -57,16 +60,36 @@ fn run_tui(path: PathBuf) -> Result<()> {
         std::process::exit(1);
     };
 
-    // Initialize and run the TUI (pass launch path for current worktree detection)
-    let mut terminal = ratatui::init();
+    // Check if stdout is being captured (e.g., by shell function)
+    let stdout_captured = !std::io::stdout().is_terminal();
+
+    // Always use /dev/tty for TUI to support shell integration
+    let tty = File::options().read(true).write(true).open("/dev/tty")?;
+    let backend = ratatui::backend::CrosstermBackend::new(tty);
+    crossterm::terminal::enable_raw_mode()?;
+    crossterm::execute!(
+        std::io::stderr(),
+        crossterm::terminal::EnterAlternateScreen
+    )?;
+    let mut terminal = ratatui::Terminal::new(backend)?;
+
     let mut app = app::App::new(bare_repo_path, Some(path))?;
     let result = app.run(&mut terminal);
-    ratatui::restore();
+
+    // Restore terminal
+    crossterm::terminal::disable_raw_mode()?;
+    crossterm::execute!(
+        std::io::stderr(),
+        crossterm::terminal::LeaveAlternateScreen
+    )?;
 
     // Handle exit action - print path for shell integration
     if let types::ExitAction::ChangeDirectory(worktree_path) = app.exit_action {
         println!("{}", worktree_path.display());
     }
+
+    // Suppress unused variable warning
+    let _ = stdout_captured;
 
     result
 }
