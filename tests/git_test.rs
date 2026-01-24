@@ -27,49 +27,57 @@ fn create_test_bare_repo(path: &PathBuf) {
     fs::create_dir_all(&temp).unwrap();
 
     // Use current_dir instead of -C for init
-    Command::new("git")
+    let init_output = Command::new("git")
         .current_dir(&temp)
         .args(["init"])
         .output()
-        .unwrap();
+        .expect("Failed to run git init");
+    assert!(init_output.status.success(),
+        "git init failed: {}", String::from_utf8_lossy(&init_output.stderr));
 
-    Command::new("git")
+    let config_email = Command::new("git")
         .current_dir(&temp)
         .args(["config", "user.email", "test@test.com"])
         .output()
-        .unwrap();
+        .expect("Failed to run git config email");
+    assert!(config_email.status.success(),
+        "git config email failed: {}", String::from_utf8_lossy(&config_email.stderr));
 
-    Command::new("git")
+    let config_name = Command::new("git")
         .current_dir(&temp)
         .args(["config", "user.name", "Test"])
         .output()
-        .unwrap();
+        .expect("Failed to run git config name");
+    assert!(config_name.status.success(),
+        "git config name failed: {}", String::from_utf8_lossy(&config_name.stderr));
 
     // Create initial commit
     let readme = temp.join("README.md");
     fs::write(&readme, "# Test").unwrap();
 
-    Command::new("git")
+    let add_output = Command::new("git")
         .current_dir(&temp)
         .args(["add", "."])
         .output()
-        .unwrap();
+        .expect("Failed to run git add");
+    assert!(add_output.status.success(),
+        "git add failed: {}", String::from_utf8_lossy(&add_output.stderr));
 
-    Command::new("git")
+    let commit_output = Command::new("git")
         .current_dir(&temp)
         .args(["commit", "-m", "Initial commit"])
         .output()
-        .unwrap();
+        .expect("Failed to run git commit");
+    assert!(commit_output.status.success(),
+        "git commit failed: {}", String::from_utf8_lossy(&commit_output.stderr));
 
     // Clone as bare
     let clone_output = Command::new("git")
         .args(["clone", "--bare", &temp.to_string_lossy(), &path.to_string_lossy()])
         .output()
-        .unwrap();
-
+        .expect("Failed to run git clone");
     assert!(clone_output.status.success(),
-        "git clone --bare failed: {}",
-        String::from_utf8_lossy(&clone_output.stderr));
+        "git clone --bare failed: {}", String::from_utf8_lossy(&clone_output.stderr));
 
     let _ = fs::remove_dir_all(&temp);
 }
