@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const REPO = 'mattew8/oh-my-worktree';
+const REPO = 'dding-g/oh-my-worktree';
 const BINARY_NAME = 'owt';
 
 function getPlatform() {
@@ -98,7 +98,7 @@ async function install() {
     console.error('Failed to download binary:', error.message);
     console.error('');
     console.error('You can manually install owt using cargo:');
-    console.error('  cargo install --git https://github.com/mattew8/oh-my-worktree');
+    console.error('  cargo install --git https://github.com/dding-g/oh-my-worktree');
     process.exit(1);
   }
 }

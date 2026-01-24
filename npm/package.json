@@ -13,11 +13,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mattew8/oh-my-worktree"
+    "url": "https://github.com/dding-g/oh-my-worktree"
   },
-  "homepage": "https://github.com/mattew8/oh-my-worktree#readme",
+  "homepage": "https://github.com/dding-g/oh-my-worktree#readme",
   "bugs": {
-    "url": "https://github.com/mattew8/oh-my-worktree/issues"
+    "url": "https://github.com/dding-g/oh-my-worktree/issues"
   },
   "bin": {
     "owt": "./bin/owt"

@@ -40,7 +40,7 @@ npx oh-my-worktree
 ### Using Cargo (requires Rust)
 
 ```bash
-cargo install --git https://github.com/mattew8/oh-my-worktree
+cargo install --git https://github.com/dding-g/oh-my-worktree
 ```
 
 Or build from source:

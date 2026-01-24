@@ -48,4 +48,4 @@ owt init
 
 ## More Information
 
-For more details, visit the [GitHub repository](https://github.com/mattew8/oh-my-worktree).
+For more details, visit the [GitHub repository](https://github.com/dding-g/oh-my-worktree).
