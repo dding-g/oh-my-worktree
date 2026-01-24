@@ -16,19 +16,18 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    // Check if it's a bare repository
-    let is_bare = git::is_bare_repo(&path)?;
-    if !is_bare {
+    // Get the common git directory (works for both bare repos and worktrees)
+    let common_dir = git::get_git_common_dir(&path)?;
+
+    // Check if the common dir is a bare repository
+    if !git::is_bare_repo(&common_dir)? {
         print_not_bare_repo_error();
         std::process::exit(1);
     }
 
-    // Get the bare repo path
-    let bare_repo_path = git::get_bare_repo_path(&path)?;
-
     // Initialize and run the TUI
     let mut terminal = ratatui::init();
-    let result = app::App::new(bare_repo_path)?.run(&mut terminal);
+    let result = app::App::new(common_dir)?.run(&mut terminal);
     ratatui::restore();
 
     result
@@ -93,10 +92,14 @@ KEYBINDINGS:
     a           Add new worktree
     d           Delete selected worktree
     o           Open in editor ($EDITOR)
-    t           Open in terminal
+    t           Open in terminal ($TERMINAL)
     f           Fetch all remotes
     r           Refresh worktree list
-    q           Quit"#
+    q           Quit
+
+ENVIRONMENT:
+    EDITOR      Editor to use (default: vim)
+    TERMINAL    Terminal app to use (default: Terminal.app on macOS)"#
     );
 }
 

@@ -59,10 +59,17 @@ pub fn render(frame: &mut Frame, app: &App) {
     )]));
     frame.render_widget(path_label, chunks[4]);
 
-    // Generated path value
+    // Generated path value (truncate from left if too long)
     let generated_path = app.generated_worktree_path();
+    let path_str = generated_path.to_string_lossy().to_string();
+    let max_width = chunks[5].width.saturating_sub(1) as usize;
+    let display_path = if path_str.len() > max_width && max_width > 3 {
+        format!("...{}", &path_str[path_str.len() - (max_width - 3)..])
+    } else {
+        path_str
+    };
     let path_value = Paragraph::new(Line::from(vec![Span::styled(
-        generated_path.to_string_lossy().to_string(),
+        display_path,
         Style::default().fg(Color::Yellow),
     )]));
     frame.render_widget(path_value, chunks[5]);

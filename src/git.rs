@@ -22,11 +22,12 @@ pub fn is_git_repo(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-pub fn get_bare_repo_path(path: &Path) -> Result<PathBuf> {
+/// Get the common git directory (bare repo root for worktrees)
+pub fn get_git_common_dir(path: &Path) -> Result<PathBuf> {
     let output = Command::new("git")
-        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-dir"])
+        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-common-dir"])
         .output()
-        .context("Failed to get git directory")?;
+        .context("Failed to get git common directory")?;
 
     if !output.status.success() {
         anyhow::bail!("Not a git repository");
@@ -285,24 +286,4 @@ pub fn get_last_commit_time(path: &Path) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-pub fn get_remote_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
-    let output = Command::new("git")
-        .args([
-            "-C",
-            &bare_repo_path.to_string_lossy(),
-            "branch",
-            "-r",
-            "--format=%(refname:short)",
-        ])
-        .output()
-        .context("Failed to get remote branches")?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout
-        .lines()
-        .filter(|s| !s.contains("HEAD"))
-        .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string())
-        .collect())
 }

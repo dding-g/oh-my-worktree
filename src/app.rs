@@ -269,21 +269,31 @@ impl App {
             }
 
             let path = wt.path.clone();
+            let terminal = std::env::var("TERMINAL").ok();
 
             #[cfg(target_os = "macos")]
-            let result = Command::new("open").args(["-a", "Terminal", &path.to_string_lossy()]).status();
+            let result = {
+                let app = terminal.as_deref().unwrap_or("Terminal");
+                Command::new("open").args(["-a", app, &path.to_string_lossy()]).status()
+            };
 
             #[cfg(target_os = "linux")]
-            let result = Command::new("x-terminal-emulator")
-                .arg("--working-directory")
-                .arg(&path)
-                .status()
-                .or_else(|_| {
-                    Command::new("gnome-terminal")
-                        .arg("--working-directory")
-                        .arg(&path)
-                        .status()
-                });
+            let result = if let Some(term) = terminal {
+                Command::new(&term)
+                    .current_dir(&path)
+                    .status()
+            } else {
+                Command::new("x-terminal-emulator")
+                    .arg("--working-directory")
+                    .arg(&path)
+                    .status()
+                    .or_else(|_| {
+                        Command::new("gnome-terminal")
+                            .arg("--working-directory")
+                            .arg(&path)
+                            .status()
+                    })
+            };
 
             #[cfg(not(any(target_os = "macos", target_os = "linux")))]
             let result: Result<std::process::ExitStatus, std::io::Error> =
