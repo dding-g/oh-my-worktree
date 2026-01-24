@@ -1,0 +1,8 @@
+# Ignore everything except essential files
+*
+!package.json
+!install.js
+!bin/
+!bin/owt
+!README.md
+!LICENSE

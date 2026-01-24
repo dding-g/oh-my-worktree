@@ -25,16 +25,28 @@ project.git/              # bare repository (metadata only)
 
 ## Installation
 
-### From source (requires Rust)
+### Using npm (Recommended)
 
 ```bash
-cargo install --path .
+npm install -g oh-my-worktree
 ```
 
-Or build manually:
+Or use with npx (no installation required):
 
 ```bash
-git clone https://github.com/yourusername/oh-my-worktree.git
+npx oh-my-worktree
+```
+
+### Using Cargo (requires Rust)
+
+```bash
+cargo install --git https://github.com/mattew8/oh-my-worktree
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/mattew8/oh-my-worktree.git
 cd oh-my-worktree
 cargo build --release
 # Binary at ./target/release/owt
@@ -42,7 +54,7 @@ cargo build --release
 
 ### PATH setup
 
-Ensure `~/.cargo/bin` is in your PATH:
+For cargo installation, ensure `~/.cargo/bin` is in your PATH:
 
 ```bash
 # Add to ~/.zshrc or ~/.bashrc
