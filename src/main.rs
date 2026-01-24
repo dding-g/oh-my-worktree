@@ -12,6 +12,7 @@ enum Command {
     Tui { path: PathBuf },
     Clone { url: String, path: Option<PathBuf> },
     Init,
+    Setup,
     Help,
     Version,
 }
@@ -28,6 +29,7 @@ fn main() -> Result<()> {
         }
         Command::Clone { url, path } => run_clone(&url, path),
         Command::Init => run_init(),
+        Command::Setup => run_setup(),
         Command::Tui { path } => run_tui(path),
     }
 }
@@ -148,6 +150,87 @@ fn run_init() -> Result<()> {
     Ok(())
 }
 
+fn run_setup() -> Result<()> {
+    use std::fs;
+    use std::io::{self, Write};
+
+    const SHELL_FUNCTION: &str = r#"
+# owt shell integration - enables 'Enter' key to change directory
+owt() {
+  local result
+  result=$(command owt "$@")
+  if [[ -d "$result" ]]; then
+    cd "$result"
+  else
+    echo "$result"
+  fi
+}
+"#;
+
+    // Detect shell from SHELL environment variable
+    let shell = env::var("SHELL").unwrap_or_default();
+    let home = env::var("HOME").ok().map(PathBuf::from);
+    let (shell_name, config_file) = if shell.contains("zsh") {
+        ("zsh", home.map(|h| h.join(".zshrc")))
+    } else if shell.contains("bash") {
+        ("bash", home.map(|h| h.join(".bashrc")))
+    } else {
+        ("unknown", None)
+    };
+
+    let config_path = match config_file {
+        Some(path) => path,
+        None => {
+            eprintln!("Error: Could not detect shell config file.");
+            eprintln!("Please manually add the following to your shell config:\n");
+            println!("{}", SHELL_FUNCTION);
+            return Ok(());
+        }
+    };
+
+    println!("Detected shell: {}", shell_name);
+    println!("Config file: {}", config_path.display());
+
+    // Check if function already exists
+    if config_path.exists() {
+        let content = fs::read_to_string(&config_path)?;
+        if content.contains("owt()") || content.contains("owt ()") {
+            println!("\n✓ Shell integration already installed!");
+            println!("  If it's not working, try: source {}", config_path.display());
+            return Ok(());
+        }
+    }
+
+    // Ask for confirmation
+    print!("\nAdd owt shell integration to {}? [Y/n] ", config_path.display());
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+
+    if input == "n" || input == "no" {
+        println!("Aborted. You can manually add this to your shell config:\n");
+        println!("{}", SHELL_FUNCTION);
+        return Ok(());
+    }
+
+    // Append to config file
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&config_path)?;
+
+    writeln!(file, "{}", SHELL_FUNCTION)?;
+
+    println!("\n✓ Shell integration installed!");
+    println!("\nTo activate, run:");
+    println!("  source {}", config_path.display());
+    println!("\nOr restart your terminal.");
+
+    Ok(())
+}
+
 fn extract_repo_name(url: &str) -> String {
     // Handle various URL formats:
     // https://github.com/user/repo.git
@@ -188,6 +271,7 @@ fn parse_args() -> Command {
             Command::Clone { url, path }
         }
         "init" => Command::Init,
+        "setup" => Command::Setup,
         arg if arg.starts_with('-') => {
             // Handle flags for TUI mode
             let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -225,6 +309,7 @@ USAGE:
     owt [OPTIONS] [PATH]         Start TUI (default)
     owt clone <URL> [PATH]       Clone as bare repo + create main worktree
     owt init                     Show guide to convert regular repo to bare
+    owt setup                    Install shell integration for directory changing
 
 ARGS:
     [PATH]    Path to the bare repository (default: current directory)
@@ -237,6 +322,7 @@ OPTIONS:
 SUBCOMMANDS:
     clone <URL> [PATH]   Clone repository as bare and create first worktree
     init                 Show conversion guide for regular repositories
+    setup                Install shell integration (adds function to .zshrc/.bashrc)
 
 KEYBINDINGS (TUI):
     Enter       Enter worktree (cd to directory)
