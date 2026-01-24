@@ -2,9 +2,14 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-/// Helper to create a temporary directory
+/// Helper to create a temporary directory with unique ID
 fn temp_dir(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("owt_test_{}", name));
+    let id = std::process::id();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!("owt_test_{}_{}_{}", name, id, ts));
     let _ = fs::remove_dir_all(&path);
     fs::create_dir_all(&path).unwrap();
     path
@@ -57,10 +62,14 @@ fn create_test_bare_repo(path: &PathBuf) {
         .unwrap();
 
     // Clone as bare
-    Command::new("git")
+    let clone_output = Command::new("git")
         .args(["clone", "--bare", &temp.to_string_lossy(), &path.to_string_lossy()])
         .output()
         .unwrap();
+
+    assert!(clone_output.status.success(),
+        "git clone --bare failed: {}",
+        String::from_utf8_lossy(&clone_output.stderr));
 
     let _ = fs::remove_dir_all(&temp);
 }
