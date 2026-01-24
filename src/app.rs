@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::git;
-use crate::types::{AppMessage, AppState, Worktree};
+use crate::types::{AppMessage, AppState, ExitAction, Worktree};
 use crate::ui::{add_modal, confirm_modal, main_view};
 
 pub struct App {
@@ -19,6 +19,8 @@ pub struct App {
     pub input_buffer: String,
     pub should_quit: bool,
     pub config: Config,
+    pub exit_action: ExitAction,
+    pub is_fetching: bool,
 }
 
 impl App {
@@ -34,12 +36,21 @@ impl App {
             input_buffer: String::new(),
             should_quit: false,
             config,
+            exit_action: ExitAction::Quit,
+            is_fetching: false,
         })
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.should_quit {
             terminal.draw(|frame| self.draw(frame))?;
+
+            // Handle async-like fetch (show UI first, then fetch)
+            if self.is_fetching {
+                self.do_fetch();
+                continue;
+            }
+
             self.handle_events(terminal)?;
         }
         Ok(())
@@ -47,7 +58,7 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         match self.state {
-            AppState::List => main_view::render(frame, self),
+            AppState::List | AppState::Fetching => main_view::render(frame, self),
             AppState::AddModal => {
                 main_view::render(frame, self);
                 add_modal::render(frame, self);
@@ -76,6 +87,7 @@ impl App {
                         AppState::ConfirmDelete { delete_branch } => {
                             self.handle_confirm_delete_input(key.code, delete_branch)
                         }
+                        AppState::Fetching => {} // Ignore input during fetch
                     }
                 }
                 Event::Resize(_, _) => {
@@ -96,6 +108,7 @@ impl App {
             }
             KeyCode::Up | KeyCode::Char('k') => self.move_selection_up(),
             KeyCode::Down | KeyCode::Char('j') => self.move_selection_down(),
+            KeyCode::Enter => self.enter_worktree(),
             KeyCode::Char('a') => {
                 self.state = AppState::AddModal;
                 self.input_buffer.clear();
@@ -347,7 +360,12 @@ impl App {
     }
 
     fn fetch_all(&mut self) {
+        self.is_fetching = true;
+        self.state = AppState::Fetching;
         self.message = Some(AppMessage::info("Fetching..."));
+    }
+
+    pub fn do_fetch(&mut self) {
         match git::fetch_all(&self.bare_repo_path) {
             Ok(()) => {
                 self.message = Some(AppMessage::info("Fetch completed"));
@@ -357,13 +375,19 @@ impl App {
                 self.message = Some(AppMessage::error(format!("Fetch failed: {}", e)));
             }
         }
+        self.is_fetching = false;
+        self.state = AppState::List;
     }
 
-    pub fn generated_worktree_path(&self) -> PathBuf {
-        let branch = self.input_buffer.trim();
-        self.bare_repo_path
-            .parent()
-            .map(|p| p.join(branch))
-            .unwrap_or_else(|| PathBuf::from(branch))
+    fn enter_worktree(&mut self) {
+        if let Some(wt) = self.selected_worktree() {
+            if wt.is_bare {
+                self.message = Some(AppMessage::error("Cannot enter bare repository"));
+                return;
+            }
+            self.exit_action = ExitAction::ChangeDirectory(wt.path.clone());
+            self.should_quit = true;
+        }
     }
+
 }

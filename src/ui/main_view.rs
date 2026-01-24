@@ -77,6 +77,21 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 Style::default()
             };
 
+            // Show "Fetching..." when fetching
+            let last_commit = if app.is_fetching {
+                "Fetching...".to_string()
+            } else {
+                wt.last_commit_time
+                    .clone()
+                    .unwrap_or_else(|| "-".to_string())
+            };
+
+            let last_commit_style = if app.is_fetching {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+
             Row::new(vec![
                 Cell::from(cursor).style(Style::default().fg(Color::Cyan)),
                 Cell::from(wt.display_name()).style(if wt.is_bare {
@@ -86,12 +101,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 }),
                 Cell::from(wt.branch_display()).style(Style::default().fg(Color::Cyan)),
                 Cell::from(status_text).style(Style::default().fg(status_color)),
-                Cell::from(
-                    wt.last_commit_time
-                        .clone()
-                        .unwrap_or_else(|| "-".to_string()),
-                )
-                .style(Style::default().fg(Color::DarkGray)),
+                Cell::from(last_commit).style(last_commit_style),
             ])
             .style(row_style)
         })
@@ -115,13 +125,13 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let keybindings = vec![
-        ("j/k", "navigate"),
+        ("↵", "enter"),
+        ("j/k", "nav"),
         ("a", "add"),
-        ("d", "delete"),
-        ("o", "editor"),
-        ("t", "terminal"),
+        ("d", "del"),
+        ("o", "edit"),
+        ("t", "term"),
         ("f", "fetch"),
-        ("r", "refresh"),
         ("q", "quit"),
     ];
 

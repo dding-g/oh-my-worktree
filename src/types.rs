@@ -62,6 +62,14 @@ pub enum AppState {
     List,
     AddModal,
     ConfirmDelete { delete_branch: bool },
+    Fetching,
+}
+
+/// Exit reason when quitting the app
+#[derive(Debug, Clone)]
+pub enum ExitAction {
+    Quit,
+    ChangeDirectory(PathBuf),
 }
 
 #[derive(Debug, Clone)]

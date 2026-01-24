@@ -57,8 +57,14 @@ fn run_tui(path: PathBuf) -> Result<()> {
 
     // Initialize and run the TUI
     let mut terminal = ratatui::init();
-    let result = app::App::new(bare_repo_path)?.run(&mut terminal);
+    let mut app = app::App::new(bare_repo_path)?;
+    let result = app.run(&mut terminal);
     ratatui::restore();
+
+    // Handle exit action - print path for shell integration
+    if let types::ExitAction::ChangeDirectory(worktree_path) = app.exit_action {
+        println!("{}", worktree_path.display());
+    }
 
     result
 }
