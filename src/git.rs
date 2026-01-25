@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::types::{Worktree, WorktreeStatus};
+use crate::types::{AheadBehind, Worktree, WorktreeStatus};
 
 /// Check for .bare folder pattern (common worktree layout)
 /// Returns the path to .bare if found
@@ -79,15 +79,14 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
     for line in output.lines() {
         if line.starts_with("worktree ") {
             if let Some(path) = current_path.take() {
-                let status = if is_bare {
-                    WorktreeStatus::Clean
+                let (status, last_commit_time, ahead_behind) = if is_bare {
+                    (WorktreeStatus::Clean, None, None)
                 } else {
-                    get_status(&path).unwrap_or(WorktreeStatus::Clean)
-                };
-                let last_commit_time = if is_bare {
-                    None
-                } else {
-                    get_last_commit_time(&path).ok()
+                    (
+                        get_status(&path).unwrap_or(WorktreeStatus::Clean),
+                        get_last_commit_time(&path).ok(),
+                        get_ahead_behind(&path),
+                    )
                 };
                 worktrees.push(Worktree {
                     path,
@@ -95,6 +94,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
                     is_bare,
                     status,
                     last_commit_time,
+                    ahead_behind,
                 });
             }
             current_path = Some(PathBuf::from(line.strip_prefix("worktree ").unwrap()));
@@ -113,15 +113,14 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
 
     // Handle the last worktree
     if let Some(path) = current_path {
-        let status = if is_bare {
-            WorktreeStatus::Clean
+        let (status, last_commit_time, ahead_behind) = if is_bare {
+            (WorktreeStatus::Clean, None, None)
         } else {
-            get_status(&path).unwrap_or(WorktreeStatus::Clean)
-        };
-        let last_commit_time = if is_bare {
-            None
-        } else {
-            get_last_commit_time(&path).ok()
+            (
+                get_status(&path).unwrap_or(WorktreeStatus::Clean),
+                get_last_commit_time(&path).ok(),
+                get_ahead_behind(&path),
+            )
         };
         worktrees.push(Worktree {
             path,
@@ -129,6 +128,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
             is_bare,
             status,
             last_commit_time,
+            ahead_behind,
         });
     }
 
@@ -315,6 +315,36 @@ pub fn get_last_commit_time(path: &Path) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+pub fn get_ahead_behind(path: &Path) -> Option<AheadBehind> {
+    // Get the upstream tracking branch
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "rev-list",
+            "--left-right",
+            "--count",
+            "@{upstream}...HEAD",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = stdout.trim().split('\t').collect();
+
+    if parts.len() == 2 {
+        let behind = parts[0].parse().unwrap_or(0);
+        let ahead = parts[1].parse().unwrap_or(0);
+        Some(AheadBehind { ahead, behind })
+    } else {
+        None
+    }
 }
 
 pub fn clone_bare(url: &str, path: &Path) -> Result<()> {

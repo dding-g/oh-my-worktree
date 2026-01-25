@@ -24,6 +24,11 @@ pub fn render(frame: &mut Frame) {
         ("Navigation", vec![
             ("j / ↓", "Move down"),
             ("k / ↑", "Move up"),
+            ("gg / Home", "Go to top"),
+            ("G / End", "Go to bottom"),
+            ("Ctrl+d/u", "Half page down/up"),
+            ("g", "Jump to current worktree"),
+            ("/", "Search worktrees"),
             ("Enter", "Enter worktree (cd)"),
         ]),
         ("Worktree Actions", vec![
@@ -31,12 +36,14 @@ pub fn render(frame: &mut Frame) {
             ("d", "Delete worktree"),
             ("r", "Refresh list"),
             ("f", "Fetch remotes"),
+            ("s", "Sort (name/recent/status)"),
         ]),
         ("External Apps", vec![
             ("o", "Open in editor"),
             ("t", "Open in terminal"),
         ]),
         ("Other", vec![
+            ("y", "Copy path to clipboard"),
             ("c", "View config"),
             ("?", "Show this help"),
             ("q", "Quit"),

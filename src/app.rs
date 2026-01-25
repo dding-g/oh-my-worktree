@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::git;
-use crate::types::{AppMessage, AppState, ExitAction, Worktree, WorktreeStatus};
+use crate::types::{AppMessage, AppState, ExitAction, SortMode, Worktree, WorktreeStatus};
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
 
 pub struct App {
@@ -25,10 +25,15 @@ pub struct App {
     pub current_worktree_path: Option<PathBuf>, // Path where owt was launched from
     pub is_adding: bool,
     pub is_deleting: bool,
+    pub has_shell_integration: bool, // Whether OWT_OUTPUT_FILE is set
+    pub filter_text: String,         // Search/filter text
+    pub is_filtering: bool,          // Whether in filter mode
+    pub last_key: Option<char>,      // For gg detection
+    pub sort_mode: SortMode,         // Current sort mode
 }
 
 impl App {
-    pub fn new(bare_repo_path: PathBuf, launch_path: Option<PathBuf>) -> Result<Self> {
+    pub fn new(bare_repo_path: PathBuf, launch_path: Option<PathBuf>, has_shell_integration: bool) -> Result<Self> {
         let worktrees = git::list_worktrees(&bare_repo_path)?;
         let config = Config::load().unwrap_or_default();
 
@@ -43,16 +48,26 @@ impl App {
             }).map(|wt| wt.path.clone())
         });
 
-        // Set initial selection to current worktree if found
+        // Set initial selection to current worktree if found, otherwise first non-bare worktree
         let selected_index = current_worktree_path.as_ref()
             .and_then(|cp| worktrees.iter().position(|wt| wt.path == *cp))
-            .unwrap_or(0);
+            .unwrap_or_else(|| {
+                // Find first non-bare worktree
+                worktrees.iter().position(|wt| !wt.is_bare).unwrap_or(0)
+            });
+
+        // Show initial message about shell integration if not set up
+        let initial_message = if !has_shell_integration {
+            Some(AppMessage::info("Tip: Run 'owt setup' then reload shell for Enter key to change directory"))
+        } else {
+            None
+        };
 
         Ok(Self {
             worktrees,
             selected_index,
             state: AppState::List,
-            message: None,
+            message: initial_message,
             bare_repo_path,
             input_buffer: String::new(),
             should_quit: false,
@@ -62,6 +77,11 @@ impl App {
             current_worktree_path,
             is_adding: false,
             is_deleting: false,
+            has_shell_integration,
+            filter_text: String::new(),
+            is_filtering: false,
+            last_key: None,
+            sort_mode: SortMode::default(),
         })
     }
 
@@ -151,17 +171,71 @@ impl App {
     }
 
     fn handle_list_input(&mut self, code: KeyCode, modifiers: KeyModifiers) {
+        // Handle filter mode separately
+        if self.is_filtering {
+            self.handle_filter_input(code);
+            return;
+        }
+
         match code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true;
             }
-            KeyCode::Up | KeyCode::Char('k') => self.move_selection_up(),
-            KeyCode::Down | KeyCode::Char('j') => self.move_selection_down(),
-            KeyCode::Enter => self.enter_worktree(),
+            KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+                // Half page down
+                self.move_selection_half_page_down();
+                self.last_key = None;
+            }
+            KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+                // Half page up
+                self.move_selection_half_page_up();
+                self.last_key = None;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.move_selection_up();
+                self.last_key = None;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.move_selection_down();
+                self.last_key = None;
+            }
+            KeyCode::Char('g') => {
+                // Check for 'gg' (go to top) or single 'g' (go to current worktree)
+                if self.last_key == Some('g') {
+                    self.move_to_top();
+                    self.last_key = None;
+                } else {
+                    // First 'g' press - wait for next key
+                    self.last_key = Some('g');
+                }
+            }
+            KeyCode::Char('G') => {
+                self.move_to_bottom();
+                self.last_key = None;
+            }
+            KeyCode::Home => {
+                self.move_to_top();
+                self.last_key = None;
+            }
+            KeyCode::End => {
+                self.move_to_bottom();
+                self.last_key = None;
+            }
+            KeyCode::Enter => {
+                self.enter_worktree();
+                self.last_key = None;
+            }
+            KeyCode::Char('/') => {
+                // Enter filter mode
+                self.is_filtering = true;
+                self.filter_text.clear();
+                self.last_key = None;
+            }
             KeyCode::Char('a') => {
                 self.state = AppState::AddModal;
                 self.input_buffer.clear();
+                self.last_key = None;
             }
             KeyCode::Char('d') => {
                 if let Some(wt) = self.selected_worktree() {
@@ -175,21 +249,101 @@ impl App {
                         self.state = AppState::ConfirmDelete { delete_branch: false };
                     }
                 }
+                self.last_key = None;
             }
-            KeyCode::Char('o') => self.open_editor(),
-            KeyCode::Char('t') => self.open_terminal(),
-            KeyCode::Char('f') => self.fetch_all(),
-            KeyCode::Char('r') => self.refresh_worktrees(),
+            KeyCode::Char('o') => {
+                self.open_editor();
+                self.last_key = None;
+            }
+            KeyCode::Char('t') => {
+                self.open_terminal();
+                self.last_key = None;
+            }
+            KeyCode::Char('f') => {
+                self.fetch_all();
+                self.last_key = None;
+            }
+            KeyCode::Char('r') => {
+                self.refresh_worktrees();
+                self.last_key = None;
+            }
+            KeyCode::Char('s') => {
+                self.cycle_sort_mode();
+                self.last_key = None;
+            }
             KeyCode::Char('c') => {
                 self.state = AppState::ConfigModal {
                     selected_index: 0,
                     editing: false,
                 };
+                self.last_key = None;
             }
             KeyCode::Char('?') => {
                 self.state = AppState::HelpModal;
+                self.last_key = None;
+            }
+            KeyCode::Char('y') => {
+                self.copy_path_to_clipboard();
+                self.last_key = None;
+            }
+            KeyCode::Char('0') => {
+                // Go to current worktree (if single g was pressed before, treat as timeout)
+                if self.last_key == Some('g') {
+                    self.jump_to_current_worktree();
+                }
+                self.last_key = None;
+            }
+            KeyCode::Esc => {
+                // Clear filter if any
+                if !self.filter_text.is_empty() {
+                    self.filter_text.clear();
+                }
+                self.last_key = None;
+            }
+            _ => {
+                // If we were waiting for 'g' and got something else
+                if self.last_key == Some('g') {
+                    self.jump_to_current_worktree();
+                }
+                self.last_key = None;
+            }
+        }
+    }
+
+    fn handle_filter_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => {
+                // Cancel filter, show all worktrees
+                self.is_filtering = false;
+                self.filter_text.clear();
+            }
+            KeyCode::Enter => {
+                // Exit filter mode and enter the selected worktree
+                self.is_filtering = false;
+                self.enter_worktree();
+            }
+            KeyCode::Backspace => {
+                self.filter_text.pop();
+            }
+            KeyCode::Char(c) => {
+                self.filter_text.push(c);
+                // Auto-select first matching worktree
+                self.select_first_filtered_worktree();
             }
             _ => {}
+        }
+    }
+
+    fn select_first_filtered_worktree(&mut self) {
+        if self.filter_text.is_empty() {
+            return;
+        }
+        let filter_lower = self.filter_text.to_lowercase();
+        if let Some(idx) = self.worktrees.iter().position(|wt| {
+            wt.display_name().to_lowercase().contains(&filter_lower)
+                || wt.branch_display().to_lowercase().contains(&filter_lower)
+        }) {
+            self.selected_index = idx;
         }
     }
 
@@ -412,6 +566,36 @@ impl App {
         }
     }
 
+    fn move_to_top(&mut self) {
+        self.selected_index = 0;
+    }
+
+    fn move_to_bottom(&mut self) {
+        self.selected_index = self.worktrees.len().saturating_sub(1);
+    }
+
+    fn move_selection_half_page_down(&mut self) {
+        let half_page = 10; // Approximate half page
+        let max_index = self.worktrees.len().saturating_sub(1);
+        self.selected_index = (self.selected_index + half_page).min(max_index);
+    }
+
+    fn move_selection_half_page_up(&mut self) {
+        let half_page = 10; // Approximate half page
+        self.selected_index = self.selected_index.saturating_sub(half_page);
+    }
+
+    fn jump_to_current_worktree(&mut self) {
+        if let Some(ref current_path) = self.current_worktree_path {
+            if let Some(idx) = self.worktrees.iter().position(|wt| wt.path == *current_path) {
+                self.selected_index = idx;
+                self.message = Some(AppMessage::info("Jumped to current worktree"));
+            }
+        } else {
+            self.message = Some(AppMessage::error("No current worktree detected"));
+        }
+    }
+
     pub fn selected_worktree(&self) -> Option<&Worktree> {
         self.worktrees.get(self.selected_index)
     }
@@ -420,6 +604,7 @@ impl App {
         match git::list_worktrees(&self.bare_repo_path) {
             Ok(worktrees) => {
                 self.worktrees = worktrees;
+                self.apply_sort();
                 if self.selected_index >= self.worktrees.len() {
                     self.selected_index = self.worktrees.len().saturating_sub(1);
                 }
@@ -427,6 +612,60 @@ impl App {
             }
             Err(e) => {
                 self.message = Some(AppMessage::error(format!("Failed to refresh: {}", e)));
+            }
+        }
+    }
+
+    fn cycle_sort_mode(&mut self) {
+        self.sort_mode = self.sort_mode.next();
+        self.apply_sort();
+        self.message = Some(AppMessage::info(format!("Sort: {}", self.sort_mode.label())));
+    }
+
+    fn apply_sort(&mut self) {
+        // Remember currently selected worktree path
+        let selected_path = self.selected_worktree().map(|wt| wt.path.clone());
+
+        match self.sort_mode {
+            SortMode::Name => {
+                self.worktrees.sort_by(|a, b| {
+                    // Bare repo always first
+                    if a.is_bare && !b.is_bare { return std::cmp::Ordering::Less; }
+                    if !a.is_bare && b.is_bare { return std::cmp::Ordering::Greater; }
+                    a.display_name().to_lowercase().cmp(&b.display_name().to_lowercase())
+                });
+            }
+            SortMode::Recent => {
+                self.worktrees.sort_by(|a, b| {
+                    // Bare repo always first
+                    if a.is_bare && !b.is_bare { return std::cmp::Ordering::Less; }
+                    if !a.is_bare && b.is_bare { return std::cmp::Ordering::Greater; }
+                    // Sort by last commit time (most recent first)
+                    b.last_commit_time.cmp(&a.last_commit_time)
+                });
+            }
+            SortMode::Status => {
+                self.worktrees.sort_by(|a, b| {
+                    // Bare repo always first
+                    if a.is_bare && !b.is_bare { return std::cmp::Ordering::Less; }
+                    if !a.is_bare && b.is_bare { return std::cmp::Ordering::Greater; }
+                    // Sort by status priority (dirty first)
+                    let status_order = |s: &WorktreeStatus| match s {
+                        WorktreeStatus::Conflict => 0,
+                        WorktreeStatus::Mixed => 1,
+                        WorktreeStatus::Unstaged => 2,
+                        WorktreeStatus::Staged => 3,
+                        WorktreeStatus::Clean => 4,
+                    };
+                    status_order(&a.status).cmp(&status_order(&b.status))
+                });
+            }
+        }
+
+        // Restore selection to same worktree after sort
+        if let Some(ref path) = selected_path {
+            if let Some(idx) = self.worktrees.iter().position(|wt| wt.path == *path) {
+                self.selected_index = idx;
             }
         }
     }
@@ -697,13 +936,72 @@ impl App {
     }
 
     fn enter_worktree(&mut self) {
-        if let Some(wt) = self.selected_worktree() {
+        if let Some(wt) = self.selected_worktree().cloned() {
             if wt.is_bare {
                 self.message = Some(AppMessage::error("Cannot enter bare repository"));
                 return;
             }
+            // Always allow enter - even without shell integration, we print the path
+            // The shell wrapper function (from `owt setup`) will handle the cd
             self.exit_action = ExitAction::ChangeDirectory(wt.path.clone());
             self.should_quit = true;
+        } else {
+            self.message = Some(AppMessage::error("No worktree selected"));
+        }
+    }
+
+    fn copy_path_to_clipboard(&mut self) {
+        if let Some(wt) = self.selected_worktree() {
+            let path_str = wt.path.to_string_lossy().to_string();
+
+            #[cfg(target_os = "macos")]
+            let result = {
+                use std::io::Write;
+                Command::new("pbcopy")
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                    .and_then(|mut child| {
+                        if let Some(mut stdin) = child.stdin.take() {
+                            stdin.write_all(path_str.as_bytes())?;
+                        }
+                        child.wait()
+                    })
+            };
+
+            #[cfg(target_os = "linux")]
+            let result = {
+                use std::io::Write;
+                // Try xclip first, then xsel
+                Command::new("xclip")
+                    .args(["-selection", "clipboard"])
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                    .or_else(|_| {
+                        Command::new("xsel")
+                            .args(["--clipboard", "--input"])
+                            .stdin(std::process::Stdio::piped())
+                            .spawn()
+                    })
+                    .and_then(|mut child| {
+                        if let Some(mut stdin) = child.stdin.take() {
+                            stdin.write_all(path_str.as_bytes())?;
+                        }
+                        child.wait()
+                    })
+            };
+
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            let result: Result<std::process::ExitStatus, std::io::Error> =
+                Err(std::io::Error::new(std::io::ErrorKind::Other, "Clipboard not supported on this platform"));
+
+            match result {
+                Ok(status) if status.success() => {
+                    self.message = Some(AppMessage::info(format!("Copied: {}", path_str)));
+                }
+                _ => {
+                    self.message = Some(AppMessage::error("Failed to copy to clipboard"));
+                }
+            }
         }
     }
 

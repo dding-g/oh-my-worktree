@@ -15,6 +15,7 @@ enum Command {
     Setup,
     Help,
     Version,
+    TestCd,  // Test command for debugging cd functionality
 }
 
 fn main() -> Result<()> {
@@ -31,6 +32,7 @@ fn main() -> Result<()> {
         Command::Init => run_init(),
         Command::Setup => run_setup(),
         Command::Tui { path } => run_tui(path),
+        Command::TestCd => run_test_cd(),
     }
 }
 
@@ -76,7 +78,8 @@ fn run_tui(path: PathBuf) -> Result<()> {
     let backend = ratatui::backend::CrosstermBackend::new(tty);
     let mut terminal = ratatui::Terminal::new(backend)?;
 
-    let mut app = app::App::new(bare_repo_path, Some(path))?;
+    let has_shell_integration = output_file.is_some();
+    let mut app = app::App::new(bare_repo_path, Some(path), has_shell_integration)?;
     let result = app.run(&mut terminal);
 
     // Restore terminal
@@ -87,18 +90,52 @@ fn run_tui(path: PathBuf) -> Result<()> {
     crossterm::terminal::disable_raw_mode()?;
 
     // Handle exit action - write path for shell integration
-    if let types::ExitAction::ChangeDirectory(worktree_path) = &app.exit_action {
-        if let Some(ref output_path) = output_file {
-            // Write to temp file for shell integration
-            let mut file = File::create(output_path)?;
-            writeln!(file, "{}", worktree_path.display())?;
-        } else {
-            // Fallback: print to stdout
-            println!("{}", worktree_path.display());
+    match &app.exit_action {
+        types::ExitAction::ChangeDirectory(worktree_path) => {
+            if let Some(ref output_path) = output_file {
+                // Write to temp file for shell integration
+                let mut file = File::create(output_path)?;
+                writeln!(file, "{}", worktree_path.display())?;
+                // Log for debugging
+                eprintln!("→ {}", worktree_path.display());
+            } else {
+                // No shell integration - just print the path
+                // This happens when running the binary directly without the shell function
+                eprintln!("To enable directory changing, run: owt setup");
+                println!("{}", worktree_path.display());
+            }
+        }
+        types::ExitAction::Quit => {
+            // Normal quit, no directory change
         }
     }
 
     result
+}
+
+fn run_test_cd() -> Result<()> {
+    use std::fs::File;
+    use std::io::Write;
+
+    // This tests the cd functionality without TUI
+    let output_file = env::var("OWT_OUTPUT_FILE").ok();
+    let test_path = env::current_dir()?;
+
+    eprintln!("Testing cd functionality...");
+    eprintln!("OWT_OUTPUT_FILE: {:?}", output_file);
+    eprintln!("Test path: {}", test_path.display());
+
+    if let Some(ref output_path) = output_file {
+        eprintln!("Writing to: {}", output_path);
+        let mut file = File::create(output_path)?;
+        writeln!(file, "{}", test_path.display())?;
+        eprintln!("Write successful!");
+    } else {
+        eprintln!("No OWT_OUTPUT_FILE set - printing to stdout");
+        println!("{}", test_path.display());
+    }
+
+    Ok(())
 }
 
 fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
@@ -323,6 +360,7 @@ fn parse_args() -> Command {
         }
         "init" => Command::Init,
         "setup" => Command::Setup,
+        "test-cd" => Command::TestCd,
         arg if arg.starts_with('-') => {
             // Handle flags for TUI mode
             let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

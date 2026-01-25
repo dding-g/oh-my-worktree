@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::types::WorktreeStatus;
+use crate::types::{SortMode, WorktreeStatus};
 
 pub fn render(frame: &mut Frame, app: &App) {
     let chunks = Layout::vertical([
@@ -53,6 +53,10 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     .style(Style::default().fg(Color::DarkGray))
     .height(1);
 
+    // Check if filter matches a worktree
+    let filter_lower = app.filter_text.to_lowercase();
+    let has_filter = !app.filter_text.is_empty();
+
     let rows: Vec<Row> = app
         .worktrees
         .iter()
@@ -62,6 +66,14 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             let is_current = app.current_worktree_path.as_ref()
                 .map(|cp| cp == &wt.path)
                 .unwrap_or(false);
+
+            // Check if this row matches filter
+            let matches_filter = if has_filter {
+                wt.display_name().to_lowercase().contains(&filter_lower)
+                    || wt.branch_display().to_lowercase().contains(&filter_lower)
+            } else {
+                true
+            };
 
             // Show cursor and current indicator
             let cursor = if is_selected && is_current {
@@ -82,10 +94,23 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 WorktreeStatus::Mixed => Color::Yellow,
             };
 
-            let status_text = format!("{} {}", wt.status.symbol(), wt.status.label());
+            // Build status text with ahead/behind info
+            let status_base = format!("{} {}", wt.status.symbol(), wt.status.label());
+            let status_text = if let Some(ref ab) = wt.ahead_behind {
+                if let Some(ab_display) = ab.display() {
+                    format!("{} {}", status_base, ab_display)
+                } else {
+                    status_base
+                }
+            } else {
+                status_base
+            };
 
             let row_style = if is_selected {
                 Style::default().bg(Color::DarkGray)
+            } else if has_filter && !matches_filter {
+                // Dim non-matching rows when filtering
+                Style::default().fg(Color::DarkGray)
             } else {
                 Style::default()
             };
@@ -104,7 +129,9 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 )
             };
 
-            let name_style = if wt.is_bare {
+            let name_style = if has_filter && !matches_filter {
+                Style::default().fg(Color::DarkGray)
+            } else if wt.is_bare {
                 Style::default().fg(Color::DarkGray).italic()
             } else if is_current {
                 Style::default().fg(Color::Green)
@@ -112,11 +139,23 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 Style::default().fg(Color::White)
             };
 
+            let branch_style = if has_filter && !matches_filter {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default().fg(Color::Cyan)
+            };
+
+            let status_style = if has_filter && !matches_filter {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default().fg(status_color)
+            };
+
             Row::new(vec![
                 Cell::from(cursor).style(Style::default().fg(Color::Cyan)),
                 Cell::from(wt.display_name()).style(name_style),
-                Cell::from(wt.branch_display()).style(Style::default().fg(Color::Cyan)),
-                Cell::from(status_text).style(Style::default().fg(status_color)),
+                Cell::from(wt.branch_display()).style(branch_style),
+                Cell::from(status_text).style(status_style),
                 Cell::from(last_commit).style(last_commit_style),
             ])
             .style(row_style)
@@ -140,19 +179,38 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
+    // Show filter input if filtering
+    if app.is_filtering {
+        let filter_line = Line::from(vec![
+            Span::styled("/", Style::default().fg(Color::Yellow)),
+            Span::styled(&app.filter_text, Style::default().fg(Color::White)),
+            Span::styled("_", Style::default().fg(Color::Yellow).add_modifier(Modifier::SLOW_BLINK)),
+            Span::raw("  "),
+            Span::styled("(Enter to apply, Esc to cancel)", Style::default().fg(Color::DarkGray)),
+        ]);
+
+        let footer = Paragraph::new(vec![filter_line]).block(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+
+        frame.render_widget(footer, area);
+        return;
+    }
+
     let keybindings = vec![
         ("↵", "enter"),
         ("j/k", "nav"),
+        ("/", "search"),
+        ("s", "sort"),
         ("a", "add"),
         ("d", "del"),
-        ("o", "edit"),
-        ("t", "term"),
-        ("f", "fetch"),
         ("?", "help"),
         ("q", "quit"),
     ];
 
-    let binding_spans: Vec<Span> = keybindings
+    let mut binding_spans: Vec<Span> = keybindings
         .iter()
         .flat_map(|(key, action)| {
             vec![
@@ -164,6 +222,23 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
 
+    // Show current sort mode if not default
+    if app.sort_mode != SortMode::Name {
+        binding_spans.push(Span::styled("[", Style::default().fg(Color::DarkGray)));
+        binding_spans.push(Span::styled(app.sort_mode.label(), Style::default().fg(Color::Yellow)));
+        binding_spans.push(Span::styled("]", Style::default().fg(Color::DarkGray)));
+    }
+
+    // Add shell integration warning if needed
+    let integration_warning = if !app.has_shell_integration {
+        Some(Span::styled(
+            " (run 'owt setup' for Enter key navigation)",
+            Style::default().fg(Color::Yellow),
+        ))
+    } else {
+        None
+    };
+
     let footer_content = if let Some(ref msg) = app.message {
         let msg_style = if msg.is_error {
             Style::default().fg(Color::Red)
@@ -173,6 +248,21 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         vec![
             Line::from(binding_spans),
             Line::from(Span::styled(&msg.text, msg_style)),
+        ]
+    } else if !app.filter_text.is_empty() {
+        // Show active filter
+        vec![
+            Line::from(binding_spans),
+            Line::from(vec![
+                Span::styled("Filter: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(&app.filter_text, Style::default().fg(Color::Yellow)),
+                Span::styled(" (Esc to clear)", Style::default().fg(Color::DarkGray)),
+            ]),
+        ]
+    } else if let Some(warning) = integration_warning {
+        vec![
+            Line::from(binding_spans),
+            Line::from(warning),
         ]
     } else {
         vec![Line::from(binding_spans)]
