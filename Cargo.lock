@@ -332,6 +332,7 @@ version = "0.3.3"
 dependencies = [
  "anyhow",
  "crossterm 0.29.0",
+ "libc",
  "ratatui",
  "thiserror",
  "tokio",
