@@ -31,6 +31,26 @@ impl WorktreeStatus {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct AheadBehind {
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+impl AheadBehind {
+    pub fn display(&self) -> Option<String> {
+        if self.ahead == 0 && self.behind == 0 {
+            None
+        } else if self.ahead > 0 && self.behind > 0 {
+            Some(format!("↑{}↓{}", self.ahead, self.behind))
+        } else if self.ahead > 0 {
+            Some(format!("↑{}", self.ahead))
+        } else {
+            Some(format!("↓{}", self.behind))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Worktree {
     pub path: PathBuf,
@@ -38,6 +58,7 @@ pub struct Worktree {
     pub is_bare: bool,
     pub status: WorktreeStatus,
     pub last_commit_time: Option<String>,
+    pub ahead_behind: Option<AheadBehind>,
 }
 
 impl Worktree {
@@ -77,6 +98,32 @@ pub enum AppState {
 pub enum ExitAction {
     Quit,
     ChangeDirectory(PathBuf),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortMode {
+    #[default]
+    Name,
+    Recent,
+    Status,
+}
+
+impl SortMode {
+    pub fn next(self) -> Self {
+        match self {
+            SortMode::Name => SortMode::Recent,
+            SortMode::Recent => SortMode::Status,
+            SortMode::Status => SortMode::Name,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            SortMode::Name => "name",
+            SortMode::Recent => "recent",
+            SortMode::Status => "status",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
