@@ -36,7 +36,10 @@ fn main() -> Result<()> {
 
 fn run_tui(path: PathBuf) -> Result<()> {
     use std::fs::File;
-    use std::io::IsTerminal;
+    use std::io::Write;
+
+    // Check if we should write result to a file (for shell integration)
+    let output_file = env::var("OWT_OUTPUT_FILE").ok();
 
     // Try to find the bare repo in multiple ways:
     // 1. Check for .bare folder in current directory (common worktree layout)
@@ -60,36 +63,40 @@ fn run_tui(path: PathBuf) -> Result<()> {
         std::process::exit(1);
     };
 
-    // Check if stdout is being captured (e.g., by shell function)
-    let stdout_captured = !std::io::stdout().is_terminal();
-
     // Always use /dev/tty for TUI to support shell integration
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
-    let backend = ratatui::backend::CrosstermBackend::new(tty);
+    let mut tty_for_control = tty.try_clone()?;
+
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(
-        std::io::stderr(),
+        tty_for_control,
         crossterm::terminal::EnterAlternateScreen
     )?;
+
+    let backend = ratatui::backend::CrosstermBackend::new(tty);
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let mut app = app::App::new(bare_repo_path, Some(path))?;
     let result = app.run(&mut terminal);
 
     // Restore terminal
-    crossterm::terminal::disable_raw_mode()?;
     crossterm::execute!(
-        std::io::stderr(),
+        tty_for_control,
         crossterm::terminal::LeaveAlternateScreen
     )?;
+    crossterm::terminal::disable_raw_mode()?;
 
-    // Handle exit action - print path for shell integration
-    if let types::ExitAction::ChangeDirectory(worktree_path) = app.exit_action {
-        println!("{}", worktree_path.display());
+    // Handle exit action - write path for shell integration
+    if let types::ExitAction::ChangeDirectory(worktree_path) = &app.exit_action {
+        if let Some(ref output_path) = output_file {
+            // Write to temp file for shell integration
+            let mut file = File::create(output_path)?;
+            writeln!(file, "{}", worktree_path.display())?;
+        } else {
+            // Fallback: print to stdout
+            println!("{}", worktree_path.display());
+        }
     }
-
-    // Suppress unused variable warning
-    let _ = stdout_captured;
 
     result
 }
@@ -180,12 +187,14 @@ fn run_setup() -> Result<()> {
     const SHELL_FUNCTION: &str = r#"
 # owt shell integration - enables 'Enter' key to change directory
 owt() {
-  local result
-  result=$(command owt "$@")
-  if [[ -d "$result" ]]; then
-    cd "$result"
-  else
-    echo "$result"
+  local tmpfile=$(mktemp)
+  trap "rm -f '$tmpfile'" EXIT
+  OWT_OUTPUT_FILE="$tmpfile" command owt "$@"
+  if [[ -f "$tmpfile" ]]; then
+    local result=$(cat "$tmpfile")
+    if [[ -d "$result" ]]; then
+      cd "$result"
+    fi
   fi
 }
 "#;
