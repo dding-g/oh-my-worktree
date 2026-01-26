@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::git;
-use crate::types::{AppMessage, AppState, ExitAction, SortMode, Worktree, WorktreeStatus};
+use crate::types::{AddWorktreeState, AppMessage, AppState, BaseSource, ExitAction, SortMode, Worktree, WorktreeStatus};
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
 
 pub struct App {
@@ -30,12 +30,14 @@ pub struct App {
     pub is_filtering: bool,          // Whether in filter mode
     pub last_key: Option<char>,      // For gg detection
     pub sort_mode: SortMode,         // Current sort mode
+    pub add_worktree_state: AddWorktreeState,  // State for add worktree modal
 }
 
 impl App {
     pub fn new(bare_repo_path: PathBuf, launch_path: Option<PathBuf>, has_shell_integration: bool) -> Result<Self> {
         let worktrees = git::list_worktrees(&bare_repo_path)?;
-        let config = Config::load().unwrap_or_default();
+        // Load config with project-level override support
+        let config = Config::load_with_project(Some(&bare_repo_path)).unwrap_or_default();
 
         // Determine current worktree from launch path
         let current_worktree_path = launch_path.and_then(|lp| {
@@ -63,6 +65,11 @@ impl App {
             None
         };
 
+        // Initialize add_worktree_state with default base branch
+        let default_branch = git::get_default_branch(&bare_repo_path).unwrap_or_else(|_| "main".to_string());
+        let mut add_worktree_state = AddWorktreeState::default();
+        add_worktree_state.base_branch = default_branch;
+
         Ok(Self {
             worktrees,
             selected_index,
@@ -82,6 +89,7 @@ impl App {
             is_filtering: false,
             last_key: None,
             sort_mode: SortMode::default(),
+            add_worktree_state,
         })
     }
 
@@ -119,6 +127,14 @@ impl App {
                 main_view::render(frame, self);
                 add_modal::render(frame, self);
             }
+            AppState::AddTypeSelect => {
+                main_view::render(frame, self);
+                add_modal::render_type_select(frame, self);
+            }
+            AppState::AddBranchInput => {
+                main_view::render(frame, self);
+                add_modal::render_branch_input(frame, self);
+            }
             AppState::ConfirmDelete { .. } => {
                 main_view::render(frame, self);
                 confirm_modal::render(frame, self);
@@ -126,6 +142,14 @@ impl App {
             AppState::ConfigModal { .. } => {
                 main_view::render(frame, self);
                 config_modal::render(frame, self);
+            }
+            AppState::BranchTypesModal { .. } => {
+                main_view::render(frame, self);
+                config_modal::render_branch_types(frame, self);
+            }
+            AppState::SetupModal { .. } => {
+                main_view::render(frame, self);
+                // TODO: setup_modal::render(frame, self);
             }
             AppState::HelpModal => {
                 main_view::render(frame, self);
@@ -145,14 +169,22 @@ impl App {
                     // Clear message on any key press
                     self.message = None;
 
-                    match self.state {
+                    match self.state.clone() {
                         AppState::List => self.handle_list_input(key.code, key.modifiers),
                         AppState::AddModal => self.handle_add_modal_input(key.code),
+                        AppState::AddTypeSelect => self.handle_add_type_select_input(key.code),
+                        AppState::AddBranchInput => self.handle_add_branch_input(key.code, key.modifiers),
                         AppState::ConfirmDelete { delete_branch } => {
                             self.handle_confirm_delete_input(key.code, delete_branch)
                         }
                         AppState::ConfigModal { selected_index, editing } => {
                             self.handle_config_modal_input(key.code, selected_index, editing)
+                        }
+                        AppState::BranchTypesModal { selected_index, editing_field } => {
+                            self.handle_branch_types_modal_input(key.code, selected_index, editing_field)
+                        }
+                        AppState::SetupModal { selected_index } => {
+                            self.handle_setup_modal_input(key.code, selected_index)
                         }
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
                         AppState::Fetching | AppState::Adding | AppState::Deleting => {
@@ -233,7 +265,12 @@ impl App {
                 self.last_key = None;
             }
             KeyCode::Char('a') => {
-                self.state = AppState::AddModal;
+                // Reset add worktree state and open type selection
+                let default_branch = git::get_default_branch(&self.bare_repo_path)
+                    .unwrap_or_else(|_| "main".to_string());
+                self.add_worktree_state = AddWorktreeState::default();
+                self.add_worktree_state.base_branch = default_branch;
+                self.state = AppState::AddTypeSelect;
                 self.input_buffer.clear();
                 self.last_key = None;
             }
@@ -441,6 +478,12 @@ impl App {
                     if selected == 3 {
                         // post_add_script - open with $EDITOR
                         self.open_post_add_script_editor();
+                    } else if selected == 4 {
+                        // branch_types - open BranchTypesModal
+                        self.state = AppState::BranchTypesModal {
+                            selected_index: 0,
+                            editing_field: None,
+                        };
                     } else {
                         // Enter inline editing mode
                         self.input_buffer = self.get_config_value_for_editing(selected);
@@ -548,6 +591,228 @@ impl App {
     fn handle_help_modal_input(&mut self, code: KeyCode) {
         match code {
             KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('q') => {
+                self.state = AppState::List;
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle input for branch type selection screen
+    fn handle_add_type_select_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => {
+                self.state = AppState::List;
+            }
+            // Shortcut keys for branch types
+            KeyCode::Char(c) => {
+                if c == 'c' {
+                    // Custom mode - go directly to branch input
+                    let default_branch = git::get_default_branch(&self.bare_repo_path)
+                        .unwrap_or_else(|_| "main".to_string());
+                    self.add_worktree_state = AddWorktreeState::custom(default_branch);
+                    self.input_buffer.clear();
+                    self.state = AppState::AddBranchInput;
+                } else if let Some(bt) = self.config.find_branch_type_by_shortcut(c).cloned() {
+                    // Found a matching branch type
+                    self.add_worktree_state = AddWorktreeState::with_branch_type(bt);
+                    self.input_buffer = self.add_worktree_state.branch_name.clone();
+                    self.state = AppState::AddBranchInput;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle input for branch name input screen
+    fn handle_add_branch_input(&mut self, code: KeyCode, modifiers: KeyModifiers) {
+        match code {
+            KeyCode::Esc => {
+                // Go back to type selection
+                self.state = AppState::AddTypeSelect;
+                self.input_buffer.clear();
+            }
+            KeyCode::Enter => {
+                if !self.input_buffer.trim().is_empty() {
+                    self.add_worktree_state.branch_name = self.input_buffer.trim().to_string();
+                    self.add_worktree_with_state();
+                }
+            }
+            KeyCode::Backspace => {
+                // Don't allow backspace past the prefix if using branch type
+                if let Some(ref bt) = self.add_worktree_state.branch_type {
+                    if self.input_buffer.len() > bt.prefix.len() {
+                        self.input_buffer.pop();
+                    }
+                } else {
+                    self.input_buffer.pop();
+                }
+            }
+            KeyCode::Char('f') if modifiers.contains(KeyModifiers::SHIFT) => {
+                // Fetch remote base branch
+                self.fetch_base_branch();
+            }
+            KeyCode::Char('u') if modifiers.contains(KeyModifiers::SHIFT) => {
+                // Use remote as base
+                self.add_worktree_state.base_source = BaseSource::Remote;
+                self.message = Some(AppMessage::info("Using remote as base"));
+            }
+            KeyCode::Char('l') if modifiers.contains(KeyModifiers::SHIFT) => {
+                // Use local as base
+                self.add_worktree_state.base_source = BaseSource::Local;
+                self.message = Some(AppMessage::info("Using local as base"));
+            }
+            KeyCode::Char('b') if modifiers.contains(KeyModifiers::SHIFT) => {
+                // Change base branch (show list)
+                self.message = Some(AppMessage::info("Base branch selection not yet implemented"));
+            }
+            KeyCode::Char(c) => {
+                self.input_buffer.push(c);
+            }
+            _ => {}
+        }
+    }
+
+    /// Fetch the base branch from remote
+    fn fetch_base_branch(&mut self) {
+        let base = self.add_worktree_state.base_branch.clone();
+        self.message = Some(AppMessage::info(format!("Fetching {}...", base)));
+
+        match git::fetch_branch(&self.bare_repo_path, &base) {
+            Ok(()) => {
+                self.message = Some(AppMessage::info(format!("Fetched {}", base)));
+            }
+            Err(e) => {
+                self.message = Some(AppMessage::error(format!("Failed to fetch: {}", e)));
+            }
+        }
+    }
+
+    /// Add worktree using the current add_worktree_state
+    fn add_worktree_with_state(&mut self) {
+        let branch = self.add_worktree_state.branch_name.trim().to_string();
+        if branch.is_empty() {
+            self.message = Some(AppMessage::error("Branch name cannot be empty"));
+            return;
+        }
+
+        // Determine base branch reference
+        let base_ref = match self.add_worktree_state.base_source {
+            BaseSource::Local => self.add_worktree_state.base_branch.clone(),
+            BaseSource::Remote => format!("origin/{}", self.add_worktree_state.base_branch),
+        };
+
+        // Store branch name for do_add_worktree
+        self.input_buffer = branch.clone();
+
+        self.is_adding = true;
+        self.state = AppState::Adding;
+        self.message = Some(AppMessage::info(format!("Creating worktree: {} from {}...", branch, base_ref)));
+    }
+
+    /// Handle input for branch types modal
+    fn handle_branch_types_modal_input(&mut self, code: KeyCode, selected_index: usize, editing_field: Option<usize>) {
+        let branch_type_count = self.config.branch_types.len();
+
+        if let Some(field) = editing_field {
+            // Editing mode
+            match code {
+                KeyCode::Esc => {
+                    self.input_buffer.clear();
+                    self.state = AppState::BranchTypesModal {
+                        selected_index,
+                        editing_field: None,
+                    };
+                }
+                KeyCode::Enter => {
+                    // Save the edited value
+                    self.apply_branch_type_edit(selected_index, field);
+                    self.input_buffer.clear();
+                    self.state = AppState::BranchTypesModal {
+                        selected_index,
+                        editing_field: None,
+                    };
+                }
+                KeyCode::Char(c) => {
+                    self.input_buffer.push(c);
+                }
+                KeyCode::Backspace => {
+                    self.input_buffer.pop();
+                }
+                _ => {}
+            }
+        } else {
+            // Navigation mode
+            match code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.state = AppState::ConfigModal {
+                        selected_index: 4, // branch_types item
+                        editing: false,
+                    };
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if selected_index > 0 {
+                        self.state = AppState::BranchTypesModal {
+                            selected_index: selected_index - 1,
+                            editing_field: None,
+                        };
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if selected_index < branch_type_count.saturating_sub(1) {
+                        self.state = AppState::BranchTypesModal {
+                            selected_index: selected_index + 1,
+                            editing_field: None,
+                        };
+                    }
+                }
+                KeyCode::Char('b') => {
+                    // Edit base branch
+                    if selected_index < branch_type_count {
+                        self.input_buffer = self.config.branch_types[selected_index].base.clone();
+                        self.state = AppState::BranchTypesModal {
+                            selected_index,
+                            editing_field: Some(0),
+                        };
+                    }
+                }
+                KeyCode::Char('s') => {
+                    // Save config
+                    self.save_config();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Apply edit to branch type
+    fn apply_branch_type_edit(&mut self, index: usize, field: usize) {
+        if index >= self.config.branch_types.len() {
+            return;
+        }
+        let value = self.input_buffer.trim().to_string();
+        match field {
+            0 => self.config.branch_types[index].base = value,
+            _ => {}
+        }
+        self.message = Some(AppMessage::info("Branch type updated (press 's' to save)"));
+    }
+
+    /// Handle input for setup modal
+    fn handle_setup_modal_input(&mut self, code: KeyCode, _selected_index: usize) {
+        match code {
+            KeyCode::Esc => {
+                self.state = AppState::List;
+            }
+            KeyCode::Enter => {
+                // Save configuration and close
+                match self.config.save_to_project(&self.bare_repo_path) {
+                    Ok(()) => {
+                        self.message = Some(AppMessage::info("Configuration saved"));
+                    }
+                    Err(e) => {
+                        self.message = Some(AppMessage::error(format!("Failed to save: {}", e)));
+                    }
+                }
                 self.state = AppState::List;
             }
             _ => {}
@@ -692,7 +957,13 @@ impl App {
             .map(|p| p.join(&branch))
             .unwrap_or_else(|| PathBuf::from(&branch));
 
-        match git::add_worktree(&self.bare_repo_path, &branch, &worktree_path, None) {
+        // Determine base branch reference from add_worktree_state
+        let base_ref = match self.add_worktree_state.base_source {
+            BaseSource::Local => Some(self.add_worktree_state.base_branch.clone()),
+            BaseSource::Remote => Some(format!("origin/{}", self.add_worktree_state.base_branch)),
+        };
+
+        match git::add_worktree(&self.bare_repo_path, &branch, &worktree_path, base_ref.as_deref()) {
             Ok(()) => {
                 // Copy files if configured
                 self.copy_configured_files(&worktree_path);
@@ -711,6 +982,8 @@ impl App {
         self.is_adding = false;
         self.state = AppState::List;
         self.input_buffer.clear();
+        // Reset add_worktree_state
+        self.add_worktree_state = AddWorktreeState::default();
     }
 
     fn copy_configured_files(&self, target_path: &PathBuf) {
