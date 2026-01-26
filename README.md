@@ -9,7 +9,8 @@ A TUI tool for managing Git worktrees in bare repositories.
 Git worktree allows you to check out multiple branches simultaneously from a single repository. Work on multiple tasks in parallel without stashing or switching branches.
 
 ```
-project.git/              # bare repository
+project/
+├── .bare/                # bare repository (hidden)
 ├── main/                 # main branch worktree
 ├── feature-auth/         # feature branch worktree
 └── hotfix-payment/       # hotfix branch worktree
@@ -55,7 +56,7 @@ cargo build --release
 owt clone https://github.com/user/repo.git
 
 # Run TUI
-cd repo.git
+cd repo/main
 owt
 ```
 
@@ -70,21 +71,21 @@ Shows a step-by-step guide to convert a regular repository to bare + worktree st
 Manual conversion:
 
 ```bash
-mv .git ../myproject.git
-cd ../myproject.git
+mv .git .bare
+echo "gitdir: ./.bare" > .git
 git config --bool core.bare true
-git worktree add ../myproject/main main
+git worktree add main main
 owt
 ```
 
 ## Usage
 
 ```bash
-# Run from bare repo or any worktree
+# Run from any worktree
 owt
 
 # Specify path
-owt /path/to/repo.git
+owt /path/to/project
 ```
 
 ### Keybindings
