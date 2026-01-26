@@ -9,7 +9,8 @@ Git worktree를 쉽게 관리할 수 있는 TUI 도구입니다.
 Git worktree를 사용하면 하나의 저장소에서 여러 브랜치를 동시에 체크아웃할 수 있습니다. stash나 branch 전환 없이 여러 작업을 병렬로 진행할 수 있습니다.
 
 ```
-project.git/              # bare repository
+project/
+├── .bare/                # bare repository (숨김)
 ├── main/                 # main 브랜치 worktree
 ├── feature-auth/         # feature 브랜치 worktree
 └── hotfix-payment/       # hotfix 브랜치 worktree
@@ -55,7 +56,7 @@ cargo build --release
 owt clone https://github.com/user/repo.git
 
 # TUI 실행
-cd repo.git
+cd repo/main
 owt
 ```
 
@@ -70,21 +71,21 @@ owt init
 수동 변환:
 
 ```bash
-mv .git ../myproject.git
-cd ../myproject.git
+mv .git .bare
+echo "gitdir: ./.bare" > .git
 git config --bool core.bare true
-git worktree add ../myproject/main main
+git worktree add main main
 owt
 ```
 
 ## 사용법
 
 ```bash
-# bare repo 또는 worktree 내에서 실행
+# worktree 내에서 실행
 owt
 
 # 경로 지정
-owt /path/to/repo.git
+owt /path/to/project
 ```
 
 ### 키 바인딩
