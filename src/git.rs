@@ -402,3 +402,223 @@ pub fn get_default_branch(bare_repo_path: &Path) -> Result<String> {
     // Default to main
     Ok("main".to_string())
 }
+
+/// Commit info for display
+#[derive(Debug, Clone)]
+pub struct CommitInfo {
+    pub hash: String,      // Short hash (e.g., abc1234)
+    pub message: String,   // First line of commit message
+    pub time_ago: String,  // Relative time (e.g., "2 days ago")
+}
+
+/// Comparison between local and remote branch
+#[derive(Debug, Clone, Default)]
+pub struct BranchComparison {
+    pub local: Option<CommitInfo>,
+    pub remote: Option<CommitInfo>,
+    pub behind_count: u32,
+    pub ahead_count: u32,
+}
+
+/// Get commit info for a branch (local or remote)
+pub fn get_branch_commit_info(bare_repo_path: &Path, branch: &str) -> Result<CommitInfo> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "log",
+            "-1",
+            "--format=%h|%s|%ar",
+            branch,
+        ])
+        .output()
+        .context("Failed to get commit info")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to get commit info: {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = stdout.trim().splitn(3, '|').collect();
+
+    if parts.len() < 3 {
+        anyhow::bail!("Invalid commit info format");
+    }
+
+    Ok(CommitInfo {
+        hash: parts[0].to_string(),
+        message: parts[1].to_string(),
+        time_ago: parts[2].to_string(),
+    })
+}
+
+/// Compare local branch with its remote counterpart
+pub fn compare_local_remote(bare_repo_path: &Path, branch: &str) -> Result<BranchComparison> {
+    let mut comparison = BranchComparison::default();
+
+    // Get local branch info
+    let local_ref = format!("refs/heads/{}", branch);
+    if branch_exists(bare_repo_path, &local_ref) {
+        comparison.local = get_branch_commit_info(bare_repo_path, branch).ok();
+    }
+
+    // Get remote branch info
+    let remote_ref = format!("origin/{}", branch);
+    let remote_full_ref = format!("refs/remotes/origin/{}", branch);
+    if branch_exists(bare_repo_path, &remote_full_ref) {
+        comparison.remote = get_branch_commit_info(bare_repo_path, &remote_ref).ok();
+    }
+
+    // Get ahead/behind counts if both exist
+    if comparison.local.is_some() && comparison.remote.is_some() {
+        let output = Command::new("git")
+            .args([
+                "-C",
+                &bare_repo_path.to_string_lossy(),
+                "rev-list",
+                "--left-right",
+                "--count",
+                &format!("{}...{}", branch, remote_ref),
+            ])
+            .output();
+
+        if let Ok(output) = output {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let parts: Vec<&str> = stdout.trim().split('\t').collect();
+                if parts.len() == 2 {
+                    comparison.ahead_count = parts[0].parse().unwrap_or(0);
+                    comparison.behind_count = parts[1].parse().unwrap_or(0);
+                }
+            }
+        }
+    } else if comparison.remote.is_some() && comparison.local.is_none() {
+        // If only remote exists, count commits from common ancestor
+        // For now, just indicate that remote exists
+    }
+
+    Ok(comparison)
+}
+
+/// Check if a branch reference exists
+fn branch_exists(bare_repo_path: &Path, ref_name: &str) -> bool {
+    Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            ref_name,
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Fetch a specific branch from origin
+pub fn fetch_branch(bare_repo_path: &Path, branch: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "fetch",
+            "origin",
+            &format!("{}:{}", branch, format!("refs/remotes/origin/{}", branch)),
+        ])
+        .output()
+        .context("Failed to fetch branch")?;
+
+    // Git fetch may return non-zero even on partial success, so check stderr
+    if !output.status.success() {
+        // Try simpler fetch
+        let output2 = Command::new("git")
+            .args([
+                "-C",
+                &bare_repo_path.to_string_lossy(),
+                "fetch",
+                "origin",
+                branch,
+            ])
+            .output()
+            .context("Failed to fetch branch")?;
+
+        if !output2.status.success() {
+            let stderr = String::from_utf8_lossy(&output2.stderr);
+            anyhow::bail!("Failed to fetch branch: {}", stderr.trim());
+        }
+    }
+
+    Ok(())
+}
+
+/// List all branches (local and remote)
+#[allow(dead_code)]
+pub fn list_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
+    let mut branches = Vec::new();
+
+    // Get local branches
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/heads/",
+        ])
+        .output()
+        .context("Failed to list local branches")?;
+
+    if output.status.success() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let branch = line.trim();
+            if !branch.is_empty() {
+                branches.push(branch.to_string());
+            }
+        }
+    }
+
+    // Get remote branches (without origin/ prefix)
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/remotes/origin/",
+        ])
+        .output()
+        .context("Failed to list remote branches")?;
+
+    if output.status.success() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let branch = line.trim();
+            if !branch.is_empty() && branch != "origin/HEAD" {
+                // Remove origin/ prefix
+                let short_name = branch.strip_prefix("origin/").unwrap_or(branch);
+                if !branches.contains(&short_name.to_string()) {
+                    branches.push(short_name.to_string());
+                }
+            }
+        }
+    }
+
+    // Sort and deduplicate
+    branches.sort();
+    branches.dedup();
+
+    Ok(branches)
+}
+
+/// Check if a local branch exists
+#[allow(dead_code)]
+pub fn local_branch_exists(bare_repo_path: &Path, branch: &str) -> bool {
+    branch_exists(bare_repo_path, &format!("refs/heads/{}", branch))
+}
+
+/// Check if a remote branch exists
+#[allow(dead_code)]
+pub fn remote_branch_exists(bare_repo_path: &Path, branch: &str) -> bool {
+    branch_exists(bare_repo_path, &format!("refs/remotes/origin/{}", branch))
+}
