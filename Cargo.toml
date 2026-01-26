@@ -1,6 +1,6 @@
 [package]
 name = "oh-my-worktree"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Bare repository based Git worktree management TUI tool"
 

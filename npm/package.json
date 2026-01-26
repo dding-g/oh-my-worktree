@@ -1,6 +1,6 @@
 {
   "name": "oh-my-worktree",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A TUI tool for managing Git worktrees in bare repositories",
   "keywords": [
     "git",
