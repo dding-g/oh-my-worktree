@@ -1,13 +1,18 @@
 {
   "name": "oh-my-worktree",
   "version": "0.4.1",
-  "description": "A TUI tool for managing Git worktrees in bare repositories",
+  "description": "A TUI tool for managing Git worktrees in bare repositories with branch type support",
   "keywords": [
     "git",
     "worktree",
     "tui",
     "cli",
-    "bare-repository"
+    "bare-repository",
+    "git-worktree",
+    "git-flow",
+    "branch-management",
+    "terminal",
+    "developer-tools"
   ],
   "author": "matthew",
   "license": "MIT",
