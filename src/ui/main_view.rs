@@ -1,6 +1,7 @@
 use ratatui::{
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
+    symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Frame,
@@ -9,13 +10,49 @@ use ratatui::{
 use crate::app::App;
 use crate::types::{SortMode, WorktreeStatus};
 
+// Modern color palette inspired by the landing page
+const ACCENT: Color = Color::Rgb(16, 185, 129);      // Emerald green
+const ACCENT_DIM: Color = Color::Rgb(6, 95, 70);     // Darker emerald
+const AMBER: Color = Color::Rgb(245, 158, 11);       // Amber/yellow
+const RED: Color = Color::Rgb(239, 68, 68);          // Red
+const CYAN: Color = Color::Rgb(34, 211, 238);        // Cyan
+const TEXT_PRIMARY: Color = Color::Rgb(250, 250, 250);
+const TEXT_SECONDARY: Color = Color::Rgb(161, 161, 170);
+const TEXT_MUTED: Color = Color::Rgb(113, 113, 122);
+const BG_ELEVATED: Color = Color::Rgb(39, 39, 42);
+const BORDER: Color = Color::Rgb(63, 63, 70);
+
 pub fn render(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+    let repo_path = app.bare_repo_path.to_string_lossy().to_string();
+
+    // Main container with rounded border
+    let main_block = Block::default()
+        .borders(Borders::ALL)
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(BORDER))
+        .title(Line::from(vec![
+            Span::styled(" ◆ ", Style::default().fg(ACCENT)),
+            Span::styled("owt ", Style::default().fg(TEXT_PRIMARY).bold()),
+            Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(TEXT_MUTED)),
+            Span::raw(" "),
+        ]))
+        .title_bottom(Line::from(vec![
+            Span::styled(" ", Style::default()),
+            Span::styled(repo_path, Style::default().fg(TEXT_MUTED)),
+            Span::styled(" ", Style::default()),
+        ]));
+
+    frame.render_widget(main_block, area);
+
+    let inner = area.inner(Margin::new(1, 1));
+
     let chunks = Layout::vertical([
-        Constraint::Length(3), // Header
+        Constraint::Length(2), // Header
         Constraint::Min(5),    // Table
-        Constraint::Length(3), // Footer
+        Constraint::Length(2), // Footer
     ])
-    .split(frame.area());
+    .split(inner);
 
     render_header(frame, chunks[0], app);
     render_table(frame, chunks[1], app);
@@ -23,34 +60,29 @@ pub fn render(frame: &mut Frame, app: &App) {
 }
 
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
+    let worktree_count = app.worktrees.iter().filter(|w| !w.is_bare).count();
+
     let header_text = vec![Line::from(vec![
-        Span::styled("owt ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(Color::DarkGray)),
+        Span::styled("Worktrees", Style::default().fg(TEXT_PRIMARY).bold()),
         Span::raw("  "),
         Span::styled(
-            app.bare_repo_path.to_string_lossy().to_string(),
-            Style::default().fg(Color::Yellow),
+            format!("{} total", worktree_count),
+            Style::default().fg(TEXT_MUTED),
         ),
     ])];
 
-    let header = Paragraph::new(header_text).block(
-        Block::default()
-            .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
-
+    let header = Paragraph::new(header_text);
     frame.render_widget(header, area);
 }
 
 fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     let header = Row::new(vec![
-        Cell::from("  "),
-        Cell::from("Name").style(Style::default().bold()),
-        Cell::from("Branch").style(Style::default().bold()),
-        Cell::from("Status").style(Style::default().bold()),
-        Cell::from("Last Commit").style(Style::default().bold()),
+        Cell::from(""),
+        Cell::from("Name").style(Style::default().fg(TEXT_MUTED)),
+        Cell::from("Branch").style(Style::default().fg(TEXT_MUTED)),
+        Cell::from("Status").style(Style::default().fg(TEXT_MUTED)),
+        Cell::from("Commit").style(Style::default().fg(TEXT_MUTED)),
     ])
-    .style(Style::default().fg(Color::DarkGray))
     .height(1);
 
     // Check if filter matches a worktree
@@ -75,23 +107,25 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 true
             };
 
-            // Show cursor and current indicator
+            // Modern indicator: dot for selection, filled dot for current
             let cursor = if is_selected && is_current {
-                ">●"
+                "● "
             } else if is_selected {
-                "> "
+                "› "
             } else if is_current {
-                " ●"
+                "◦ "
             } else {
                 "  "
             };
 
+            let cursor_color = if is_selected { ACCENT } else { TEXT_MUTED };
+
             let status_color = match wt.status {
-                WorktreeStatus::Clean => Color::Green,
-                WorktreeStatus::Staged => Color::Yellow,
-                WorktreeStatus::Unstaged => Color::Red,
-                WorktreeStatus::Conflict => Color::Magenta,
-                WorktreeStatus::Mixed => Color::Yellow,
+                WorktreeStatus::Clean => ACCENT,
+                WorktreeStatus::Staged => AMBER,
+                WorktreeStatus::Unstaged => AMBER,
+                WorktreeStatus::Conflict => RED,
+                WorktreeStatus::Mixed => AMBER,
             };
 
             // Build status text with ahead/behind info
@@ -107,52 +141,51 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             let row_style = if is_selected {
-                Style::default().bg(Color::DarkGray)
+                Style::default().bg(ACCENT_DIM)
             } else if has_filter && !matches_filter {
-                // Dim non-matching rows when filtering
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(TEXT_MUTED)
             } else {
                 Style::default()
             };
 
             // Show operation status in last commit column
             let (last_commit, last_commit_style) = if app.is_fetching && is_selected {
-                ("Fetching...".to_string(), Style::default().fg(Color::Yellow))
+                ("Fetching...".to_string(), Style::default().fg(AMBER))
             } else if app.is_adding {
-                ("Adding...".to_string(), Style::default().fg(Color::Yellow))
+                ("Adding...".to_string(), Style::default().fg(AMBER))
             } else if app.is_deleting && is_selected {
-                ("Deleting...".to_string(), Style::default().fg(Color::Red))
+                ("Deleting...".to_string(), Style::default().fg(RED))
             } else {
                 (
                     wt.last_commit_time.clone().unwrap_or_else(|| "-".to_string()),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(TEXT_MUTED),
                 )
             };
 
             let name_style = if has_filter && !matches_filter {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(TEXT_MUTED)
             } else if wt.is_bare {
-                Style::default().fg(Color::DarkGray).italic()
+                Style::default().fg(TEXT_MUTED).italic()
             } else if is_current {
-                Style::default().fg(Color::Green)
+                Style::default().fg(ACCENT)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(TEXT_PRIMARY)
             };
 
             let branch_style = if has_filter && !matches_filter {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(TEXT_MUTED)
             } else {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(CYAN)
             };
 
             let status_style = if has_filter && !matches_filter {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(TEXT_MUTED)
             } else {
                 Style::default().fg(status_color)
             };
 
             Row::new(vec![
-                Cell::from(cursor).style(Style::default().fg(Color::Cyan)),
+                Cell::from(cursor).style(Style::default().fg(cursor_color)),
                 Cell::from(wt.display_name()).style(name_style),
                 Cell::from(wt.branch_display()).style(branch_style),
                 Cell::from(status_text).style(status_style),
@@ -164,10 +197,10 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 
     let widths = [
         Constraint::Length(2),
-        Constraint::Percentage(25),
-        Constraint::Percentage(25),
-        Constraint::Percentage(20),
-        Constraint::Percentage(30),
+        Constraint::Percentage(22),
+        Constraint::Percentage(28),
+        Constraint::Percentage(22),
+        Constraint::Percentage(28),
     ];
 
     let table = Table::new(rows, widths)
@@ -182,17 +215,18 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     // Show filter input if filtering
     if app.is_filtering {
         let filter_line = Line::from(vec![
-            Span::styled("/", Style::default().fg(Color::Yellow)),
-            Span::styled(&app.filter_text, Style::default().fg(Color::White)),
-            Span::styled("_", Style::default().fg(Color::Yellow).add_modifier(Modifier::SLOW_BLINK)),
+            Span::styled("/", Style::default().fg(ACCENT)),
+            Span::styled(&app.filter_text, Style::default().fg(TEXT_PRIMARY)),
+            Span::styled("▋", Style::default().fg(ACCENT).add_modifier(Modifier::SLOW_BLINK)),
             Span::raw("  "),
-            Span::styled("(Enter to apply, Esc to cancel)", Style::default().fg(Color::DarkGray)),
+            Span::styled("Enter to apply · Esc to cancel", Style::default().fg(TEXT_MUTED)),
         ]);
 
         let footer = Paragraph::new(vec![filter_line]).block(
             Block::default()
                 .borders(Borders::TOP)
-                .border_style(Style::default().fg(Color::DarkGray)),
+                .border_set(border::ROUNDED)
+                .border_style(Style::default().fg(BORDER)),
         );
 
         frame.render_widget(footer, area);
@@ -202,38 +236,35 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let keybindings = vec![
         ("↵", "enter"),
         ("j/k", "nav"),
-        ("/", "search"),
-        ("s", "sort"),
         ("a", "add"),
         ("d", "del"),
+        ("f", "fetch"),
+        ("p", "pull"),
+        ("/", "search"),
         ("?", "help"),
-        ("q", "quit"),
     ];
 
     let mut binding_spans: Vec<Span> = keybindings
         .iter()
         .flat_map(|(key, action)| {
             vec![
-                Span::styled(*key, Style::default().fg(Color::Cyan).bold()),
-                Span::raw(" "),
-                Span::styled(*action, Style::default().fg(Color::DarkGray)),
-                Span::raw("  "),
+                Span::styled(*key, Style::default().fg(ACCENT).bold()),
+                Span::styled(format!(" {} ", action), Style::default().fg(TEXT_MUTED)),
             ]
         })
         .collect();
 
     // Show current sort mode if not default
     if app.sort_mode != SortMode::Name {
-        binding_spans.push(Span::styled("[", Style::default().fg(Color::DarkGray)));
-        binding_spans.push(Span::styled(app.sort_mode.label(), Style::default().fg(Color::Yellow)));
-        binding_spans.push(Span::styled("]", Style::default().fg(Color::DarkGray)));
+        binding_spans.push(Span::styled("│ ", Style::default().fg(BORDER)));
+        binding_spans.push(Span::styled(app.sort_mode.label(), Style::default().fg(AMBER)));
     }
 
     // Add shell integration warning if needed
     let integration_warning = if !app.has_shell_integration {
         Some(Span::styled(
-            " (run 'owt setup' for Enter key navigation)",
-            Style::default().fg(Color::Yellow),
+            " │ run 'owt setup' for shell integration",
+            Style::default().fg(AMBER),
         ))
     } else {
         None
@@ -241,9 +272,9 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
 
     let footer_content = if let Some(ref msg) = app.message {
         let msg_style = if msg.is_error {
-            Style::default().fg(Color::Red)
+            Style::default().fg(RED)
         } else {
-            Style::default().fg(Color::Green)
+            Style::default().fg(ACCENT)
         };
         vec![
             Line::from(binding_spans),
@@ -254,9 +285,9 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         vec![
             Line::from(binding_spans),
             Line::from(vec![
-                Span::styled("Filter: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&app.filter_text, Style::default().fg(Color::Yellow)),
-                Span::styled(" (Esc to clear)", Style::default().fg(Color::DarkGray)),
+                Span::styled("Filter: ", Style::default().fg(TEXT_MUTED)),
+                Span::styled(&app.filter_text, Style::default().fg(AMBER)),
+                Span::styled(" (Esc to clear)", Style::default().fg(TEXT_MUTED)),
             ]),
         ]
     } else if let Some(warning) = integration_warning {
@@ -271,7 +302,8 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let footer = Paragraph::new(footer_content).block(
         Block::default()
             .borders(Borders::TOP)
-            .border_style(Style::default().fg(Color::DarkGray)),
+            .border_set(border::ROUNDED)
+            .border_style(Style::default().fg(BORDER)),
     );
 
     frame.render_widget(footer, area);
