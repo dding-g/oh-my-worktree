@@ -105,11 +105,19 @@ impl App {
 
             if self.is_adding {
                 self.do_add_worktree();
+                // Drain pending key events to prevent accidental enter_worktree
+                while event::poll(Duration::from_millis(0))? {
+                    let _ = event::read()?;
+                }
                 continue;
             }
 
             if self.is_deleting {
                 self.do_delete_worktree();
+                // Drain pending key events to prevent accidental actions
+                while event::poll(Duration::from_millis(0))? {
+                    let _ = event::read()?;
+                }
                 continue;
             }
 
