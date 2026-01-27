@@ -35,6 +35,8 @@
       --accent: #10b981;
       --accent-light: #34d399;
       --accent-subtle: rgba(16, 185, 129, 0.1);
+      --blue: #3b82f6;
+      --amber: #f59e0b;
 
       --bg: #000000;
       --bg-subtle: #0a0a0a;
@@ -74,7 +76,6 @@
       overflow-x: hidden;
     }
 
-    /* Gradient background */
     .bg-gradient {
       position: fixed;
       top: 0;
@@ -94,7 +95,6 @@
       padding: 0 24px;
     }
 
-    /* Header */
     header {
       position: fixed;
       top: 0;
@@ -170,7 +170,6 @@
       background: var(--text-primary) !important;
     }
 
-    /* Hero */
     .hero {
       min-height: 100vh;
       display: flex;
@@ -275,7 +274,6 @@
       border-color: var(--border-hover);
     }
 
-    /* Install command */
     .install-cmd {
       display: inline-flex;
       align-items: center;
@@ -316,7 +314,6 @@
       color: var(--accent);
     }
 
-    /* Terminal Preview */
     .hero-visual {
       margin-top: 80px;
       position: relative;
@@ -379,11 +376,6 @@
 
     .term-cmd {
       color: var(--text-primary);
-    }
-
-    .term-output {
-      color: var(--text-tertiary);
-      padding-left: 24px;
     }
 
     .tui-preview {
@@ -450,8 +442,17 @@
       font-size: 0.75rem;
     }
 
+    .tui-ahead-behind {
+      font-size: 0.7rem;
+      color: var(--text-tertiary);
+      margin-left: 8px;
+    }
+
+    .tui-ahead { color: var(--accent); }
+    .tui-behind { color: var(--amber); }
+
     .status-clean { color: var(--accent); }
-    .status-modified { color: #f59e0b; }
+    .status-modified { color: var(--amber); }
 
     .tui-footer {
       padding: 8px 12px;
@@ -485,7 +486,66 @@
       51%, 100% { opacity: 0; }
     }
 
-    /* Features */
+    .why-section {
+      padding: 160px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .why-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .why-content h2 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+    }
+
+    .why-content p {
+      color: var(--text-secondary);
+      font-size: 1.125rem;
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comparison-table th {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-tertiary);
+    }
+
+    .comparison-table td {
+      font-size: 0.9375rem;
+    }
+
+    .comparison-table td:first-child {
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+    }
+
+    .comparison-table td:last-child {
+      color: var(--accent);
+    }
+
     .features {
       padding: 160px 0;
     }
@@ -564,7 +624,13 @@
       line-height: 1.6;
     }
 
-    /* Installation */
+    .feature-card code {
+      background: var(--bg-elevated);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.8125rem;
+    }
+
     .installation {
       padding: 160px 0;
       background: linear-gradient(180deg, transparent 0%, var(--bg-subtle) 50%, transparent 100%);
@@ -647,26 +713,166 @@
       transform: translateY(-50%);
     }
 
-    /* Keybindings */
-    .keybindings {
+    .shell-section {
       padding: 160px 0;
     }
 
-    .keys-grid {
+    .shell-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .shell-content h2 {
+      font-size: clamp(2rem, 5vw, 2.5rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+
+    .shell-content p {
+      color: var(--text-secondary);
+      font-size: 1.125rem;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .shell-steps {
+      list-style: none;
+    }
+
+    .shell-steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-subtle);
+      border-radius: 50%;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .step-text {
+      color: var(--text-secondary);
+      font-size: 0.9375rem;
+    }
+
+    .step-text code {
+      background: var(--bg-elevated);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent);
+    }
+
+    .shell-code {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .shell-code-header {
+      display: flex;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+
+    .shell-tab {
+      padding: 6px 12px;
+      font-size: 0.8125rem;
+      color: var(--text-tertiary);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+
+    .shell-tab.active {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    .shell-code-body {
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      line-height: 1.8;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .shell-code-body pre {
+      color: var(--text-secondary);
+    }
+
+    .shell-code-body .fn { color: var(--blue); }
+    .shell-code-body .var { color: var(--accent); }
+    .shell-code-body .str { color: var(--amber); }
+    .shell-code-body .cmd { color: var(--text-primary); }
+
+    .keybindings {
+      padding: 160px 0;
+      background: linear-gradient(180deg, transparent 0%, var(--bg-subtle) 50%, transparent 100%);
+    }
+
+    .keys-categories {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
       margin-top: 48px;
+    }
+
+    .keys-category {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+
+    .keys-category h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .keys-category h3 svg {
+      color: var(--accent);
+    }
+
+    .keys-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .key-item {
       display: flex;
       align-items: center;
       gap: 14px;
-      padding: 16px 20px;
-      background: var(--bg-card);
+      padding: 10px 12px;
+      background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       transition: all 0.15s ease;
     }
 
@@ -675,27 +881,27 @@
     }
 
     kbd {
-      min-width: 36px;
-      height: 36px;
+      min-width: 32px;
+      height: 28px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg) 100%);
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      border-radius: 4px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.875rem;
+      font-size: 0.75rem;
       font-weight: 500;
       color: var(--text-primary);
       box-shadow: 0 2px 0 var(--border);
+      padding: 0 8px;
     }
 
     .key-label {
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       color: var(--text-secondary);
     }
 
-    /* CTA Section */
     .cta-section {
       padding: 160px 0;
       text-align: center;
@@ -735,7 +941,6 @@
       margin-bottom: 32px;
     }
 
-    /* Footer */
     footer {
       padding: 48px 0;
       border-top: 1px solid var(--border);
@@ -768,14 +973,19 @@
       color: var(--text-tertiary);
     }
 
-    /* Responsive */
     @media (max-width: 1024px) {
       .features-grid {
         grid-template-columns: repeat(2, 1fr);
       }
 
-      .keys-grid {
-        grid-template-columns: repeat(2, 1fr);
+      .why-grid,
+      .shell-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .keys-categories {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -793,10 +1003,6 @@
         grid-template-columns: 1fr;
       }
 
-      .keys-grid {
-        grid-template-columns: 1fr;
-      }
-
       .footer-inner {
         flex-direction: column;
         gap: 24px;
@@ -806,9 +1012,17 @@
       .cta-box {
         padding: 40px 24px;
       }
+
+      .comparison-table {
+        font-size: 0.875rem;
+      }
+
+      .comparison-table th,
+      .comparison-table td {
+        padding: 12px 8px;
+      }
     }
 
-    /* Animations */
     @keyframes fadeInUp {
       from {
         opacity: 0;
@@ -841,7 +1055,7 @@
       </a>
       <nav class="nav-links">
         <a href="#features">Features</a>
-        <a href="#installation">Installation</a>
+        <a href="#installation">Install</a>
         <a href="#keybindings">Keys</a>
         <a href="https://github.com/dding-g/oh-my-worktree" target="_blank" class="nav-cta">GitHub</a>
       </nav>
@@ -854,7 +1068,7 @@
         <div class="hero-content">
           <div class="badge animate-in delay-1">
             <span class="badge-dot"></span>
-            v0.3.4 · Now Available
+            v0.5.1 · Now Available
           </div>
 
           <h1 class="animate-in delay-2">Git worktrees,<br>simplified.</h1>
@@ -918,6 +1132,7 @@
                       <span class="tui-indicator"></span>
                       <span class="tui-name">feature/auth</span>
                       <span class="tui-branch">origin/feature/auth</span>
+                      <span class="tui-ahead-behind"><span class="tui-ahead">↑2</span> <span class="tui-behind">↓1</span></span>
                     </div>
                     <span class="tui-status status-modified">~ modified</span>
                   </div>
@@ -931,13 +1146,70 @@
                   </div>
                 </div>
                 <div class="tui-footer">
-                  <kbd>a</kbd>add <kbd>d</kbd>delete <kbd>o</kbd>editor <kbd>t</kbd>terminal <kbd>q</kbd>quit
+                  <kbd>a</kbd>add <kbd>d</kbd>delete <kbd>p</kbd>pull <kbd>P</kbd>push <kbd>/</kbd>search <kbd>q</kbd>quit
                 </div>
               </div>
 
               <div class="term-line">
                 <span class="term-prompt">❯</span>
                 <span class="cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="why-section">
+      <div class="container">
+        <div class="why-grid">
+          <div class="why-content">
+            <h2>Why worktrees?</h2>
+            <p>
+              Stop stashing, stop waiting for checkouts, stop rebuilding.
+              With worktrees, each branch lives in its own directory—switch instantly by just changing folders.
+            </p>
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th>Without owt</th>
+                  <th>With owt</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>git worktree list</td>
+                  <td>Visual TUI with status</td>
+                </tr>
+                <tr>
+                  <td>git worktree add ../feat -b feat</td>
+                  <td>Press <kbd>a</kbd>, type name</td>
+                </tr>
+                <tr>
+                  <td>cd ../feature && git status</td>
+                  <td>Press <kbd>Enter</kbd> to switch</td>
+                </tr>
+                <tr>
+                  <td>git fetch && git pull</td>
+                  <td>Press <kbd>f</kbd> then <kbd>p</kbd></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="why-visual">
+            <div class="terminal">
+              <div class="terminal-header">
+                <span class="terminal-btn close"></span>
+                <span class="terminal-btn minimize"></span>
+                <span class="terminal-btn maximize"></span>
+                <span class="terminal-title">Project structure</span>
+              </div>
+              <div class="terminal-body" style="font-size: 0.8125rem;">
+<pre style="color: var(--text-secondary); margin: 0;">project/
+├── <span style="color: var(--text-tertiary);">.bare/</span>              <span style="color: var(--text-tertiary);"># bare repo (hidden)</span>
+├── <span style="color: var(--accent);">main/</span>               <span style="color: var(--text-tertiary);"># stable branch</span>
+├── <span style="color: var(--blue);">feature-auth/</span>       <span style="color: var(--text-tertiary);"># your feature</span>
+└── <span style="color: var(--amber);">hotfix-payment/</span>     <span style="color: var(--text-tertiary);"># urgent fix</span></pre>
               </div>
             </div>
           </div>
@@ -964,13 +1236,13 @@
           <div class="feature-card">
             <div class="feature-icon">📊</div>
             <h3>Dashboard View</h3>
-            <p>See all your worktrees at a glance with status indicators, branch info, and uncommitted changes.</p>
+            <p>See all worktrees at a glance with status indicators, branch info, and ahead/behind counts.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">⚡</div>
             <h3>Quick Actions</h3>
-            <p>Create, delete, and switch worktrees with single keystrokes. No more typing long git commands.</p>
+            <p>Create, delete, and switch worktrees with single keystrokes. Supports feature/bugfix/hotfix prefixes.</p>
           </div>
 
           <div class="feature-card">
@@ -980,21 +1252,21 @@
           </div>
 
           <div class="feature-card">
-            <div class="feature-icon">📦</div>
-            <h3>Clone as Bare</h3>
-            <p>Set up the perfect bare repo structure with one command using <code>owt clone</code>.</p>
+            <div class="feature-icon">🔄</div>
+            <h3>Git Operations</h3>
+            <p>Fetch, pull, push, and merge without leaving the TUI. See operation status in real-time.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">🖥️</div>
             <h3>Editor Integration</h3>
-            <p>Open any worktree directly in VS Code, Vim, or your preferred editor instantly.</p>
+            <p>Open any worktree directly in VS Code, Vim, or your preferred editor with <code>o</code>.</p>
           </div>
 
           <div class="feature-card">
-            <div class="feature-icon">💻</div>
-            <h3>Terminal Launch</h3>
-            <p>Spawn a new terminal session in any worktree with a single keystroke.</p>
+            <div class="feature-icon">🐚</div>
+            <h3>Shell Integration</h3>
+            <p>Press <code>Enter</code> to cd into the selected worktree. Works with bash, zsh, and fish.</p>
           </div>
         </div>
       </div>
@@ -1077,6 +1349,57 @@
       </div>
     </section>
 
+    <section class="shell-section">
+      <div class="container">
+        <div class="shell-grid">
+          <div class="shell-content">
+            <h2>Shell Integration</h2>
+            <p>
+              Enable seamless directory switching. When you press <code>Enter</code> on a worktree, your shell automatically changes to that directory.
+            </p>
+            <ul class="shell-steps">
+              <li>
+                <span class="step-num">1</span>
+                <span class="step-text">Run <code>owt setup</code> to see instructions for your shell</span>
+              </li>
+              <li>
+                <span class="step-num">2</span>
+                <span class="step-text">Add the function to your shell config file</span>
+              </li>
+              <li>
+                <span class="step-num">3</span>
+                <span class="step-text">Reload with <code>source ~/.zshrc</code> (or your shell's config)</span>
+              </li>
+            </ul>
+          </div>
+          <div class="shell-code">
+            <div class="shell-code-header">
+              <button class="shell-tab active" data-shell="zsh">zsh</button>
+              <button class="shell-tab" data-shell="bash">bash</button>
+              <button class="shell-tab" data-shell="fish">fish</button>
+            </div>
+            <div class="shell-code-body">
+              <pre id="shell-code-content"><span class="fn">owt</span>() {
+    <span class="cmd">local</span> <span class="var">output_file</span>=$(<span class="cmd">mktemp</span>)
+    <span class="var">OWT_OUTPUT_FILE</span>=<span class="str">"$output_file"</span> <span class="cmd">command</span> owt <span class="str">"$@"</span>
+    <span class="cmd">local</span> <span class="var">exit_code</span>=$?
+
+    <span class="cmd">if</span> [ -f <span class="str">"$output_file"</span> ]; <span class="cmd">then</span>
+        <span class="cmd">local</span> <span class="var">target</span>=$(<span class="cmd">cat</span> <span class="str">"$output_file"</span>)
+        <span class="cmd">rm</span> -f <span class="str">"$output_file"</span>
+        <span class="cmd">if</span> [ -n <span class="str">"$target"</span> ] && [ -d <span class="str">"$target"</span> ]; <span class="cmd">then</span>
+            <span class="cmd">cd</span> <span class="str">"$target"</span>
+        <span class="cmd">fi</span>
+    <span class="cmd">fi</span>
+
+    <span class="cmd">return</span> <span class="var">$exit_code</span>
+}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="keybindings" class="keybindings">
       <div class="container">
         <div class="section-header">
@@ -1091,54 +1414,68 @@
           <p class="section-desc">Intuitive keyboard shortcuts you already know.</p>
         </div>
 
-        <div class="keys-grid">
-          <div class="key-item">
-            <kbd>j</kbd>
-            <span class="key-label">Move down</span>
+        <div class="keys-categories">
+          <div class="keys-category">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="18 15 12 9 6 15"></polyline>
+              </svg>
+              Navigation
+            </h3>
+            <div class="keys-list">
+              <div class="key-item"><kbd>j</kbd><kbd>k</kbd><span class="key-label">Move up / down</span></div>
+              <div class="key-item"><kbd>gg</kbd><kbd>G</kbd><span class="key-label">Jump to top / bottom</span></div>
+              <div class="key-item"><kbd>/</kbd><span class="key-label">Search worktrees</span></div>
+              <div class="key-item"><kbd>Enter</kbd><span class="key-label">Enter worktree (cd)</span></div>
+            </div>
           </div>
-          <div class="key-item">
-            <kbd>k</kbd>
-            <span class="key-label">Move up</span>
+
+          <div class="keys-category">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3v18M3 12h18"></path>
+              </svg>
+              Worktree Actions
+            </h3>
+            <div class="keys-list">
+              <div class="key-item"><kbd>a</kbd><span class="key-label">Add new worktree</span></div>
+              <div class="key-item"><kbd>d</kbd><span class="key-label">Delete worktree</span></div>
+              <div class="key-item"><kbd>r</kbd><span class="key-label">Refresh list</span></div>
+              <div class="key-item"><kbd>s</kbd><span class="key-label">Cycle sort mode</span></div>
+            </div>
           </div>
-          <div class="key-item">
-            <kbd>a</kbd>
-            <span class="key-label">Add worktree</span>
+
+          <div class="keys-category">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"></path>
+              </svg>
+              Git Operations
+            </h3>
+            <div class="keys-list">
+              <div class="key-item"><kbd>f</kbd><span class="key-label">Fetch remotes</span></div>
+              <div class="key-item"><kbd>p</kbd><span class="key-label">Pull from remote</span></div>
+              <div class="key-item"><kbd>P</kbd><span class="key-label">Push to remote</span></div>
+              <div class="key-item"><kbd>m</kbd><span class="key-label">Merge upstream</span></div>
+            </div>
           </div>
-          <div class="key-item">
-            <kbd>d</kbd>
-            <span class="key-label">Delete worktree</span>
-          </div>
-          <div class="key-item">
-            <kbd>o</kbd>
-            <span class="key-label">Open in editor</span>
-          </div>
-          <div class="key-item">
-            <kbd>t</kbd>
-            <span class="key-label">Open terminal</span>
-          </div>
-          <div class="key-item">
-            <kbd>f</kbd>
-            <span class="key-label">Fetch all remotes</span>
-          </div>
-          <div class="key-item">
-            <kbd>r</kbd>
-            <span class="key-label">Refresh list</span>
-          </div>
-          <div class="key-item">
-            <kbd>↵</kbd>
-            <span class="key-label">Enter worktree</span>
-          </div>
-          <div class="key-item">
-            <kbd>q</kbd>
-            <span class="key-label">Quit</span>
-          </div>
-          <div class="key-item">
-            <kbd>c</kbd>
-            <span class="key-label">Open config</span>
-          </div>
-          <div class="key-item">
-            <kbd>?</kbd>
-            <span class="key-label">Show help</span>
+
+          <div class="keys-category">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+              External Apps
+            </h3>
+            <div class="keys-list">
+              <div class="key-item"><kbd>o</kbd><span class="key-label">Open in editor</span></div>
+              <div class="key-item"><kbd>t</kbd><span class="key-label">Open in terminal</span></div>
+              <div class="key-item"><kbd>y</kbd><span class="key-label">Copy path to clipboard</span></div>
+              <div class="key-item"><kbd>c</kbd><span class="key-label">Open config</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1172,7 +1509,6 @@
   </footer>
 
   <script>
-    // Copy functionality
     document.querySelectorAll('.copy-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const text = btn.dataset.copy;
@@ -1186,7 +1522,6 @@
       });
     });
 
-    // Smooth scroll
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -1194,6 +1529,62 @@
         if (target) {
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+      });
+    });
+
+    const shellCodes = {
+      zsh: `<span class="fn">owt</span>() {
+    <span class="cmd">local</span> <span class="var">output_file</span>=$(<span class="cmd">mktemp</span>)
+    <span class="var">OWT_OUTPUT_FILE</span>=<span class="str">"$output_file"</span> <span class="cmd">command</span> owt <span class="str">"$@"</span>
+    <span class="cmd">local</span> <span class="var">exit_code</span>=$?
+
+    <span class="cmd">if</span> [ -f <span class="str">"$output_file"</span> ]; <span class="cmd">then</span>
+        <span class="cmd">local</span> <span class="var">target</span>=$(<span class="cmd">cat</span> <span class="str">"$output_file"</span>)
+        <span class="cmd">rm</span> -f <span class="str">"$output_file"</span>
+        <span class="cmd">if</span> [ -n <span class="str">"$target"</span> ] && [ -d <span class="str">"$target"</span> ]; <span class="cmd">then</span>
+            <span class="cmd">cd</span> <span class="str">"$target"</span>
+        <span class="cmd">fi</span>
+    <span class="cmd">fi</span>
+
+    <span class="cmd">return</span> <span class="var">$exit_code</span>
+}`,
+      bash: `<span class="fn">owt</span>() {
+    <span class="cmd">local</span> <span class="var">output_file</span>=$(<span class="cmd">mktemp</span>)
+    <span class="var">OWT_OUTPUT_FILE</span>=<span class="str">"$output_file"</span> <span class="cmd">command</span> owt <span class="str">"$@"</span>
+    <span class="cmd">local</span> <span class="var">exit_code</span>=$?
+
+    <span class="cmd">if</span> [ -f <span class="str">"$output_file"</span> ]; <span class="cmd">then</span>
+        <span class="cmd">local</span> <span class="var">target</span>=$(<span class="cmd">cat</span> <span class="str">"$output_file"</span>)
+        <span class="cmd">rm</span> -f <span class="str">"$output_file"</span>
+        <span class="cmd">if</span> [ -n <span class="str">"$target"</span> ] && [ -d <span class="str">"$target"</span> ]; <span class="cmd">then</span>
+            <span class="cmd">cd</span> <span class="str">"$target"</span>
+        <span class="cmd">fi</span>
+    <span class="cmd">fi</span>
+
+    <span class="cmd">return</span> <span class="var">$exit_code</span>
+}`,
+      fish: `<span class="fn">function</span> <span class="var">owt</span>
+    <span class="cmd">set</span> -l <span class="var">output_file</span> (<span class="cmd">mktemp</span>)
+    <span class="var">OWT_OUTPUT_FILE</span>=<span class="str">"$output_file"</span> <span class="cmd">command</span> owt <span class="var">$argv</span>
+    <span class="cmd">set</span> -l <span class="var">exit_code</span> <span class="var">$status</span>
+
+    <span class="cmd">if</span> <span class="cmd">test</span> -f <span class="str">"$output_file"</span>
+        <span class="cmd">set</span> -l <span class="var">target</span> (<span class="cmd">cat</span> <span class="str">"$output_file"</span>)
+        <span class="cmd">rm</span> -f <span class="str">"$output_file"</span>
+        <span class="cmd">if</span> <span class="cmd">test</span> -n <span class="str">"$target"</span> -a -d <span class="str">"$target"</span>
+            <span class="cmd">cd</span> <span class="str">"$target"</span>
+        <span class="cmd">end</span>
+    <span class="cmd">end</span>
+
+    <span class="cmd">return</span> <span class="var">$exit_code</span>
+<span class="fn">end</span>`
+    };
+
+    document.querySelectorAll('.shell-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.shell-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('shell-code-content').innerHTML = shellCodes[tab.dataset.shell];
       });
     });
   </script>
