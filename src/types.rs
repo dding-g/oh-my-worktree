@@ -163,6 +163,14 @@ pub enum AppState {
     Fetching,
     Adding,
     Deleting,
+    Pulling,
+    Pushing,
+    Merging,
+    /// Branch selection for merge
+    MergeBranchSelect {
+        branches: Vec<String>,
+        selected: usize,
+    },
 }
 
 /// Exit reason when quitting the app

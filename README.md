@@ -2,6 +2,8 @@
 
 A TUI tool for managing Git worktrees in bare repositories.
 
+**[Documentation](https://mattew8.github.io/oh-my-worktree)** | **[GitHub](https://github.com/mattew8/oh-my-worktree)**
+
 <img width="786" height="580" alt="Image" src="https://github.com/user-attachments/assets/929a7bf2-cd66-4a87-a73e-8b9567cb0a08" />
 
 ## What is Git Worktree?

@@ -25,6 +25,10 @@ pub struct App {
     pub current_worktree_path: Option<PathBuf>, // Path where owt was launched from
     pub is_adding: bool,
     pub is_deleting: bool,
+    pub is_pulling: bool,
+    pub is_pushing: bool,
+    pub is_merging: bool,
+    pub merge_source_branch: Option<String>,  // Branch to merge from
     pub has_shell_integration: bool, // Whether OWT_OUTPUT_FILE is set
     pub filter_text: String,         // Search/filter text
     pub is_filtering: bool,          // Whether in filter mode
@@ -84,6 +88,10 @@ impl App {
             current_worktree_path,
             is_adding: false,
             is_deleting: false,
+            is_pulling: false,
+            is_pushing: false,
+            is_merging: false,
+            merge_source_branch: None,
             has_shell_integration,
             filter_text: String::new(),
             is_filtering: false,
@@ -121,6 +129,30 @@ impl App {
                 continue;
             }
 
+            if self.is_pulling {
+                self.do_pull();
+                while event::poll(Duration::from_millis(0))? {
+                    let _ = event::read()?;
+                }
+                continue;
+            }
+
+            if self.is_pushing {
+                self.do_push();
+                while event::poll(Duration::from_millis(0))? {
+                    let _ = event::read()?;
+                }
+                continue;
+            }
+
+            if self.is_merging {
+                self.do_merge();
+                while event::poll(Duration::from_millis(0))? {
+                    let _ = event::read()?;
+                }
+                continue;
+            }
+
             self.handle_events(terminal)?;
         }
         Ok(())
@@ -128,7 +160,8 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         match self.state {
-            AppState::List | AppState::Fetching | AppState::Adding | AppState::Deleting => {
+            AppState::List | AppState::Fetching | AppState::Adding | AppState::Deleting
+            | AppState::Pulling | AppState::Pushing | AppState::Merging => {
                 main_view::render(frame, self)
             }
             AppState::AddModal => {
@@ -163,6 +196,10 @@ impl App {
                 main_view::render(frame, self);
                 help_modal::render(frame);
             }
+            AppState::MergeBranchSelect { .. } => {
+                main_view::render(frame, self);
+                crate::ui::merge_modal::render(frame, self);
+            }
         }
     }
 
@@ -195,7 +232,11 @@ impl App {
                             self.handle_setup_modal_input(key.code, selected_index)
                         }
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
-                        AppState::Fetching | AppState::Adding | AppState::Deleting => {
+                        AppState::MergeBranchSelect { branches, selected } => {
+                            self.handle_merge_branch_select_input(key.code, branches, selected)
+                        }
+                        AppState::Fetching | AppState::Adding | AppState::Deleting
+                        | AppState::Pulling | AppState::Pushing | AppState::Merging => {
                             // Ignore input during operations
                         }
                     }
@@ -306,6 +347,22 @@ impl App {
             }
             KeyCode::Char('f') => {
                 self.fetch_all();
+                self.last_key = None;
+            }
+            KeyCode::Char('p') => {
+                self.pull_worktree();
+                self.last_key = None;
+            }
+            KeyCode::Char('P') => {
+                self.push_worktree();
+                self.last_key = None;
+            }
+            KeyCode::Char('m') => {
+                self.merge_upstream();
+                self.last_key = None;
+            }
+            KeyCode::Char('M') => {
+                self.open_merge_branch_select();
                 self.last_key = None;
             }
             KeyCode::Char('r') => {
@@ -1284,6 +1341,193 @@ impl App {
                 }
             }
         }
+    }
+
+    fn pull_worktree(&mut self) {
+        let wt_info = self.selected_worktree().map(|wt| (wt.is_bare, wt.display_name(), wt.status.clone()));
+
+        if let Some((is_bare, name, status)) = wt_info {
+            if is_bare {
+                self.message = Some(AppMessage::error("Cannot pull bare repository"));
+                return;
+            }
+            if status != WorktreeStatus::Clean {
+                self.message = Some(AppMessage::error("Cannot pull: worktree has uncommitted changes"));
+                return;
+            }
+            self.is_pulling = true;
+            self.state = AppState::Pulling;
+            self.message = Some(AppMessage::info(format!("Pulling: {}...", name)));
+        }
+    }
+
+    fn do_pull(&mut self) {
+        if let Some(wt) = self.selected_worktree().cloned() {
+            match git::pull_worktree(&wt.path) {
+                Ok(msg) => {
+                    let display = if msg.is_empty() {
+                        format!("Pull completed: {}", wt.display_name())
+                    } else {
+                        format!("Pull completed: {}", msg)
+                    };
+                    self.message = Some(AppMessage::info(display));
+                    self.refresh_worktrees();
+                }
+                Err(e) => {
+                    self.message = Some(AppMessage::error(format!("Pull failed: {}", e)));
+                }
+            }
+        }
+        self.is_pulling = false;
+        self.state = AppState::List;
+    }
+
+    fn push_worktree(&mut self) {
+        let wt_info = self.selected_worktree().map(|wt| (wt.is_bare, wt.display_name()));
+
+        if let Some((is_bare, name)) = wt_info {
+            if is_bare {
+                self.message = Some(AppMessage::error("Cannot push bare repository"));
+                return;
+            }
+            self.is_pushing = true;
+            self.state = AppState::Pushing;
+            self.message = Some(AppMessage::info(format!("Pushing: {}...", name)));
+        }
+    }
+
+    fn do_push(&mut self) {
+        if let Some(wt) = self.selected_worktree().cloned() {
+            match git::push_worktree(&wt.path) {
+                Ok(msg) => {
+                    let display = if msg.is_empty() || msg.contains("Everything up-to-date") {
+                        "Push completed: Everything up-to-date".to_string()
+                    } else {
+                        format!("Push completed: {}", wt.display_name())
+                    };
+                    self.message = Some(AppMessage::info(display));
+                    self.refresh_worktrees();
+                }
+                Err(e) => {
+                    self.message = Some(AppMessage::error(format!("Push failed: {}", e)));
+                }
+            }
+        }
+        self.is_pushing = false;
+        self.state = AppState::List;
+    }
+
+    fn merge_upstream(&mut self) {
+        let wt_info = self.selected_worktree().map(|wt| (wt.is_bare, wt.display_name(), wt.status.clone()));
+
+        if let Some((is_bare, name, status)) = wt_info {
+            if is_bare {
+                self.message = Some(AppMessage::error("Cannot merge into bare repository"));
+                return;
+            }
+            if status != WorktreeStatus::Clean {
+                self.message = Some(AppMessage::error("Cannot merge: worktree has uncommitted changes"));
+                return;
+            }
+            self.merge_source_branch = None; // upstream merge
+            self.is_merging = true;
+            self.state = AppState::Merging;
+            self.message = Some(AppMessage::info(format!("Merging upstream into {}...", name)));
+        }
+    }
+
+    fn open_merge_branch_select(&mut self) {
+        let wt_info = self.selected_worktree().map(|wt| (wt.is_bare, wt.status.clone()));
+
+        if let Some((is_bare, status)) = wt_info {
+            if is_bare {
+                self.message = Some(AppMessage::error("Cannot merge into bare repository"));
+                return;
+            }
+            if status != WorktreeStatus::Clean {
+                self.message = Some(AppMessage::error("Cannot merge: worktree has uncommitted changes"));
+                return;
+            }
+
+            match git::list_local_branches(&self.bare_repo_path) {
+                Ok(branches) => {
+                    if branches.is_empty() {
+                        self.message = Some(AppMessage::error("No branches available to merge"));
+                        return;
+                    }
+                    self.state = AppState::MergeBranchSelect {
+                        branches,
+                        selected: 0,
+                    };
+                }
+                Err(e) => {
+                    self.message = Some(AppMessage::error(format!("Failed to list branches: {}", e)));
+                }
+            }
+        }
+    }
+
+    fn handle_merge_branch_select_input(&mut self, code: KeyCode, branches: Vec<String>, selected: usize) {
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.state = AppState::List;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                let new_selected = if selected > 0 { selected - 1 } else { 0 };
+                self.state = AppState::MergeBranchSelect {
+                    branches,
+                    selected: new_selected,
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let new_selected = if selected < branches.len().saturating_sub(1) {
+                    selected + 1
+                } else {
+                    branches.len().saturating_sub(1)
+                };
+                self.state = AppState::MergeBranchSelect {
+                    branches,
+                    selected: new_selected,
+                };
+            }
+            KeyCode::Enter => {
+                if let Some(branch) = branches.get(selected) {
+                    self.merge_source_branch = Some(branch.clone());
+                    self.is_merging = true;
+                    self.state = AppState::Merging;
+                    self.message = Some(AppMessage::info(format!("Merging {}...", branch)));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn do_merge(&mut self) {
+        if let Some(wt) = self.selected_worktree().cloned() {
+            let result = if let Some(ref source_branch) = self.merge_source_branch {
+                git::merge_branch(&wt.path, source_branch)
+            } else {
+                git::merge_upstream(&wt.path)
+            };
+
+            match result {
+                Ok(msg) => {
+                    let display = if msg.is_empty() {
+                        "Merge completed".to_string()
+                    } else {
+                        format!("Merge completed: {}", msg)
+                    };
+                    self.message = Some(AppMessage::info(display));
+                    self.refresh_worktrees();
+                }
+                Err(e) => {
+                    self.message = Some(AppMessage::error(format!("Merge failed: {}", e)));
+                }
+            }
+        }
+        self.is_merging = false;
+        self.merge_source_branch = None;
+        self.state = AppState::List;
     }
 
 }
