@@ -35,8 +35,14 @@ pub fn render(frame: &mut Frame) {
             ("a", "Add new worktree"),
             ("d", "Delete worktree"),
             ("r", "Refresh list"),
-            ("f", "Fetch remotes"),
             ("s", "Sort (name/recent/status)"),
+        ]),
+        ("Git Operations", vec![
+            ("f", "Fetch remotes"),
+            ("p", "Pull from remote"),
+            ("P", "Push to remote"),
+            ("m", "Merge upstream"),
+            ("M", "Merge branch (select)"),
         ]),
         ("External Apps", vec![
             ("o", "Open in editor"),

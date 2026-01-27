@@ -622,3 +622,116 @@ pub fn local_branch_exists(bare_repo_path: &Path, branch: &str) -> bool {
 pub fn remote_branch_exists(bare_repo_path: &Path, branch: &str) -> bool {
     branch_exists(bare_repo_path, &format!("refs/remotes/origin/{}", branch))
 }
+
+/// Pull changes from remote for a worktree
+pub fn pull_worktree(worktree_path: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .args(["-C", &worktree_path.to_string_lossy(), "pull"])
+        .output()
+        .context("Failed to pull")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to pull: {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.trim().to_string())
+}
+
+/// Push changes to remote for a worktree
+pub fn push_worktree(worktree_path: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .args(["-C", &worktree_path.to_string_lossy(), "push"])
+        .output()
+        .context("Failed to push")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to push: {}", stderr.trim());
+    }
+
+    // Git push often outputs to stderr even on success
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = if stdout.trim().is_empty() {
+        stderr.trim().to_string()
+    } else {
+        stdout.trim().to_string()
+    };
+    Ok(message)
+}
+
+/// Merge upstream branch into a worktree
+/// Finds the configured upstream and merges it
+pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
+    // First, get the upstream branch
+    let upstream_output = Command::new("git")
+        .args(["-C", &worktree_path.to_string_lossy(), "rev-parse", "--abbrev-ref", "@{upstream}"])
+        .output()
+        .context("Failed to get upstream")?;
+
+    if !upstream_output.status.success() {
+        anyhow::bail!("No upstream branch configured");
+    }
+
+    let upstream = String::from_utf8_lossy(&upstream_output.stdout).trim().to_string();
+
+    // Merge the upstream
+    let output = Command::new("git")
+        .args(["-C", &worktree_path.to_string_lossy(), "merge", &upstream])
+        .output()
+        .context("Failed to merge upstream")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to merge: {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(format!("Merged {} - {}", upstream, stdout.trim()))
+}
+
+/// Merge a specific branch into a worktree
+pub fn merge_branch(worktree_path: &Path, source_branch: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["-C", &worktree_path.to_string_lossy(), "merge", source_branch])
+        .output()
+        .context("Failed to merge")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to merge: {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.trim().to_string())
+}
+
+/// List local branches for merge selection
+pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/heads/",
+        ])
+        .output()
+        .context("Failed to list branches")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to list branches: {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let branches: Vec<String> = stdout
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(branches)
+}
