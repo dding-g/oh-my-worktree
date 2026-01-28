@@ -8,7 +8,6 @@ use ratatui::{
 
 use crate::app::App;
 use crate::git;
-use crate::types::BaseSource;
 
 /// Render the original simple add modal (for backwards compatibility)
 pub fn render(frame: &mut Frame, app: &App) {
@@ -144,18 +143,18 @@ pub fn render_type_select(frame: &mut Frame, app: &App) {
     frame.render_widget(help, chunks[help_idx]);
 }
 
-/// Render the branch name input screen with base branch comparison
+/// Render the branch name input screen (Step 1: Enter branch name)
 pub fn render_branch_input(frame: &mut Frame, app: &App) {
-    let area = centered_rect(70, 60, frame.area());
+    let area = centered_rect(60, 30, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
 
     // Determine title based on branch type
     let title = if let Some(ref bt) = app.add_worktree_state.branch_type {
-        format!(" Add {} worktree ", bt.name)
+        format!(" Add {} worktree (1/2) ", bt.name)
     } else {
-        " Add worktree (custom) ".to_string()
+        " Add worktree (1/2) ".to_string()
     };
 
     let block = Block::default()
@@ -168,148 +167,202 @@ pub fn render_branch_input(frame: &mut Frame, app: &App) {
 
     let chunks = Layout::vertical([
         Constraint::Length(1), // Spacing
+        Constraint::Length(1), // Step indicator
+        Constraint::Length(1), // Spacing
         Constraint::Length(1), // Name label
         Constraint::Length(1), // Name input
-        Constraint::Length(1), // Spacing
-        Constraint::Length(1), // Separator
-        Constraint::Length(1), // Base label
-        Constraint::Length(1), // Spacing
-        Constraint::Length(1), // Local info
-        Constraint::Length(1), // Remote info
-        Constraint::Length(1), // Behind count
-        Constraint::Length(1), // Spacing
-        Constraint::Length(1), // Actions
-        Constraint::Length(1), // Separator
-        Constraint::Length(1), // Spacing
-        Constraint::Length(1), // Will create from
+        Constraint::Length(1), // Hint
         Constraint::Min(1),    // Flexible spacing
         Constraint::Length(1), // Help
     ])
     .split(inner);
 
+    // Step indicator
+    let step = Paragraph::new(Line::from(vec![
+        Span::styled("Step 1: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("Enter branch name", Style::default().fg(Color::White)),
+    ]));
+    frame.render_widget(step, chunks[1]);
+
     // Name label
     let name_label = Paragraph::new(Line::from(vec![
-        Span::styled("Name:", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled("Branch name:", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
     ]));
-    frame.render_widget(name_label, chunks[1]);
+    frame.render_widget(name_label, chunks[3]);
 
-    // Name input with prefix
+    // Name input
     let input_display = format!("[{}█]", app.input_buffer);
     let name_input = Paragraph::new(Line::from(vec![
         Span::styled("  ", Style::default()),
         Span::styled(input_display, Style::default().fg(Color::Yellow)),
     ]));
-    frame.render_widget(name_input, chunks[2]);
+    frame.render_widget(name_input, chunks[4]);
 
-    // Separator
-    let separator = Line::from(vec![
-        Span::styled("───────────────────────────────────────────────────────", Style::default().fg(Color::DarkGray)),
-    ]);
-    frame.render_widget(Paragraph::new(separator.clone()), chunks[4]);
+    // Hint
+    let hint = Paragraph::new(Line::from(vec![Span::styled(
+        "  e.g. TASK-123-feature-description",
+        Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+    )]));
+    frame.render_widget(hint, chunks[5]);
 
-    // Base label
-    let base_label = Paragraph::new(Line::from(vec![
-        Span::styled("Base: ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+    // Help text
+    let help = Paragraph::new(Line::from(vec![
+        Span::styled("Enter", Style::default().fg(Color::Cyan)),
+        Span::raw(" next  "),
+        Span::styled("Esc", Style::default().fg(Color::Cyan)),
+        Span::raw(" back"),
+    ]))
+    .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(help, chunks[7]);
+}
+
+/// Render the base source selection screen (Step 2: Choose remote or local)
+pub fn render_base_select(frame: &mut Frame, app: &App) {
+    let area = centered_rect(65, 55, frame.area());
+
+    // Clear the background
+    frame.render_widget(Clear, area);
+
+    let title = if let Some(ref bt) = app.add_worktree_state.branch_type {
+        format!(" Add {} worktree (2/2) ", bt.name)
+    } else {
+        " Add worktree (2/2) ".to_string()
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::vertical([
+        Constraint::Length(1), // Spacing
+        Constraint::Length(1), // Step indicator
+        Constraint::Length(1), // Spacing
+        Constraint::Length(1), // Branch name display
+        Constraint::Length(1), // Base branch display
+        Constraint::Length(1), // Separator
+        Constraint::Length(1), // Spacing
+        Constraint::Length(1), // Remote option
+        Constraint::Length(1), // Remote info
+        Constraint::Length(1), // Spacing
+        Constraint::Length(1), // Local option
+        Constraint::Length(1), // Local info
+        Constraint::Length(1), // Spacing
+        Constraint::Length(1), // Behind info
+        Constraint::Min(1),    // Flexible spacing
+        Constraint::Length(1), // Help
+    ])
+    .split(inner);
+
+    // Step indicator
+    let step = Paragraph::new(Line::from(vec![
+        Span::styled("Step 2: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("Select base branch source", Style::default().fg(Color::White)),
+    ]));
+    frame.render_widget(step, chunks[1]);
+
+    // Branch name display
+    let branch_display = Paragraph::new(Line::from(vec![
+        Span::styled("  Branch: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(&app.add_worktree_state.branch_name, Style::default().fg(Color::Yellow)),
+    ]));
+    frame.render_widget(branch_display, chunks[3]);
+
+    // Base branch display
+    let base_display = Paragraph::new(Line::from(vec![
+        Span::styled("  Base:   ", Style::default().fg(Color::DarkGray)),
         Span::styled(&app.add_worktree_state.base_branch, Style::default().fg(Color::Cyan)),
     ]));
-    frame.render_widget(base_label, chunks[5]);
+    frame.render_widget(base_display, chunks[4]);
+
+    // Separator
+    let separator = Paragraph::new(Line::from(vec![
+        Span::styled("  ─────────────────────────────────────────────────", Style::default().fg(Color::DarkGray)),
+    ]));
+    frame.render_widget(separator, chunks[5]);
 
     // Get branch comparison info
     let comparison = git::compare_local_remote(&app.bare_repo_path, &app.add_worktree_state.base_branch)
         .unwrap_or_default();
 
-    // Local info
-    let local_info = if let Some(ref info) = comparison.local {
-        Line::from(vec![
-            Span::styled("  local   ", Style::default().fg(if app.add_worktree_state.base_source == BaseSource::Local { Color::Green } else { Color::DarkGray })),
-            Span::styled(&info.hash, Style::default().fg(Color::Yellow)),
-            Span::styled(format!("  \"{}\"", truncate_str(&info.message, 30)), Style::default().fg(Color::White)),
-            Span::styled(format!(" ({})", info.time_ago), Style::default().fg(Color::DarkGray)),
-        ])
-    } else {
-        Line::from(vec![
-            Span::styled("  local   ", Style::default().fg(Color::DarkGray)),
-            Span::styled("(not found)", Style::default().fg(Color::DarkGray)),
-        ])
-    };
-    frame.render_widget(Paragraph::new(local_info), chunks[7]);
+    // Remote option (default, highlighted)
+    let remote_option = Paragraph::new(Line::from(vec![
+        Span::styled("  [", Style::default().fg(Color::DarkGray)),
+        Span::styled("R", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("] ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Remote", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(" (recommended)", Style::default().fg(Color::Green)),
+    ]));
+    frame.render_widget(remote_option, chunks[7]);
 
     // Remote info
     let remote_info = if let Some(ref info) = comparison.remote {
         Line::from(vec![
-            Span::styled("  remote  ", Style::default().fg(if app.add_worktree_state.base_source == BaseSource::Remote { Color::Green } else { Color::DarkGray })),
+            Span::styled("      ", Style::default()),
             Span::styled(&info.hash, Style::default().fg(Color::Yellow)),
-            Span::styled(format!("  \"{}\"", truncate_str(&info.message, 30)), Style::default().fg(Color::White)),
+            Span::styled(format!("  \"{}\"", truncate_str(&info.message, 25)), Style::default().fg(Color::White)),
             Span::styled(format!(" ({})", info.time_ago), Style::default().fg(Color::DarkGray)),
         ])
     } else {
         Line::from(vec![
-            Span::styled("  remote  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("(not fetched)", Style::default().fg(Color::DarkGray)),
+            Span::styled("      Fetches latest from origin/", Style::default().fg(Color::DarkGray)),
+            Span::styled(&app.add_worktree_state.base_branch, Style::default().fg(Color::DarkGray)),
         ])
     };
     frame.render_widget(Paragraph::new(remote_info), chunks[8]);
 
+    // Local option
+    let local_option = Paragraph::new(Line::from(vec![
+        Span::styled("  [", Style::default().fg(Color::DarkGray)),
+        Span::styled("L", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("] ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Local", Style::default().fg(Color::White)),
+    ]));
+    frame.render_widget(local_option, chunks[10]);
+
+    // Local info
+    let local_info = if let Some(ref info) = comparison.local {
+        Line::from(vec![
+            Span::styled("      ", Style::default()),
+            Span::styled(&info.hash, Style::default().fg(Color::Yellow)),
+            Span::styled(format!("  \"{}\"", truncate_str(&info.message, 25)), Style::default().fg(Color::White)),
+            Span::styled(format!(" ({})", info.time_ago), Style::default().fg(Color::DarkGray)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("      (local branch not found)", Style::default().fg(Color::DarkGray)),
+        ])
+    };
+    frame.render_widget(Paragraph::new(local_info), chunks[11]);
+
     // Behind count
     let behind_info = if comparison.behind_count > 0 {
         Line::from(vec![
-            Span::styled(format!("          ↓{} commits behind", comparison.behind_count), Style::default().fg(Color::Yellow)),
+            Span::styled(format!("      ⚠ Local is {} commits behind remote", comparison.behind_count), Style::default().fg(Color::Yellow)),
         ])
     } else if comparison.local.is_some() && comparison.remote.is_some() {
         Line::from(vec![
-            Span::styled("          ✓ up to date", Style::default().fg(Color::Green)),
+            Span::styled("      ✓ Local is up to date with remote", Style::default().fg(Color::Green)),
         ])
     } else {
         Line::from(vec![])
     };
-    frame.render_widget(Paragraph::new(behind_info), chunks[9]);
-
-    // Actions
-    let actions = Paragraph::new(Line::from(vec![
-        Span::styled("  [", Style::default().fg(Color::DarkGray)),
-        Span::styled("F", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("] Fetch  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[", Style::default().fg(Color::DarkGray)),
-        Span::styled("U", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("] Use remote  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[", Style::default().fg(Color::DarkGray)),
-        Span::styled("L", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("] Use local", Style::default().fg(Color::DarkGray)),
-    ]));
-    frame.render_widget(actions, chunks[11]);
-
-    // Separator
-    frame.render_widget(Paragraph::new(separator.clone()), chunks[12]);
-
-    // Will create from
-    let source = match app.add_worktree_state.base_source {
-        BaseSource::Local => format!("local/{}", app.add_worktree_state.base_branch),
-        BaseSource::Remote => format!("origin/{}", app.add_worktree_state.base_branch),
-    };
-    let hash = match app.add_worktree_state.base_source {
-        BaseSource::Local => comparison.local.as_ref().map(|i| i.hash.clone()),
-        BaseSource::Remote => comparison.remote.as_ref().map(|i| i.hash.clone()),
-    };
-    let create_from = Paragraph::new(Line::from(vec![
-        Span::styled("Will create from: ", Style::default().fg(Color::White)),
-        Span::styled(&source, Style::default().fg(Color::Cyan)),
-        if let Some(h) = hash {
-            Span::styled(format!(" ({})", h), Style::default().fg(Color::DarkGray))
-        } else {
-            Span::styled("", Style::default())
-        },
-    ]));
-    frame.render_widget(create_from, chunks[14]);
+    frame.render_widget(Paragraph::new(behind_info), chunks[13]);
 
     // Help text
     let help = Paragraph::new(Line::from(vec![
-        Span::styled("Enter", Style::default().fg(Color::Cyan)),
-        Span::raw(" create  "),
+        Span::styled("Enter/R", Style::default().fg(Color::Cyan)),
+        Span::raw(" remote  "),
+        Span::styled("L", Style::default().fg(Color::Cyan)),
+        Span::raw(" local  "),
         Span::styled("Esc", Style::default().fg(Color::Cyan)),
         Span::raw(" back"),
     ]))
     .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(help, chunks[16]);
+    frame.render_widget(help, chunks[15]);
 }
 
 /// Truncate a string to max length, adding "..." if truncated
