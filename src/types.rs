@@ -83,9 +83,9 @@ impl Worktree {
 /// Which base to use when creating a new worktree
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum BaseSource {
-    #[default]
     Local,      // Use local branch as base
-    Remote,     // Use remote branch as base (origin/<branch>)
+    #[default]
+    Remote,     // Use remote branch as base (origin/<branch>) - default
 }
 
 /// State for the add worktree modal - holds all configuration
@@ -104,7 +104,7 @@ impl Default for AddWorktreeState {
         Self {
             branch_type: None,
             base_branch: "main".to_string(),
-            base_source: BaseSource::Local,
+            base_source: BaseSource::Remote,  // Default to remote
             branch_name: String::new(),
             is_fetching: false,
         }
@@ -118,7 +118,7 @@ impl AddWorktreeState {
         Self {
             branch_type: Some(branch_type),
             base_branch: base,
-            base_source: BaseSource::Local,
+            base_source: BaseSource::Remote,  // Default to remote
             branch_name: prefix, // Start with prefix
             is_fetching: false,
         }
@@ -128,7 +128,7 @@ impl AddWorktreeState {
         Self {
             branch_type: None,
             base_branch,
-            base_source: BaseSource::Local,
+            base_source: BaseSource::Remote,  // Default to remote
             branch_name: String::new(),
             is_fetching: false,
         }
@@ -142,8 +142,10 @@ pub enum AppState {
     AddModal,  // Kept for backwards compatibility
     /// Type selection screen for add worktree
     AddTypeSelect,
-    /// Branch input screen with base branch comparison
+    /// Branch input screen (step 1: enter branch name)
     AddBranchInput,
+    /// Base source selection screen (step 2: choose remote or local)
+    AddBaseSelect,
     ConfirmDelete { delete_branch: bool },
     ConfigModal {
         selected_index: usize,  // 0-4 (editor, terminal, copy_files, post_add_script, branch_types)

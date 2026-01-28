@@ -176,6 +176,10 @@ impl App {
                 main_view::render(frame, self);
                 add_modal::render_branch_input(frame, self);
             }
+            AppState::AddBaseSelect => {
+                main_view::render(frame, self);
+                add_modal::render_base_select(frame, self);
+            }
             AppState::ConfirmDelete { .. } => {
                 main_view::render(frame, self);
                 confirm_modal::render(frame, self);
@@ -218,7 +222,8 @@ impl App {
                         AppState::List => self.handle_list_input(key.code, key.modifiers),
                         AppState::AddModal => self.handle_add_modal_input(key.code),
                         AppState::AddTypeSelect => self.handle_add_type_select_input(key.code),
-                        AppState::AddBranchInput => self.handle_add_branch_input(key.code, key.modifiers),
+                        AppState::AddBranchInput => self.handle_add_branch_input(key.code),
+                        AppState::AddBaseSelect => self.handle_add_base_select_input(key.code),
                         AppState::ConfirmDelete { delete_branch } => {
                             self.handle_confirm_delete_input(key.code, delete_branch)
                         }
@@ -688,8 +693,8 @@ impl App {
         }
     }
 
-    /// Handle input for branch name input screen
-    fn handle_add_branch_input(&mut self, code: KeyCode, modifiers: KeyModifiers) {
+    /// Handle input for branch name input screen (Step 1)
+    fn handle_add_branch_input(&mut self, code: KeyCode) {
         match code {
             KeyCode::Esc => {
                 // Go back to type selection
@@ -699,7 +704,8 @@ impl App {
             KeyCode::Enter => {
                 if !self.input_buffer.trim().is_empty() {
                     self.add_worktree_state.branch_name = self.input_buffer.trim().to_string();
-                    self.add_worktree_with_state();
+                    // Go to base selection step
+                    self.state = AppState::AddBaseSelect;
                 }
             }
             KeyCode::Backspace => {
@@ -712,24 +718,6 @@ impl App {
                     self.input_buffer.pop();
                 }
             }
-            KeyCode::Char('f') if modifiers.contains(KeyModifiers::SHIFT) => {
-                // Fetch remote base branch
-                self.fetch_base_branch();
-            }
-            KeyCode::Char('u') if modifiers.contains(KeyModifiers::SHIFT) => {
-                // Use remote as base
-                self.add_worktree_state.base_source = BaseSource::Remote;
-                self.message = Some(AppMessage::info("Using remote as base"));
-            }
-            KeyCode::Char('l') if modifiers.contains(KeyModifiers::SHIFT) => {
-                // Use local as base
-                self.add_worktree_state.base_source = BaseSource::Local;
-                self.message = Some(AppMessage::info("Using local as base"));
-            }
-            KeyCode::Char('b') if modifiers.contains(KeyModifiers::SHIFT) => {
-                // Change base branch (show list)
-                self.message = Some(AppMessage::info("Base branch selection not yet implemented"));
-            }
             KeyCode::Char(c) => {
                 self.input_buffer.push(c);
             }
@@ -737,17 +725,41 @@ impl App {
         }
     }
 
-    /// Fetch the base branch from remote
-    fn fetch_base_branch(&mut self) {
+    /// Handle input for base source selection screen (Step 2)
+    fn handle_add_base_select_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => {
+                // Go back to branch input
+                self.state = AppState::AddBranchInput;
+            }
+            KeyCode::Enter | KeyCode::Char('r') | KeyCode::Char('R') => {
+                // Use remote (default) - fetch and create
+                self.add_worktree_state.base_source = BaseSource::Remote;
+                self.fetch_and_create_worktree();
+            }
+            KeyCode::Char('l') | KeyCode::Char('L') => {
+                // Use local
+                self.add_worktree_state.base_source = BaseSource::Local;
+                self.add_worktree_with_state();
+            }
+            _ => {}
+        }
+    }
+
+    /// Fetch base branch from remote and create worktree
+    fn fetch_and_create_worktree(&mut self) {
         let base = self.add_worktree_state.base_branch.clone();
         self.message = Some(AppMessage::info(format!("Fetching {}...", base)));
 
+        // Fetch first
         match git::fetch_branch(&self.bare_repo_path, &base) {
             Ok(()) => {
-                self.message = Some(AppMessage::info(format!("Fetched {}", base)));
+                self.message = Some(AppMessage::info(format!("Fetched {}, creating worktree...", base)));
+                self.add_worktree_with_state();
             }
             Err(e) => {
                 self.message = Some(AppMessage::error(format!("Failed to fetch: {}", e)));
+                // Stay on base select screen so user can choose local
             }
         }
     }
