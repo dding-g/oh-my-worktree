@@ -28,7 +28,7 @@ npx oh-my-worktree
 If you have Rust installed, you can install via Cargo:
 
 ```bash
-cargo install --git https://github.com/mattew8/oh-my-worktree
+cargo install --git https://github.com/dding-g/oh-my-worktree
 ```
 
 ## Build from Source
@@ -36,7 +36,7 @@ cargo install --git https://github.com/mattew8/oh-my-worktree
 Clone the repository and build:
 
 ```bash
-git clone https://github.com/mattew8/oh-my-worktree.git
+git clone https://github.com/dding-g/oh-my-worktree.git
 cd oh-my-worktree
 cargo build --release
 ```

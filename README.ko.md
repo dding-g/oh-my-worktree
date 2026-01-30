@@ -18,6 +18,15 @@ project/
 
 **owt**는 이 워크플로우를 간단한 TUI로 관리할 수 있게 해줍니다.
 
+## 명령어
+
+| 명령어 | 설명 |
+|--------|------|
+| `owt` | TUI 실행 (기본) |
+| `owt clone <URL> [PATH]` | bare repo 클론 + 첫 worktree 생성 |
+| `owt init` | 기존 repo를 bare 구조로 변환 가이드 |
+| `owt setup` | 쉘 통합 설치 |
+
 ## 설치
 
 ### npm (권장)
@@ -35,13 +44,13 @@ npx oh-my-worktree
 ### Cargo
 
 ```bash
-cargo install --git https://github.com/mattew8/oh-my-worktree
+cargo install --git https://github.com/dding-g/oh-my-worktree
 ```
 
 소스에서 빌드:
 
 ```bash
-git clone https://github.com/mattew8/oh-my-worktree.git
+git clone https://github.com/dding-g/oh-my-worktree.git
 cd oh-my-worktree
 cargo build --release
 # 바이너리: ./target/release/owt
@@ -100,6 +109,10 @@ owt /path/to/project
 | `o` | 에디터에서 열기 |
 | `t` | 터미널에서 열기 |
 | `f` | 모든 remote fetch |
+| `p` | remote에서 pull |
+| `P` | remote로 push |
+| `m` | upstream merge |
+| `M` | 브랜치 merge (선택) |
 | `r` | 목록 새로고침 |
 | `q` | 종료 |
 
