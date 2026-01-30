@@ -2,7 +2,7 @@
 
 A TUI tool for managing Git worktrees in bare repositories.
 
-**[Documentation](https://mattew8.github.io/oh-my-worktree)** | **[GitHub](https://github.com/mattew8/oh-my-worktree)**
+**[GitHub](https://github.com/dding-g/oh-my-worktree)**
 
 <img width="786" height="580" alt="Image" src="https://github.com/user-attachments/assets/929a7bf2-cd66-4a87-a73e-8b9567cb0a08" />
 
@@ -19,6 +19,15 @@ project/
 ```
 
 **owt** makes this workflow effortless with a simple TUI.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `owt` | Launch TUI (default) |
+| `owt clone <URL> [PATH]` | Clone as bare repo + create first worktree |
+| `owt init` | Guide to convert existing repo to bare structure |
+| `owt setup` | Install shell integration |
 
 ## Installation
 
@@ -37,13 +46,13 @@ npx oh-my-worktree
 ### Cargo
 
 ```bash
-cargo install --git https://github.com/mattew8/oh-my-worktree
+cargo install --git https://github.com/dding-g/oh-my-worktree
 ```
 
 Build from source:
 
 ```bash
-git clone https://github.com/mattew8/oh-my-worktree.git
+git clone https://github.com/dding-g/oh-my-worktree.git
 cd oh-my-worktree
 cargo build --release
 # Binary: ./target/release/owt
@@ -102,6 +111,10 @@ owt /path/to/project
 | `o` | Open in editor |
 | `t` | Open in terminal |
 | `f` | Fetch all remotes |
+| `p` | Pull from remote |
+| `P` | Push to remote |
+| `m` | Merge upstream |
+| `M` | Merge branch (select) |
 | `r` | Refresh list |
 | `q` | Quit |
 

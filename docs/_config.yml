@@ -2,7 +2,10 @@ title: owt (oh-my-worktree)
 description: A TUI tool for managing Git worktrees in bare repositories
 theme: just-the-docs
 
-url: https://mattew8.github.io
+url: https://dding-g.github.io
+
+# Version (update on release)
+owt_version: "0.5.2"
 baseurl: /oh-my-worktree
 
 # Enable search
@@ -17,7 +20,7 @@ nav_sort: case_insensitive
 # Footer
 gh_edit_link: true
 gh_edit_link_text: "Edit this page on GitHub"
-gh_edit_repository: "https://github.com/mattew8/oh-my-worktree"
+gh_edit_repository: "https://github.com/dding-g/oh-my-worktree"
 gh_edit_branch: "main"
 gh_edit_view_mode: "tree"
 
@@ -27,7 +30,7 @@ color_scheme: dark
 # Aux links (top right)
 aux_links:
   "GitHub":
-    - "//github.com/mattew8/oh-my-worktree"
+    - "//github.com/dding-g/oh-my-worktree"
 
 aux_links_new_tab: true
 

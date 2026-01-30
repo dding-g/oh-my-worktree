@@ -10,7 +10,9 @@ A TUI tool for managing Git worktrees in bare repositories.
 {: .fs-6 .fw-300 }
 
 [Get Started](/oh-my-worktree/getting-started/installation){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
-[View on GitHub](https://github.com/mattew8/oh-my-worktree){: .btn .fs-5 .mb-4 .mb-md-0 }
+[View on GitHub](https://github.com/dding-g/oh-my-worktree){: .btn .fs-5 .mb-4 .mb-md-0 }
+
+![Version](https://img.shields.io/badge/version-v{{ site.owt_version }}-blue)
 
 ---
 

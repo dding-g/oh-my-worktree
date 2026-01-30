@@ -14,3 +14,4 @@ Learn how to use owt effectively.
 1. **[Navigation](/oh-my-worktree/usage/navigation)** - Moving around the TUI
 2. **[Managing Worktrees](/oh-my-worktree/usage/worktrees)** - Add, delete, and switch worktrees
 3. **[Git Operations](/oh-my-worktree/usage/git-operations)** - Fetch, pull, push, and merge
+4. **[Workflows](/oh-my-worktree/usage/workflows)** - Real-world use cases and scenarios
