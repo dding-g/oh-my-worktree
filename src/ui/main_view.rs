@@ -22,6 +22,9 @@ const TEXT_MUTED: Color = Color::Rgb(113, 113, 122);
 const BG_ELEVATED: Color = Color::Rgb(39, 39, 42);
 const BORDER: Color = Color::Rgb(63, 63, 70);
 
+// Spinner frames for loading animation
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let repo_path = app.bare_repo_path.to_string_lossy().to_string();
@@ -89,6 +92,13 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     let filter_lower = app.filter_text.to_lowercase();
     let has_filter = !app.filter_text.is_empty();
 
+    // Check if any loading operation is in progress
+    let is_loading = app.is_adding || app.is_deleting || app.is_fetching
+        || app.is_pulling || app.is_pushing || app.is_merging;
+
+    // Get current spinner frame
+    let spinner = SPINNER_FRAMES[app.spinner_tick % SPINNER_FRAMES.len()];
+
     let rows: Vec<Row> = app
         .worktrees
         .iter()
@@ -108,7 +118,14 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             // Modern indicator: dot for selection, filled dot for current
-            let cursor = if is_selected && is_current {
+            // Hide selection cursor during loading
+            let cursor = if is_loading {
+                if is_current {
+                    "◦ "
+                } else {
+                    "  "
+                }
+            } else if is_selected && is_current {
                 "● "
             } else if is_selected {
                 "› "
@@ -118,7 +135,13 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 "  "
             };
 
-            let cursor_color = if is_selected { ACCENT } else { TEXT_MUTED };
+            let cursor_color = if is_loading {
+                TEXT_MUTED
+            } else if is_selected {
+                ACCENT
+            } else {
+                TEXT_MUTED
+            };
 
             let status_color = match wt.status {
                 WorktreeStatus::Clean => ACCENT,
@@ -140,7 +163,15 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 status_base
             };
 
-            let row_style = if is_selected {
+            // Hide highlight during loading operations
+            let row_style = if is_loading {
+                // No highlight during loading
+                if has_filter && !matches_filter {
+                    Style::default().fg(TEXT_MUTED)
+                } else {
+                    Style::default()
+                }
+            } else if is_selected {
                 Style::default().bg(ACCENT_DIM)
             } else if has_filter && !matches_filter {
                 Style::default().fg(TEXT_MUTED)
@@ -148,13 +179,19 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 Style::default()
             };
 
-            // Show operation status in last commit column
+            // Show operation status in last commit column with spinner
             let (last_commit, last_commit_style) = if app.is_fetching && is_selected {
-                ("Fetching...".to_string(), Style::default().fg(AMBER))
-            } else if app.is_adding {
-                ("Adding...".to_string(), Style::default().fg(AMBER))
+                (format!("{} Fetching...", spinner), Style::default().fg(AMBER))
+            } else if app.is_adding && is_selected {
+                (format!("{} Adding...", spinner), Style::default().fg(AMBER))
             } else if app.is_deleting && is_selected {
-                ("Deleting...".to_string(), Style::default().fg(RED))
+                (format!("{} Deleting...", spinner), Style::default().fg(RED))
+            } else if app.is_pulling && is_selected {
+                (format!("{} Pulling...", spinner), Style::default().fg(AMBER))
+            } else if app.is_pushing && is_selected {
+                (format!("{} Pushing...", spinner), Style::default().fg(AMBER))
+            } else if app.is_merging && is_selected {
+                (format!("{} Merging...", spinner), Style::default().fg(AMBER))
             } else {
                 (
                     wt.last_commit_time.clone().unwrap_or_else(|| "-".to_string()),
