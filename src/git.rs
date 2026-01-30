@@ -708,6 +708,59 @@ pub fn merge_branch(worktree_path: &Path, source_branch: &str) -> Result<String>
     Ok(stdout.trim().to_string())
 }
 
+/// Force update a local branch ref to match its remote counterpart.
+/// Skips if the branch is currently checked out in any worktree.
+pub fn force_update_local_branch(bare_repo_path: &Path, branch: &str) -> Result<()> {
+    // Check if the remote ref exists
+    let remote_ref = format!("refs/remotes/origin/{}", branch);
+    if !branch_exists(bare_repo_path, &remote_ref) {
+        anyhow::bail!("Remote branch origin/{} not found", branch);
+    }
+
+    // Check if the branch is checked out in any worktree
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "worktree",
+            "list",
+            "--porcelain",
+        ])
+        .output()
+        .context("Failed to list worktrees")?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let checked_out_branch = format!("branch refs/heads/{}", branch);
+        for line in stdout.lines() {
+            if line == checked_out_branch {
+                // Branch is checked out in a worktree, skip update
+                return Ok(());
+            }
+        }
+    }
+
+    // Update local ref to match remote
+    let local_ref = format!("refs/heads/{}", branch);
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "update-ref",
+            &local_ref,
+            &remote_ref,
+        ])
+        .output()
+        .context("Failed to update local branch ref")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to update local branch: {}", stderr.trim());
+    }
+
+    Ok(())
+}
+
 /// List local branches for merge selection
 pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
     let output = Command::new("git")

@@ -35,6 +35,7 @@ pub struct App {
     pub last_key: Option<char>,      // For gg detection
     pub sort_mode: SortMode,         // Current sort mode
     pub add_worktree_state: AddWorktreeState,  // State for add worktree modal
+    pub spinner_tick: usize,         // Spinner animation tick
 }
 
 impl App {
@@ -98,6 +99,7 @@ impl App {
             last_key: None,
             sort_mode: SortMode::default(),
             add_worktree_state,
+            spinner_tick: 0,
         })
     }
 
@@ -208,6 +210,11 @@ impl App {
     }
 
     fn handle_events<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
+        // Update spinner tick during loading states
+        if self.is_adding || self.is_deleting || self.is_fetching || self.is_pulling || self.is_pushing || self.is_merging {
+            self.spinner_tick = self.spinner_tick.wrapping_add(1);
+        }
+
         if event::poll(Duration::from_millis(100))? {
             match event::read()? {
                 Event::Key(key) => {
@@ -754,6 +761,8 @@ impl App {
         // Fetch first
         match git::fetch_branch(&self.bare_repo_path, &base) {
             Ok(()) => {
+                // Best-effort: update local branch to match remote
+                let _ = git::force_update_local_branch(&self.bare_repo_path, &base);
                 self.message = Some(AppMessage::info(format!("Fetched {}, creating worktree...", base)));
                 self.add_worktree_with_state();
             }
