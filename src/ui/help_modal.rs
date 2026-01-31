@@ -50,6 +50,7 @@ pub fn render(frame: &mut Frame) {
         ]),
         ("Other", vec![
             ("y", "Copy path to clipboard"),
+            ("v", "Toggle verbose mode"),
             ("c", "View config"),
             ("?", "Show this help"),
             ("q", "Quit"),
