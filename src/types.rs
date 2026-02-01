@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use crate::config::BranchType;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorktreeStatus {
     Clean,
@@ -80,86 +78,14 @@ impl Worktree {
     }
 }
 
-/// Which base to use when creating a new worktree
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum BaseSource {
-    Local,      // Use local branch as base
-    #[default]
-    Remote,     // Use remote branch as base (origin/<branch>) - default
-}
-
-/// State for the add worktree modal - holds all configuration
-#[derive(Debug, Clone)]
-pub struct AddWorktreeState {
-    pub branch_type: Option<BranchType>,  // None means custom (manual base selection)
-    pub base_branch: String,              // The base branch to create from
-    pub base_source: BaseSource,          // Local or remote
-    pub branch_name: String,              // Full branch name (e.g., "feature/foo")
-    #[allow(dead_code)]
-    pub is_fetching: bool,                // Currently fetching (for async UI)
-}
-
-impl Default for AddWorktreeState {
-    fn default() -> Self {
-        Self {
-            branch_type: None,
-            base_branch: "main".to_string(),
-            base_source: BaseSource::Remote,  // Default to remote
-            branch_name: String::new(),
-            is_fetching: false,
-        }
-    }
-}
-
-impl AddWorktreeState {
-    pub fn with_branch_type(branch_type: BranchType) -> Self {
-        let base = branch_type.base.clone();
-        let prefix = branch_type.prefix.clone();
-        Self {
-            branch_type: Some(branch_type),
-            base_branch: base,
-            base_source: BaseSource::Remote,  // Default to remote
-            branch_name: prefix, // Start with prefix
-            is_fetching: false,
-        }
-    }
-
-    pub fn custom(base_branch: String) -> Self {
-        Self {
-            branch_type: None,
-            base_branch,
-            base_source: BaseSource::Remote,  // Default to remote
-            branch_name: String::new(),
-            is_fetching: false,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppState {
     List,
-    #[allow(dead_code)]
-    AddModal,  // Kept for backwards compatibility
-    /// Type selection screen for add worktree
-    AddTypeSelect,
-    /// Branch input screen (step 1: enter branch name)
-    AddBranchInput,
-    /// Base source selection screen (step 2: choose remote or local)
-    AddBaseSelect,
+    AddModal,
     ConfirmDelete { delete_branch: bool },
     ConfigModal {
-        selected_index: usize,  // 0-4 (editor, terminal, copy_files, post_add_script, branch_types)
-        editing: bool,          // inline editing mode
-    },
-    /// Branch types editing within config modal
-    BranchTypesModal {
-        selected_index: usize,  // Which branch type is selected
-        editing_field: Option<usize>,  // Which field is being edited (0=base, 1=shortcut)
-    },
-    /// Initial setup modal for first-time configuration
-    #[allow(dead_code)]
-    SetupModal {
-        selected_index: usize,  // Which branch type is selected
+        selected_index: usize,  // 0-3 (editor, terminal, copy_files, post_add_script)
+        editing: bool,
     },
     HelpModal,
     Fetching,
