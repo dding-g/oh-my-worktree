@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Layout, Margin, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Modifier, Style, Stylize},
     symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table},
@@ -10,39 +10,28 @@ use ratatui::{
 use crate::app::App;
 use crate::types::{SortMode, WorktreeStatus};
 
-// Modern color palette inspired by the landing page
-const ACCENT: Color = Color::Rgb(16, 185, 129);      // Emerald green
-const ACCENT_DIM: Color = Color::Rgb(6, 95, 70);     // Darker emerald
-const AMBER: Color = Color::Rgb(245, 158, 11);       // Amber/yellow
-const RED: Color = Color::Rgb(239, 68, 68);          // Red
-const CYAN: Color = Color::Rgb(34, 211, 238);        // Cyan
-const TEXT_PRIMARY: Color = Color::Rgb(250, 250, 250);
-const TEXT_SECONDARY: Color = Color::Rgb(161, 161, 170);
-const TEXT_MUTED: Color = Color::Rgb(113, 113, 122);
-const BG_ELEVATED: Color = Color::Rgb(39, 39, 42);
-const BORDER: Color = Color::Rgb(63, 63, 70);
-
 // Spinner frames for loading animation
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let repo_path = app.bare_repo_path.to_string_lossy().to_string();
+    let t = &app.theme;
 
     // Main container with rounded border
     let main_block = Block::default()
         .borders(Borders::ALL)
         .border_set(border::ROUNDED)
-        .border_style(Style::default().fg(BORDER))
+        .border_style(Style::default().fg(t.border))
         .title(Line::from(vec![
-            Span::styled(" ◆ ", Style::default().fg(ACCENT)),
-            Span::styled("owt ", Style::default().fg(TEXT_PRIMARY).bold()),
-            Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(TEXT_MUTED)),
+            Span::styled(" ◆ ", Style::default().fg(t.accent)),
+            Span::styled("owt ", Style::default().fg(t.text_primary).bold()),
+            Span::styled(env!("CARGO_PKG_VERSION"), Style::default().fg(t.text_muted)),
             Span::raw(" "),
         ]))
         .title_bottom(Line::from(vec![
             Span::styled(" ", Style::default()),
-            Span::styled(repo_path, Style::default().fg(TEXT_MUTED)),
+            Span::styled(repo_path, Style::default().fg(t.text_muted)),
             Span::styled(" ", Style::default()),
         ]));
 
@@ -63,14 +52,15 @@ pub fn render(frame: &mut Frame, app: &App) {
 }
 
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
+    let t = &app.theme;
     let worktree_count = app.worktrees.iter().filter(|w| !w.is_bare).count();
 
     let header_text = vec![Line::from(vec![
-        Span::styled("Worktrees", Style::default().fg(TEXT_PRIMARY).bold()),
+        Span::styled("Worktrees", Style::default().fg(t.text_primary).bold()),
         Span::raw("  "),
         Span::styled(
             format!("{} total", worktree_count),
-            Style::default().fg(TEXT_MUTED),
+            Style::default().fg(t.text_muted),
         ),
     ])];
 
@@ -79,12 +69,14 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_table(frame: &mut Frame, area: Rect, app: &App) {
+    let t = &app.theme;
+
     let header = Row::new(vec![
         Cell::from(""),
-        Cell::from("Name").style(Style::default().fg(TEXT_MUTED)),
-        Cell::from("Branch").style(Style::default().fg(TEXT_MUTED)),
-        Cell::from("Status").style(Style::default().fg(TEXT_MUTED)),
-        Cell::from("Commit").style(Style::default().fg(TEXT_MUTED)),
+        Cell::from("Name").style(Style::default().fg(t.text_muted)),
+        Cell::from("Branch").style(Style::default().fg(t.text_muted)),
+        Cell::from("Status").style(Style::default().fg(t.text_muted)),
+        Cell::from("Commit").style(Style::default().fg(t.text_muted)),
     ])
     .height(1);
 
@@ -136,19 +128,19 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             let cursor_color = if is_loading {
-                TEXT_MUTED
+                t.text_muted
             } else if is_selected {
-                ACCENT
+                t.accent
             } else {
-                TEXT_MUTED
+                t.text_muted
             };
 
             let status_color = match wt.status {
-                WorktreeStatus::Clean => ACCENT,
-                WorktreeStatus::Staged => AMBER,
-                WorktreeStatus::Unstaged => AMBER,
-                WorktreeStatus::Conflict => RED,
-                WorktreeStatus::Mixed => AMBER,
+                WorktreeStatus::Clean => t.accent,
+                WorktreeStatus::Staged => t.amber,
+                WorktreeStatus::Unstaged => t.amber,
+                WorktreeStatus::Conflict => t.red,
+                WorktreeStatus::Mixed => t.amber,
             };
 
             // Build status text with ahead/behind info
@@ -167,56 +159,56 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             let row_style = if is_loading {
                 // No highlight during loading
                 if has_filter && !matches_filter {
-                    Style::default().fg(TEXT_MUTED)
+                    Style::default().fg(t.text_muted)
                 } else {
                     Style::default()
                 }
             } else if is_selected {
-                Style::default().bg(ACCENT_DIM)
+                Style::default().bg(t.accent_dim)
             } else if has_filter && !matches_filter {
-                Style::default().fg(TEXT_MUTED)
+                Style::default().fg(t.text_muted)
             } else {
                 Style::default()
             };
 
             // Show operation status in last commit column with spinner
             let (last_commit, last_commit_style) = if app.is_fetching && is_selected {
-                (format!("{} Fetching...", spinner), Style::default().fg(AMBER))
+                (format!("{} Fetching...", spinner), Style::default().fg(t.amber))
             } else if app.is_adding && is_selected {
-                (format!("{} Adding...", spinner), Style::default().fg(AMBER))
+                (format!("{} Adding...", spinner), Style::default().fg(t.amber))
             } else if app.is_deleting && is_selected {
-                (format!("{} Deleting...", spinner), Style::default().fg(RED))
+                (format!("{} Deleting...", spinner), Style::default().fg(t.red))
             } else if app.is_pulling && is_selected {
-                (format!("{} Pulling...", spinner), Style::default().fg(AMBER))
+                (format!("{} Pulling...", spinner), Style::default().fg(t.amber))
             } else if app.is_pushing && is_selected {
-                (format!("{} Pushing...", spinner), Style::default().fg(AMBER))
+                (format!("{} Pushing...", spinner), Style::default().fg(t.amber))
             } else if app.is_merging && is_selected {
-                (format!("{} Merging...", spinner), Style::default().fg(AMBER))
+                (format!("{} Merging...", spinner), Style::default().fg(t.amber))
             } else {
                 (
                     wt.last_commit_time.clone().unwrap_or_else(|| "-".to_string()),
-                    Style::default().fg(TEXT_MUTED),
+                    Style::default().fg(t.text_muted),
                 )
             };
 
             let name_style = if has_filter && !matches_filter {
-                Style::default().fg(TEXT_MUTED)
+                Style::default().fg(t.text_muted)
             } else if wt.is_bare {
-                Style::default().fg(TEXT_MUTED).italic()
+                Style::default().fg(t.text_muted).italic()
             } else if is_current {
-                Style::default().fg(ACCENT)
+                Style::default().fg(t.accent)
             } else {
-                Style::default().fg(TEXT_PRIMARY)
+                Style::default().fg(t.text_primary)
             };
 
             let branch_style = if has_filter && !matches_filter {
-                Style::default().fg(TEXT_MUTED)
+                Style::default().fg(t.text_muted)
             } else {
-                Style::default().fg(CYAN)
+                Style::default().fg(t.cyan)
             };
 
             let status_style = if has_filter && !matches_filter {
-                Style::default().fg(TEXT_MUTED)
+                Style::default().fg(t.text_muted)
             } else {
                 Style::default().fg(status_color)
             };
@@ -249,21 +241,23 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
+    let t = &app.theme;
+
     // Show filter input if filtering
     if app.is_filtering {
         let filter_line = Line::from(vec![
-            Span::styled("/", Style::default().fg(ACCENT)),
-            Span::styled(&app.filter_text, Style::default().fg(TEXT_PRIMARY)),
-            Span::styled("▋", Style::default().fg(ACCENT).add_modifier(Modifier::SLOW_BLINK)),
+            Span::styled("/", Style::default().fg(t.accent)),
+            Span::styled(&app.filter_text, Style::default().fg(t.text_primary)),
+            Span::styled("▋", Style::default().fg(t.accent).add_modifier(Modifier::SLOW_BLINK)),
             Span::raw("  "),
-            Span::styled("Enter to apply · Esc to cancel", Style::default().fg(TEXT_MUTED)),
+            Span::styled("Enter to apply · Esc to cancel", Style::default().fg(t.text_muted)),
         ]);
 
         let footer = Paragraph::new(vec![filter_line]).block(
             Block::default()
                 .borders(Borders::TOP)
                 .border_set(border::ROUNDED)
-                .border_style(Style::default().fg(BORDER)),
+                .border_style(Style::default().fg(t.border)),
         );
 
         frame.render_widget(footer, area);
@@ -285,23 +279,23 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         .iter()
         .flat_map(|(key, action)| {
             vec![
-                Span::styled(*key, Style::default().fg(ACCENT).bold()),
-                Span::styled(format!(" {} ", action), Style::default().fg(TEXT_MUTED)),
+                Span::styled(*key, Style::default().fg(t.accent).bold()),
+                Span::styled(format!(" {} ", action), Style::default().fg(t.text_muted)),
             ]
         })
         .collect();
 
     // Show current sort mode if not default
     if app.sort_mode != SortMode::Name {
-        binding_spans.push(Span::styled("│ ", Style::default().fg(BORDER)));
-        binding_spans.push(Span::styled(app.sort_mode.label(), Style::default().fg(AMBER)));
+        binding_spans.push(Span::styled("│ ", Style::default().fg(t.border)));
+        binding_spans.push(Span::styled(app.sort_mode.label(), Style::default().fg(t.amber)));
     }
 
     // Add shell integration warning if needed
     let integration_warning = if !app.has_shell_integration {
         Some(Span::styled(
             " │ run 'owt setup' for shell integration",
-            Style::default().fg(AMBER),
+            Style::default().fg(t.amber),
         ))
     } else {
         None
@@ -309,9 +303,9 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
 
     let footer_content = if let Some(ref msg) = app.message {
         let msg_style = if msg.is_error {
-            Style::default().fg(RED)
+            Style::default().fg(t.red)
         } else {
-            Style::default().fg(ACCENT)
+            Style::default().fg(t.accent)
         };
         vec![
             Line::from(binding_spans),
@@ -322,9 +316,9 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         vec![
             Line::from(binding_spans),
             Line::from(vec![
-                Span::styled("Filter: ", Style::default().fg(TEXT_MUTED)),
-                Span::styled(&app.filter_text, Style::default().fg(AMBER)),
-                Span::styled(" (Esc to clear)", Style::default().fg(TEXT_MUTED)),
+                Span::styled("Filter: ", Style::default().fg(t.text_muted)),
+                Span::styled(&app.filter_text, Style::default().fg(t.amber)),
+                Span::styled(" (Esc to clear)", Style::default().fg(t.text_muted)),
             ]),
         ]
     } else if let Some(warning) = integration_warning {
@@ -340,7 +334,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         Block::default()
             .borders(Borders::TOP)
             .border_set(border::ROUNDED)
-            .border_style(Style::default().fg(BORDER)),
+            .border_style(Style::default().fg(t.border)),
     );
 
     frame.render_widget(footer, area);
