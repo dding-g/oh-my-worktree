@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::Color,
 };
 
@@ -74,17 +74,18 @@ pub fn detect_theme() -> Theme {
 
 /// Centered rectangle helper used by all modals.
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::vertical([
-        Constraint::Percentage((100 - percent_y) / 2),
-        Constraint::Percentage(percent_y),
-        Constraint::Percentage((100 - percent_y) / 2),
-    ])
-    .split(r);
+    centered_rect_with_min(percent_x, percent_y, 0, r)
+}
 
-    Layout::horizontal([
-        Constraint::Percentage((100 - percent_x) / 2),
-        Constraint::Percentage(percent_x),
-        Constraint::Percentage((100 - percent_x) / 2),
-    ])
-    .split(popup_layout[1])[1]
+/// Centered rectangle with a guaranteed minimum height in rows.
+/// Uses `max(percent_of_screen, min_height)` clamped to screen height.
+pub fn centered_rect_with_min(percent_x: u16, percent_y: u16, min_height: u16, r: Rect) -> Rect {
+    let pct_height = r.height * percent_y / 100;
+    let height = pct_height.max(min_height).min(r.height);
+    let width = r.width * percent_x / 100;
+
+    let x = r.x + r.width.saturating_sub(width) / 2;
+    let y = r.y + r.height.saturating_sub(height) / 2;
+
+    Rect::new(x, y, width, height)
 }
