@@ -3,7 +3,7 @@ use ratatui::{
     style::{Modifier, Style, Stylize},
     symbols::border,
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
 };
 
@@ -155,17 +155,8 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 status_base
             };
 
-            // Hide highlight during loading operations
-            let row_style = if is_loading {
-                // No highlight during loading
-                if has_filter && !matches_filter {
-                    Style::default().fg(t.text_muted)
-                } else {
-                    Style::default()
-                }
-            } else if is_selected {
-                Style::default().bg(t.accent_dim)
-            } else if has_filter && !matches_filter {
+            // Dim non-matching rows during filter (selected highlight handled by StatefulWidget)
+            let row_style = if has_filter && !matches_filter {
                 Style::default().fg(t.text_muted)
             } else {
                 Style::default()
@@ -235,9 +226,16 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     let table = Table::new(rows, widths)
         .header(header)
         .block(Block::default().borders(Borders::NONE))
-        .row_highlight_style(Style::default().add_modifier(Modifier::BOLD));
+        .row_highlight_style(
+            Style::default()
+                .bg(t.accent_dim)
+                .add_modifier(Modifier::BOLD),
+        );
 
-    frame.render_widget(table, area);
+    // Use StatefulWidget so ratatui handles scroll offset automatically
+    let selected = if is_loading { None } else { Some(app.selected_index) };
+    let mut table_state = TableState::new().with_selected(selected);
+    frame.render_stateful_widget(table, area, &mut table_state);
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
