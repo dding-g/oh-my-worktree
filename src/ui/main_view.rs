@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::types::{SortMode, WorktreeStatus};
+use crate::types::{ScriptStatus, SortMode, WorktreeStatus};
 
 // Spinner frames for loading animation
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -302,7 +302,25 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         None
     };
 
-    let footer_content = if let Some(ref msg) = app.message {
+    let footer_content = if let ScriptStatus::Running { ref worktree_name } = app.script_status {
+        let spinner = SPINNER_FRAMES[app.spinner_tick % SPINNER_FRAMES.len()];
+        let script_line = if let Some(ref msg) = app.message {
+            // Show both message and script status
+            Line::from(vec![
+                Span::styled(&msg.text, Style::default().fg(t.accent)),
+                Span::styled(format!("  {} running setup...", spinner), Style::default().fg(t.amber)),
+            ])
+        } else {
+            Line::from(vec![
+                Span::styled(spinner, Style::default().fg(t.amber)),
+                Span::styled(
+                    format!(" Running setup script for {}...", worktree_name),
+                    Style::default().fg(t.amber),
+                ),
+            ])
+        };
+        vec![Line::from(binding_spans), script_line]
+    } else if let Some(ref msg) = app.message {
         let msg_style = if msg.is_error {
             Style::default().fg(t.red)
         } else {

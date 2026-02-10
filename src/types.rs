@@ -155,3 +155,10 @@ impl AppMessage {
         }
     }
 }
+
+/// Status of background post-add script execution.
+#[derive(Debug, Clone)]
+pub enum ScriptStatus {
+    Idle,
+    Running { worktree_name: String },
+}

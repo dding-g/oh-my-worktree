@@ -5,13 +5,19 @@ use std::cell::Cell;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use crate::config::Config;
 use crate::git;
-use crate::types::{AppMessage, AppState, ExitAction, SortMode, Worktree, WorktreeStatus};
+use crate::types::{AppMessage, AppState, ExitAction, ScriptStatus, SortMode, Worktree, WorktreeStatus};
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
 use crate::ui::theme::Theme;
+
+pub struct ScriptResult {
+    pub success: bool,
+    pub message: String,
+}
 
 pub struct App {
     pub worktrees: Vec<Worktree>,
@@ -42,6 +48,8 @@ pub struct App {
     pub theme: Theme,                // Active color theme
     pub viewport_height: Cell<u16>,  // Table viewport height (set during render)
     pub help_scroll_offset: u16,     // Scroll offset for help modal
+    pub script_status: ScriptStatus,                       // Background script status
+    pub script_receiver: Option<mpsc::Receiver<ScriptResult>>, // Channel for script completion
 }
 
 impl App {
@@ -105,6 +113,8 @@ impl App {
             theme: crate::ui::theme::detect_theme(),
             viewport_height: Cell::new(0),
             help_scroll_offset: 0,
+            script_status: ScriptStatus::Idle,
+            script_receiver: None,
         })
     }
 
@@ -160,9 +170,41 @@ impl App {
                 continue;
             }
 
+            // Poll background script completion
+            self.poll_script_status();
+
             self.handle_events(terminal)?;
         }
         Ok(())
+    }
+
+    fn poll_script_status(&mut self) {
+        if let Some(ref rx) = self.script_receiver {
+            match rx.try_recv() {
+                Ok(result) => {
+                    let status_msg = if result.success {
+                        format!("Setup script completed: {}", result.message)
+                    } else {
+                        format!("Setup script failed: {}", result.message)
+                    };
+                    self.message = Some(if result.success {
+                        AppMessage::info(status_msg)
+                    } else {
+                        AppMessage::error(status_msg)
+                    });
+                    self.script_status = ScriptStatus::Idle;
+                    self.script_receiver = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // Still running, tick spinner
+                    self.spinner_tick = self.spinner_tick.wrapping_add(1);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.script_status = ScriptStatus::Idle;
+                    self.script_receiver = None;
+                }
+            }
+        }
     }
 
     fn draw(&self, frame: &mut Frame) {
@@ -812,10 +854,14 @@ impl App {
                 // Copy files if configured
                 self.copy_configured_files(&worktree_path);
 
-                // Run post-add script if exists
+                // Run post-add script if exists (in background)
                 self.run_post_add_script(&worktree_path);
 
-                let mut msg = format!("Created worktree: {}", branch);
+                let mut msg = if matches!(self.script_status, ScriptStatus::Running { .. }) {
+                    format!("Created worktree: {} (running setup script...)", branch)
+                } else {
+                    format!("Created worktree: {}", branch)
+                };
                 if self.verbose {
                     msg = format!("{}\n$ {}", msg, cmd_detail);
                 }
@@ -865,18 +911,58 @@ impl App {
         }
     }
 
-    fn run_post_add_script(&self, worktree_path: &PathBuf) {
+    fn run_post_add_script(&mut self, worktree_path: &PathBuf) {
         let script_path = Config::post_add_script_path(&self.bare_repo_path);
 
         if !script_path.exists() {
             return;
         }
 
-        // Run the script in the worktree directory
-        let _ = Command::new("sh")
-            .arg(&script_path)
-            .current_dir(worktree_path)
-            .output();
+        let worktree_name = worktree_path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let (tx, rx) = mpsc::channel();
+        let script = script_path.clone();
+        let wt_path = worktree_path.clone();
+
+        self.script_status = ScriptStatus::Running {
+            worktree_name: worktree_name.clone(),
+        };
+        self.script_receiver = Some(rx);
+
+        std::thread::spawn(move || {
+            let output = Command::new("sh")
+                .arg(&script)
+                .current_dir(&wt_path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .output();
+
+            let result = match output {
+                Ok(out) => {
+                    if out.status.success() {
+                        ScriptResult {
+                            success: true,
+                            message: worktree_name,
+                        }
+                    } else {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        ScriptResult {
+                            success: false,
+                            message: stderr.trim().to_string(),
+                        }
+                    }
+                }
+                Err(e) => ScriptResult {
+                    success: false,
+                    message: e.to_string(),
+                },
+            };
+            let _ = tx.send(result);
+        });
     }
 
     fn delete_selected_worktree(&mut self, delete_branch: bool) {
