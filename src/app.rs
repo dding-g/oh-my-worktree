@@ -10,6 +10,7 @@ use crate::config::Config;
 use crate::git;
 use crate::types::{AppMessage, AppState, ExitAction, SortMode, Worktree, WorktreeStatus};
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
+use crate::ui::theme::Theme;
 
 pub struct App {
     pub worktrees: Vec<Worktree>,
@@ -37,6 +38,7 @@ pub struct App {
     pub verbose: bool,               // Show detailed git command output
     pub last_command_detail: Option<String>, // Last git command detail for verbose mode
     pub spinner_tick: usize,         // Spinner animation tick
+    pub theme: Theme,                // Active color theme
 }
 
 impl App {
@@ -97,6 +99,7 @@ impl App {
             verbose: false,
             last_command_detail: None,
             spinner_tick: 0,
+            theme: crate::ui::theme::detect_theme(),
         })
     }
 
