@@ -1,12 +1,15 @@
 use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 
-pub fn render(frame: &mut Frame) {
+use crate::app::App;
+use super::theme::centered_rect;
+
+pub fn render(frame: &mut Frame, app: &App) {
+    let t = &app.theme;
     let area = centered_rect(50, 70, frame.area());
 
     // Clear the background
@@ -15,7 +18,7 @@ pub fn render(frame: &mut Frame) {
     let block = Block::default()
         .title(" Keybindings ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(t.cyan));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -64,7 +67,7 @@ pub fn render(frame: &mut Frame) {
         // Section header
         lines.push(Line::from(Span::styled(
             format!("  {}", section),
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default().fg(t.amber).add_modifier(Modifier::BOLD),
         )));
         lines.push(Line::from(""));
 
@@ -72,8 +75,8 @@ pub fn render(frame: &mut Frame) {
         for (key, desc) in bindings {
             lines.push(Line::from(vec![
                 Span::raw("    "),
-                Span::styled(format!("{:12}", key), Style::default().fg(Color::Cyan)),
-                Span::styled(desc, Style::default().fg(Color::White)),
+                Span::styled(format!("{:12}", key), Style::default().fg(t.cyan)),
+                Span::styled(desc, Style::default().fg(t.text_primary)),
             ]));
         }
         lines.push(Line::from(""));
@@ -82,30 +85,14 @@ pub fn render(frame: &mut Frame) {
     // Help text
     lines.push(Line::from(vec![
         Span::raw("  Press "),
-        Span::styled("Esc", Style::default().fg(Color::Cyan)),
+        Span::styled("Esc", Style::default().fg(t.cyan)),
         Span::raw(" or "),
-        Span::styled("?", Style::default().fg(Color::Cyan)),
+        Span::styled("?", Style::default().fg(t.cyan)),
         Span::raw(" to close"),
     ]));
 
     let help = Paragraph::new(lines)
-        .style(Style::default().fg(Color::DarkGray));
+        .style(Style::default().fg(t.text_muted));
 
     frame.render_widget(help, inner);
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::vertical([
-        Constraint::Percentage((100 - percent_y) / 2),
-        Constraint::Percentage(percent_y),
-        Constraint::Percentage((100 - percent_y) / 2),
-    ])
-    .split(r);
-
-    Layout::horizontal([
-        Constraint::Percentage((100 - percent_x) / 2),
-        Constraint::Percentage(percent_x),
-        Constraint::Percentage((100 - percent_x) / 2),
-    ])
-    .split(popup_layout[1])[1]
 }
