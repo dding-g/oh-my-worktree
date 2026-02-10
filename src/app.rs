@@ -41,6 +41,7 @@ pub struct App {
     pub spinner_tick: usize,         // Spinner animation tick
     pub theme: Theme,                // Active color theme
     pub viewport_height: Cell<u16>,  // Table viewport height (set during render)
+    pub help_scroll_offset: u16,     // Scroll offset for help modal
 }
 
 impl App {
@@ -103,6 +104,7 @@ impl App {
             spinner_tick: 0,
             theme: crate::ui::theme::detect_theme(),
             viewport_height: Cell::new(0),
+            help_scroll_offset: 0,
         })
     }
 
@@ -369,6 +371,7 @@ impl App {
                 self.last_key = None;
             }
             KeyCode::Char('?') => {
+                self.help_scroll_offset = 0;
                 self.state = AppState::HelpModal;
                 self.last_key = None;
             }
@@ -639,6 +642,12 @@ impl App {
         match code {
             KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('q') => {
                 self.state = AppState::List;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.help_scroll_offset = self.help_scroll_offset.saturating_add(1);
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.help_scroll_offset = self.help_scroll_offset.saturating_sub(1);
             }
             _ => {}
         }
