@@ -180,7 +180,7 @@ impl App {
             }
             AppState::HelpModal => {
                 main_view::render(frame, self);
-                help_modal::render(frame);
+                help_modal::render(frame, self);
             }
             AppState::MergeBranchSelect { .. } => {
                 main_view::render(frame, self);
