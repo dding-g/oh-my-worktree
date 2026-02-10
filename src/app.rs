@@ -1,6 +1,7 @@
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Frame, Terminal};
+use std::cell::Cell;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -39,6 +40,7 @@ pub struct App {
     pub last_command_detail: Option<String>, // Last git command detail for verbose mode
     pub spinner_tick: usize,         // Spinner animation tick
     pub theme: Theme,                // Active color theme
+    pub viewport_height: Cell<u16>,  // Table viewport height (set during render)
 }
 
 impl App {
@@ -100,6 +102,7 @@ impl App {
             last_command_detail: None,
             spinner_tick: 0,
             theme: crate::ui::theme::detect_theme(),
+            viewport_height: Cell::new(0),
         })
     }
 
@@ -662,13 +665,15 @@ impl App {
     }
 
     fn move_selection_half_page_down(&mut self) {
-        let half_page = 10; // Approximate half page
+        let vh = self.viewport_height.get();
+        let half_page = if vh > 0 { (vh / 2) as usize } else { 10 };
         let max_index = self.worktrees.len().saturating_sub(1);
         self.selected_index = (self.selected_index + half_page).min(max_index);
     }
 
     fn move_selection_half_page_up(&mut self) {
-        let half_page = 10; // Approximate half page
+        let vh = self.viewport_height.get();
+        let half_page = if vh > 0 { (vh / 2) as usize } else { 10 };
         self.selected_index = self.selected_index.saturating_sub(half_page);
     }
 
