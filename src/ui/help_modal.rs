@@ -84,15 +84,18 @@ pub fn render(frame: &mut Frame, app: &App) {
 
     // Help text
     lines.push(Line::from(vec![
-        Span::raw("  Press "),
+        Span::raw("  "),
+        Span::styled("j/k", Style::default().fg(t.cyan)),
+        Span::raw(" scroll  "),
         Span::styled("Esc", Style::default().fg(t.cyan)),
-        Span::raw(" or "),
+        Span::raw("/"),
         Span::styled("?", Style::default().fg(t.cyan)),
-        Span::raw(" to close"),
+        Span::raw(" close"),
     ]));
 
     let help = Paragraph::new(lines)
-        .style(Style::default().fg(t.text_muted));
+        .style(Style::default().fg(t.text_muted))
+        .scroll((app.help_scroll_offset, 0));
 
     frame.render_widget(help, inner);
 }
