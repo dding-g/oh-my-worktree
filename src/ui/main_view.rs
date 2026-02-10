@@ -71,6 +71,9 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
 fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     let t = &app.theme;
 
+    // Store viewport height for half-page navigation (subtract 1 for header row)
+    app.viewport_height.set(area.height.saturating_sub(1));
+
     let header = Row::new(vec![
         Cell::from(""),
         Cell::from("Name").style(Style::default().fg(t.text_muted)),
