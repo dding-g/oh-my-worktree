@@ -7,11 +7,12 @@ use ratatui::{
 };
 
 use crate::app::App;
-use super::theme::centered_rect;
+use super::theme::centered_rect_with_min;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
-    let area = centered_rect(60, 28, frame.area());
+    // min: 5 inner rows + 2 border = 7
+    let area = centered_rect_with_min(60, 28, 7, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
