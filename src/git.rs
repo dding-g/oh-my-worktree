@@ -296,6 +296,21 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
     Ok(())
 }
 
+pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .args(["-C", &bare_repo_path.to_string_lossy(), "worktree", "prune", "-v"])
+        .output()
+        .context("Failed to prune worktrees")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to prune worktrees: {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.trim().to_string())
+}
+
 pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result<()> {
     let flag = if force { "-D" } else { "-d" };
 

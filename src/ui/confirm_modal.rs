@@ -12,12 +12,12 @@ use super::theme::centered_rect;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
-    let delete_branch = match app.state {
-        AppState::ConfirmDelete { delete_branch } => delete_branch,
-        _ => false,
+    let (delete_branch, force) = match app.state {
+        AppState::ConfirmDelete { delete_branch, force } => (delete_branch, force),
+        _ => (false, false),
     };
 
-    let area = centered_rect(55, 35, frame.area());
+    let area = centered_rect(55, 40, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
@@ -37,6 +37,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         Constraint::Length(1), // Worktree name
         Constraint::Length(1), // Branch
         Constraint::Length(1), // Delete branch option
+        Constraint::Length(1), // Force delete option
         Constraint::Length(1), // Status warning
         Constraint::Min(1),    // Spacing
         Constraint::Length(1), // Help
@@ -74,13 +75,30 @@ pub fn render(frame: &mut Frame, app: &App) {
         ]));
         frame.render_widget(delete_branch_opt, chunks[5]);
 
+        // Force delete option
+        let is_dirty = wt.status != WorktreeStatus::Clean;
+        let force_checkbox = if force { "[x]" } else { "[ ]" };
+        let force_color = if force { t.red } else { t.text_muted };
+        let force_opt = Paragraph::new(Line::from(vec![
+            Span::styled(force_checkbox, Style::default().fg(force_color)),
+            Span::styled(" Force delete (--force)", Style::default().fg(
+                if is_dirty { t.text_primary } else { t.text_muted }
+            )),
+        ]));
+        frame.render_widget(force_opt, chunks[6]);
+
         // Status warning
-        if wt.status != WorktreeStatus::Clean {
+        if is_dirty {
+            let warning_text = if force {
+                "Warning: Force deleting worktree with uncommitted changes!"
+            } else {
+                "Warning: Worktree has uncommitted changes! Enable force (f) to delete."
+            };
             let warning = Paragraph::new(Line::from(vec![Span::styled(
-                "Warning: Worktree has uncommitted changes!",
-                Style::default().fg(t.amber),
+                warning_text,
+                Style::default().fg(if force { t.red } else { t.amber }),
             )]));
-            frame.render_widget(warning, chunks[6]);
+            frame.render_widget(warning, chunks[7]);
         }
     }
 
@@ -91,10 +109,12 @@ pub fn render(frame: &mut Frame, app: &App) {
         Span::styled("n", Style::default().fg(t.cyan)),
         Span::raw(" no  "),
         Span::styled("b", Style::default().fg(t.amber)),
-        Span::raw(" toggle branch  "),
+        Span::raw(" branch  "),
+        Span::styled("f", Style::default().fg(t.red)),
+        Span::raw(" force  "),
         Span::styled("Esc", Style::default().fg(t.cyan)),
         Span::raw(" cancel"),
     ]))
     .style(Style::default().fg(t.text_muted));
-    frame.render_widget(help, chunks[8]);
+    frame.render_widget(help, chunks[9]);
 }
