@@ -22,9 +22,7 @@ pub struct ScriptResult {
 pub struct DeleteResult {
     pub success: bool,
     pub message: String,
-    pub delete_branch: bool,
-    pub branch_name: Option<String>,
-    pub force: bool,
+    pub worktree_path: PathBuf,
     pub cmd_detail: String,
 }
 
@@ -220,29 +218,18 @@ impl App {
             match rx.try_recv() {
                 Ok(result) => {
                     if result.success {
-                        let mut msg = format!("Deleted worktree: {}", result.message);
-
-                        // Delete branch if requested
-                        if result.delete_branch {
-                            if let Some(ref branch) = result.branch_name {
-                                match git::delete_branch(&self.bare_repo_path, branch, result.force) {
-                                    Ok(()) => {
-                                        msg.push_str(&format!(" (branch '{}' deleted)", branch));
-                                    }
-                                    Err(e) => {
-                                        msg.push_str(&format!(" (branch delete failed: {})", e));
-                                    }
-                                }
-                            }
-                        }
-
+                        let mut msg = result.message.clone();
                         if self.verbose {
                             self.last_command_detail = Some(result.cmd_detail.clone());
                             msg = format!("{}\n$ {}", msg, result.cmd_detail);
                         }
-
                         self.message = Some(AppMessage::info(msg));
-                        self.refresh_worktrees();
+
+                        // Remove deleted worktree from in-memory list (no blocking refresh)
+                        self.worktrees.retain(|wt| wt.path != result.worktree_path);
+                        if self.selected_index >= self.worktrees.len() {
+                            self.selected_index = self.worktrees.len().saturating_sub(1);
+                        }
                     } else {
                         let mut msg = format!("Failed to delete: {}", result.message);
                         if self.verbose {
@@ -1086,15 +1073,25 @@ impl App {
 
             std::thread::spawn(move || {
                 let result = git::remove_worktree(&bare_repo_path, &worktree_path, force);
+                let mut msg = match &result {
+                    Ok(()) => format!("Deleted worktree: {}", display_name),
+                    Err(e) => e.to_string(),
+                };
+
+                // Delete branch in background thread too (avoid blocking main thread)
+                if result.is_ok() && delete_branch {
+                    if let Some(ref branch) = branch_name {
+                        match git::delete_branch(&bare_repo_path, branch, force) {
+                            Ok(()) => msg.push_str(&format!(" (branch '{}' deleted)", branch)),
+                            Err(e) => msg.push_str(&format!(" (branch delete failed: {})", e)),
+                        }
+                    }
+                }
+
                 let _ = tx.send(DeleteResult {
                     success: result.is_ok(),
-                    message: match result {
-                        Ok(()) => display_name,
-                        Err(e) => e.to_string(),
-                    },
-                    delete_branch,
-                    branch_name,
-                    force,
+                    message: msg,
+                    worktree_path,
                     cmd_detail,
                 });
             });
