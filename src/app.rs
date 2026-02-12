@@ -19,6 +19,15 @@ pub struct ScriptResult {
     pub message: String,
 }
 
+pub struct DeleteResult {
+    pub success: bool,
+    pub message: String,
+    pub delete_branch: bool,
+    pub branch_name: Option<String>,
+    pub force: bool,
+    pub cmd_detail: String,
+}
+
 pub struct App {
     pub worktrees: Vec<Worktree>,
     pub selected_index: usize,
@@ -50,6 +59,7 @@ pub struct App {
     pub help_scroll_offset: u16,     // Scroll offset for help modal
     pub script_status: ScriptStatus,                       // Background script status
     pub script_receiver: Option<mpsc::Receiver<ScriptResult>>, // Channel for script completion
+    pub delete_receiver: Option<mpsc::Receiver<DeleteResult>>, // Channel for async worktree deletion
 }
 
 impl App {
@@ -115,6 +125,7 @@ impl App {
             help_scroll_offset: 0,
             script_status: ScriptStatus::Idle,
             script_receiver: None,
+            delete_receiver: None,
         })
     }
 
@@ -139,10 +150,6 @@ impl App {
 
             if self.is_deleting {
                 self.do_delete_worktree();
-                // Drain pending key events to prevent accidental actions
-                while event::poll(Duration::from_millis(0))? {
-                    let _ = event::read()?;
-                }
                 continue;
             }
 
@@ -170,8 +177,9 @@ impl App {
                 continue;
             }
 
-            // Poll background script completion
+            // Poll background operations
             self.poll_script_status();
+            self.poll_delete_status();
 
             self.handle_events(terminal)?;
         }
@@ -202,6 +210,57 @@ impl App {
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.script_status = ScriptStatus::Idle;
                     self.script_receiver = None;
+                }
+            }
+        }
+    }
+
+    fn poll_delete_status(&mut self) {
+        if let Some(ref rx) = self.delete_receiver {
+            match rx.try_recv() {
+                Ok(result) => {
+                    if result.success {
+                        let mut msg = format!("Deleted worktree: {}", result.message);
+
+                        // Delete branch if requested
+                        if result.delete_branch {
+                            if let Some(ref branch) = result.branch_name {
+                                match git::delete_branch(&self.bare_repo_path, branch, result.force) {
+                                    Ok(()) => {
+                                        msg.push_str(&format!(" (branch '{}' deleted)", branch));
+                                    }
+                                    Err(e) => {
+                                        msg.push_str(&format!(" (branch delete failed: {})", e));
+                                    }
+                                }
+                            }
+                        }
+
+                        if self.verbose {
+                            self.last_command_detail = Some(result.cmd_detail.clone());
+                            msg = format!("{}\n$ {}", msg, result.cmd_detail);
+                        }
+
+                        self.message = Some(AppMessage::info(msg));
+                        self.refresh_worktrees();
+                    } else {
+                        let mut msg = format!("Failed to delete: {}", result.message);
+                        if self.verbose {
+                            self.last_command_detail = Some(result.cmd_detail.clone());
+                            msg = format!("{}\n$ {}", msg, result.cmd_detail);
+                        }
+                        self.message = Some(AppMessage::error(msg));
+                    }
+                    self.delete_receiver = None;
+                    self.state = AppState::List;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // Still running, tick spinner
+                    self.spinner_tick = self.spinner_tick.wrapping_add(1);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.delete_receiver = None;
+                    self.state = AppState::List;
                 }
             }
         }
@@ -1006,6 +1065,7 @@ impl App {
 
         if let Some(wt) = self.selected_worktree().cloned() {
             let branch_name = wt.branch.clone();
+            let display_name = wt.display_name();
 
             let force_flag = if force { " --force" } else { "" };
             let cmd_detail = format!(
@@ -1013,50 +1073,31 @@ impl App {
                 self.bare_repo_path.display(), force_flag, wt.path.display()
             );
 
-            let result = git::remove_worktree(&self.bare_repo_path, &wt.path, force);
+            let bare_repo_path = self.bare_repo_path.clone();
+            let worktree_path = wt.path.clone();
 
-            if self.verbose {
-                self.last_command_detail = Some(cmd_detail.clone());
-            }
+            let (tx, rx) = mpsc::channel();
+            self.delete_receiver = Some(rx);
 
-            match result {
-                Ok(()) => {
-                    let mut msg = format!("Deleted worktree: {}", wt.display_name());
-
-                    // Delete branch if requested
-                    if delete_branch {
-                        if let Some(ref branch) = branch_name {
-                            match git::delete_branch(&self.bare_repo_path, branch, force) {
-                                Ok(()) => {
-                                    msg.push_str(&format!(" (branch '{}' deleted)", branch));
-                                }
-                                Err(e) => {
-                                    msg.push_str(&format!(" (branch delete failed: {})", e));
-                                }
-                            }
-                        }
-                    }
-
-                    if self.verbose {
-                        msg = format!("{}\n$ {}", msg, cmd_detail);
-                    }
-
-                    self.message = Some(AppMessage::info(msg));
-                    self.refresh_worktrees();
-                }
-                Err(e) => {
-                    let mut msg = format!("Failed to delete: {}", e);
-                    if self.verbose {
-                        msg = format!("{}\n$ {}", msg, cmd_detail);
-                    }
-                    self.message = Some(AppMessage::error(msg));
-                }
-            }
+            std::thread::spawn(move || {
+                let result = git::remove_worktree(&bare_repo_path, &worktree_path, force);
+                let _ = tx.send(DeleteResult {
+                    success: result.is_ok(),
+                    message: match result {
+                        Ok(()) => display_name,
+                        Err(e) => e.to_string(),
+                    },
+                    delete_branch,
+                    branch_name,
+                    force,
+                    cmd_detail,
+                });
+            });
         }
 
         self.is_deleting = false;
-        self.state = AppState::List;
         self.input_buffer.clear();
+        // Keep state as AppState::Deleting - resolved when poll_delete_status gets the result
     }
 
     fn prune_worktrees(&mut self) {
