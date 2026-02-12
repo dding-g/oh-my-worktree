@@ -36,7 +36,8 @@ pub fn render(frame: &mut Frame, app: &App) {
         ]),
         ("Worktree Actions", vec![
             ("a", "Add new worktree"),
-            ("d", "Delete worktree"),
+            ("d", "Delete worktree (f: force)"),
+            ("x", "Prune stale worktrees"),
             ("r", "Refresh list"),
             ("s", "Sort (name/recent/status)"),
         ]),

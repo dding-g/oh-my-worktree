@@ -256,8 +256,8 @@ impl App {
                     match self.state.clone() {
                         AppState::List => self.handle_list_input(key.code, key.modifiers),
                         AppState::AddModal => self.handle_add_modal_input(key.code),
-                        AppState::ConfirmDelete { delete_branch } => {
-                            self.handle_confirm_delete_input(key.code, delete_branch)
+                        AppState::ConfirmDelete { delete_branch, force } => {
+                            self.handle_confirm_delete_input(key.code, delete_branch, force)
                         }
                         AppState::ConfigModal { selected_index, editing } => {
                             self.handle_config_modal_input(key.code, selected_index, editing)
@@ -353,12 +353,8 @@ impl App {
                 if let Some(wt) = self.selected_worktree() {
                     if wt.is_bare {
                         self.message = Some(AppMessage::error("Cannot delete bare repository"));
-                    } else if wt.status != WorktreeStatus::Clean {
-                        self.message = Some(AppMessage::error(
-                            "Cannot delete: worktree has uncommitted changes. Commit or stash changes first."
-                        ));
                     } else {
-                        self.state = AppState::ConfirmDelete { delete_branch: false };
+                        self.state = AppState::ConfirmDelete { delete_branch: false, force: false };
                     }
                 }
                 self.last_key = None;
@@ -393,6 +389,10 @@ impl App {
             }
             KeyCode::Char('r') => {
                 self.refresh_worktrees();
+                self.last_key = None;
+            }
+            KeyCode::Char('x') => {
+                self.prune_worktrees();
                 self.last_key = None;
             }
             KeyCode::Char('s') => {
@@ -503,17 +503,30 @@ impl App {
         }
     }
 
-    fn handle_confirm_delete_input(&mut self, code: KeyCode, delete_branch: bool) {
+    fn handle_confirm_delete_input(&mut self, code: KeyCode, delete_branch: bool, force: bool) {
         match code {
             KeyCode::Esc | KeyCode::Char('n') => {
                 self.state = AppState::List;
             }
             KeyCode::Char('y') | KeyCode::Enter => {
-                self.delete_selected_worktree(delete_branch);
+                // Require force for dirty worktrees
+                if let Some(wt) = self.selected_worktree() {
+                    if wt.status != WorktreeStatus::Clean && !force {
+                        self.message = Some(AppMessage::error(
+                            "Worktree has uncommitted changes. Press 'f' to enable force delete."
+                        ));
+                        return;
+                    }
+                }
+                self.delete_selected_worktree(delete_branch, force);
             }
             KeyCode::Char('b') => {
                 // Toggle delete branch option
-                self.state = AppState::ConfirmDelete { delete_branch: !delete_branch };
+                self.state = AppState::ConfirmDelete { delete_branch: !delete_branch, force };
+            }
+            KeyCode::Char('f') => {
+                // Toggle force delete option
+                self.state = AppState::ConfirmDelete { delete_branch, force: !force };
             }
             _ => {}
         }
@@ -965,7 +978,7 @@ impl App {
         });
     }
 
-    fn delete_selected_worktree(&mut self, delete_branch: bool) {
+    fn delete_selected_worktree(&mut self, delete_branch: bool, force: bool) {
         if let Some(wt) = self.selected_worktree().cloned() {
             if wt.is_bare {
                 self.message = Some(AppMessage::error("Cannot delete bare repository"));
@@ -977,23 +990,30 @@ impl App {
             self.is_deleting = true;
             self.state = AppState::Deleting;
             self.message = Some(AppMessage::info(format!("Deleting worktree: {}...", wt.display_name())));
-            // Store delete_branch flag in input_buffer (hacky but works)
-            self.input_buffer = if delete_branch { "delete_branch".to_string() } else { String::new() };
+            // Encode flags in input_buffer
+            self.input_buffer = format!(
+                "{}:{}",
+                if delete_branch { "1" } else { "0" },
+                if force { "1" } else { "0" }
+            );
         }
     }
 
     fn do_delete_worktree(&mut self) {
-        let delete_branch = self.input_buffer == "delete_branch";
+        let parts: Vec<&str> = self.input_buffer.split(':').collect();
+        let delete_branch = parts.first() == Some(&"1");
+        let force = parts.get(1) == Some(&"1");
 
         if let Some(wt) = self.selected_worktree().cloned() {
             let branch_name = wt.branch.clone();
 
+            let force_flag = if force { " --force" } else { "" };
             let cmd_detail = format!(
-                "git -C {} worktree remove {}",
-                self.bare_repo_path.display(), wt.path.display()
+                "git -C {} worktree remove{}  {}",
+                self.bare_repo_path.display(), force_flag, wt.path.display()
             );
 
-            let result = git::remove_worktree(&self.bare_repo_path, &wt.path, false);
+            let result = git::remove_worktree(&self.bare_repo_path, &wt.path, force);
 
             if self.verbose {
                 self.last_command_detail = Some(cmd_detail.clone());
@@ -1006,7 +1026,7 @@ impl App {
                     // Delete branch if requested
                     if delete_branch {
                         if let Some(ref branch) = branch_name {
-                            match git::delete_branch(&self.bare_repo_path, branch, false) {
+                            match git::delete_branch(&self.bare_repo_path, branch, force) {
                                 Ok(()) => {
                                     msg.push_str(&format!(" (branch '{}' deleted)", branch));
                                 }
@@ -1037,6 +1057,37 @@ impl App {
         self.is_deleting = false;
         self.state = AppState::List;
         self.input_buffer.clear();
+    }
+
+    fn prune_worktrees(&mut self) {
+        let cmd_detail = format!(
+            "git -C {} worktree prune -v",
+            self.bare_repo_path.display()
+        );
+
+        match git::prune_worktrees(&self.bare_repo_path) {
+            Ok(output) => {
+                let mut msg = if output.is_empty() {
+                    "Prune completed: nothing to prune".to_string()
+                } else {
+                    format!("Pruned: {}", output)
+                };
+                if self.verbose {
+                    msg = format!("{}\n$ {}", msg, cmd_detail);
+                    self.last_command_detail = Some(cmd_detail);
+                }
+                self.message = Some(AppMessage::info(msg));
+                self.refresh_worktrees();
+            }
+            Err(e) => {
+                let mut msg = format!("Prune failed: {}", e);
+                if self.verbose {
+                    msg = format!("{}\n$ {}", msg, cmd_detail);
+                    self.last_command_detail = Some(cmd_detail);
+                }
+                self.message = Some(AppMessage::error(msg));
+            }
+        }
     }
 
     fn open_editor(&mut self) {

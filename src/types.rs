@@ -82,7 +82,7 @@ impl Worktree {
 pub enum AppState {
     List,
     AddModal,
-    ConfirmDelete { delete_branch: bool },
+    ConfirmDelete { delete_branch: bool, force: bool },
     ConfigModal {
         selected_index: usize,  // 0-3 (editor, terminal, copy_files, post_add_script)
         editing: bool,
