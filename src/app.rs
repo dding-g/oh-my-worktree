@@ -939,6 +939,11 @@ impl App {
                 }
                 self.message = Some(AppMessage::info(msg));
                 self.refresh_worktrees();
+
+                // Select the newly added worktree
+                if let Some(idx) = self.worktrees.iter().position(|wt| wt.path == worktree_path) {
+                    self.selected_index = idx;
+                }
             }
             Err(e) => {
                 let mut msg = format!("Failed to create: {}", e);
