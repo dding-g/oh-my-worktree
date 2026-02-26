@@ -1008,8 +1008,11 @@ impl App {
         self.script_receiver = Some(rx);
 
         std::thread::spawn(move || {
-            let output = Command::new("sh")
-                .arg(&script)
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string());
+            let output = Command::new(&shell)
+                .arg("-l")
+                .arg("-c")
+                .arg(format!("sh '{}'", script.display()))
                 .current_dir(&wt_path)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::piped())
