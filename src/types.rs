@@ -88,12 +88,6 @@ pub enum AppState {
         editing: bool,
     },
     HelpModal,
-    Fetching,
-    Adding,
-    Deleting,
-    Pulling,
-    Pushing,
-    Merging,
     /// Branch selection for merge
     MergeBranchSelect {
         branches: Vec<String>,
@@ -161,4 +155,30 @@ impl AppMessage {
 pub enum ScriptStatus {
     Idle,
     Running { worktree_name: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpKind {
+    Fetch,
+    Pull,
+    Push,
+    Add,
+    Delete,
+    Merge,
+}
+
+pub struct OpResult {
+    pub kind: OpKind,
+    pub success: bool,
+    pub message: String,
+    pub cmd_detail: String,
+    pub worktree_path: PathBuf,
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActiveOp {
+    pub kind: OpKind,
+    pub worktree_path: PathBuf,
+    pub display_name: String,
 }

@@ -255,8 +255,7 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         match self.state {
-            AppState::List | AppState::Fetching | AppState::Adding | AppState::Deleting
-            | AppState::Pulling | AppState::Pushing | AppState::Merging => {
+            AppState::List => {
                 main_view::render(frame, self)
             }
             AppState::AddModal => {
@@ -311,10 +310,6 @@ impl App {
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
                         AppState::MergeBranchSelect { branches, selected } => {
                             self.handle_merge_branch_select_input(key.code, branches, selected)
-                        }
-                        AppState::Fetching | AppState::Adding | AppState::Deleting
-                        | AppState::Pulling | AppState::Pushing | AppState::Merging => {
-                            // Ignore input during operations
                         }
                     }
                 }
@@ -880,7 +875,7 @@ impl App {
         }
 
         self.is_adding = true;
-        self.state = AppState::Adding;
+        self.state = AppState::List;
         self.message = Some(AppMessage::info(format!("Creating worktree: {}...", branch)));
     }
 
@@ -1039,7 +1034,7 @@ impl App {
 
             // Store delete info and start async delete
             self.is_deleting = true;
-            self.state = AppState::Deleting;
+            self.state = AppState::List;
             self.message = Some(AppMessage::info(format!("Deleting worktree: {}...", wt.display_name())));
             // Encode flags in input_buffer
             self.input_buffer = format!(
@@ -1236,7 +1231,7 @@ impl App {
                 return;
             }
             self.is_fetching = true;
-            self.state = AppState::Fetching;
+            self.state = AppState::List;
             self.message = Some(AppMessage::info(format!("Fetching: {}...", name)));
         }
     }
@@ -1359,7 +1354,7 @@ impl App {
                 return;
             }
             self.is_pulling = true;
-            self.state = AppState::Pulling;
+            self.state = AppState::List;
             self.message = Some(AppMessage::info(format!("Pulling: {}...", name)));
         }
     }
@@ -1394,7 +1389,7 @@ impl App {
                 return;
             }
             self.is_pushing = true;
-            self.state = AppState::Pushing;
+            self.state = AppState::List;
             self.message = Some(AppMessage::info(format!("Pushing: {}...", name)));
         }
     }
@@ -1434,7 +1429,7 @@ impl App {
             }
             self.merge_source_branch = None; // upstream merge
             self.is_merging = true;
-            self.state = AppState::Merging;
+            self.state = AppState::List;
             self.message = Some(AppMessage::info(format!("Merging upstream into {}...", name)));
         }
     }
@@ -1497,7 +1492,7 @@ impl App {
                 if let Some(branch) = branches.get(selected) {
                     self.merge_source_branch = Some(branch.clone());
                     self.is_merging = true;
-                    self.state = AppState::Merging;
+                    self.state = AppState::List;
                     self.message = Some(AppMessage::info(format!("Merging {}...", branch)));
                 }
             }
