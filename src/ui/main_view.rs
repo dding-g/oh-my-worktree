@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::types::{ScriptStatus, SortMode, WorktreeStatus};
+use crate::types::{OpKind, ScriptStatus, SortMode, WorktreeStatus};
 
 // Spinner frames for loading animation
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -87,9 +87,6 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     let filter_lower = app.filter_text.to_lowercase();
     let has_filter = !app.filter_text.is_empty();
 
-    // Check if any loading operation is in progress
-    let is_loading = app.is_adding || app.is_deleting || app.is_fetching
-        || app.is_pulling || app.is_pushing || app.is_merging;
 
     // Get current spinner frame
     let spinner = SPINNER_FRAMES[app.spinner_tick % SPINNER_FRAMES.len()];
@@ -113,14 +110,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             // Modern indicator: dot for selection, filled dot for current
-            // Hide selection cursor during loading
-            let cursor = if is_loading {
-                if is_current {
-                    "◦ "
-                } else {
-                    "  "
-                }
-            } else if is_selected && is_current {
+            let cursor = if is_selected && is_current {
                 "● "
             } else if is_selected {
                 "› "
@@ -130,9 +120,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 "  "
             };
 
-            let cursor_color = if is_loading {
-                t.text_muted
-            } else if is_selected {
+            let cursor_color = if is_selected {
                 t.accent
             } else {
                 t.text_muted
@@ -166,18 +154,22 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             // Show operation status in last commit column with spinner
-            let (last_commit, last_commit_style) = if app.is_fetching && is_selected {
-                (format!("{} Fetching...", spinner), Style::default().fg(t.amber))
-            } else if app.is_adding && is_selected {
-                (format!("{} Adding...", spinner), Style::default().fg(t.amber))
-            } else if app.is_deleting && is_selected {
-                (format!("{} Deleting...", spinner), Style::default().fg(t.red))
-            } else if app.is_pulling && is_selected {
-                (format!("{} Pulling...", spinner), Style::default().fg(t.amber))
-            } else if app.is_pushing && is_selected {
-                (format!("{} Pushing...", spinner), Style::default().fg(t.amber))
-            } else if app.is_merging && is_selected {
-                (format!("{} Merging...", spinner), Style::default().fg(t.amber))
+            let is_op_target = app.active_op_info.as_ref()
+                .map(|op| op.worktree_path == wt.path)
+                .unwrap_or(false);
+
+            let (last_commit, last_commit_style) = if is_op_target {
+                let op = app.active_op_info.as_ref().unwrap();
+                let label = match &op.kind {
+                    OpKind::Fetch => "Fetching...",
+                    OpKind::Pull => "Pulling...",
+                    OpKind::Push => "Pushing...",
+                    OpKind::Add => "Adding...",
+                    OpKind::Delete => "Deleting...",
+                    OpKind::Merge => "Merging...",
+                };
+                let color = if op.kind == OpKind::Delete { t.red } else { t.amber };
+                (format!("{} {}", spinner, label), Style::default().fg(color))
             } else {
                 (
                     wt.last_commit_time.clone().unwrap_or_else(|| "-".to_string()),
@@ -236,7 +228,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
         );
 
     // Use StatefulWidget so ratatui handles scroll offset automatically
-    let selected = if is_loading { None } else { Some(app.selected_index) };
+    let selected = Some(app.selected_index);
     let mut table_state = TableState::new().with_selected(selected);
     frame.render_stateful_widget(table, area, &mut table_state);
 }
@@ -338,6 +330,26 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled("Filter: ", Style::default().fg(t.text_muted)),
                 Span::styled(&app.filter_text, Style::default().fg(t.amber)),
                 Span::styled(" (Esc to clear)", Style::default().fg(t.text_muted)),
+            ]),
+        ]
+    } else if let Some(ref op) = app.active_op_info {
+        let spinner = SPINNER_FRAMES[app.spinner_tick % SPINNER_FRAMES.len()];
+        let label = match &op.kind {
+            OpKind::Fetch => "Fetching",
+            OpKind::Pull => "Pulling",
+            OpKind::Push => "Pushing",
+            OpKind::Add => "Adding",
+            OpKind::Delete => "Deleting",
+            OpKind::Merge => "Merging",
+        };
+        vec![
+            Line::from(binding_spans),
+            Line::from(vec![
+                Span::styled(spinner, Style::default().fg(t.amber)),
+                Span::styled(
+                    format!(" {} {}...", label, op.display_name),
+                    Style::default().fg(t.amber),
+                ),
             ]),
         ]
     } else if let Some(warning) = integration_warning {
