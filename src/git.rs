@@ -18,7 +18,12 @@ pub fn find_bare_in_parent(path: &Path) -> Option<PathBuf> {
 
 pub fn is_bare_repo(path: &Path) -> Result<bool> {
     let output = Command::new("git")
-        .args(["-C", &path.to_string_lossy(), "rev-parse", "--is-bare-repository"])
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "rev-parse",
+            "--is-bare-repository",
+        ])
         .output()
         .context("Failed to execute git command")?;
 
@@ -37,7 +42,12 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// Get the common git directory (bare repo root for worktrees)
 pub fn get_git_common_dir(path: &Path) -> Result<PathBuf> {
     let output = Command::new("git")
-        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-common-dir"])
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "rev-parse",
+            "--git-common-dir",
+        ])
         .output()
         .context("Failed to get git common directory")?;
 
@@ -57,7 +67,13 @@ pub fn get_git_common_dir(path: &Path) -> Result<PathBuf> {
 
 pub fn list_worktrees(bare_repo_path: &Path) -> Result<Vec<Worktree>> {
     let output = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "worktree", "list", "--porcelain"])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "worktree",
+            "list",
+            "--porcelain",
+        ])
         .output()
         .context("Failed to list worktrees")?;
 
@@ -100,9 +116,9 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
             current_path = Some(PathBuf::from(line.strip_prefix("worktree ").unwrap()));
             is_bare = false;
         } else if line.starts_with("branch ") {
-            let branch = line.strip_prefix("branch refs/heads/").unwrap_or(
-                line.strip_prefix("branch ").unwrap_or("")
-            );
+            let branch = line
+                .strip_prefix("branch refs/heads/")
+                .unwrap_or(line.strip_prefix("branch ").unwrap_or(""));
             current_branch = Some(branch.to_string());
         } else if line == "bare" {
             is_bare = true;
@@ -159,7 +175,10 @@ pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
         let worktree = line.chars().nth(1).unwrap_or(' ');
 
         // Check for conflicts (UU, AA, DD, etc.)
-        if matches!((index, worktree), ('U', _) | (_, 'U') | ('A', 'A') | ('D', 'D')) {
+        if matches!(
+            (index, worktree),
+            ('U', _) | (_, 'U') | ('A', 'A') | ('D', 'D')
+        ) {
             has_conflict = true;
         }
 
@@ -187,7 +206,12 @@ pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
     }
 }
 
-pub fn add_worktree(bare_repo_path: &Path, branch: &str, worktree_path: &Path, base_branch: Option<&str>) -> Result<()> {
+pub fn add_worktree(
+    bare_repo_path: &Path,
+    branch: &str,
+    worktree_path: &Path,
+    base_branch: Option<&str>,
+) -> Result<()> {
     let mut args = vec![
         "-C".to_string(),
         bare_repo_path.to_string_lossy().to_string(),
@@ -197,13 +221,27 @@ pub fn add_worktree(bare_repo_path: &Path, branch: &str, worktree_path: &Path, b
 
     // Check if branch exists
     let branch_exists = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "show-ref", "--verify", "--quiet", &format!("refs/heads/{}", branch)])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{}", branch),
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
 
     let remote_branch_exists = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "show-ref", "--verify", "--quiet", &format!("refs/remotes/origin/{}", branch)])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/remotes/origin/{}", branch),
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
@@ -239,19 +277,137 @@ pub fn add_worktree(bare_repo_path: &Path, branch: &str, worktree_path: &Path, b
         anyhow::bail!("Failed to add worktree: {}", stderr.trim());
     }
 
+    ensure_worktree_is_usable(worktree_path)?;
+
+    Ok(())
+}
+
+fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
+    let bare_check = Command::new("git")
+        .args([
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--is-bare-repository",
+        ])
+        .output()
+        .context("Failed to verify new worktree state")?;
+
+    if !bare_check.status.success() {
+        let stderr = String::from_utf8_lossy(&bare_check.stderr);
+        anyhow::bail!("Failed to verify new worktree state: {}", stderr.trim());
+    }
+
+    let is_bare = String::from_utf8_lossy(&bare_check.stdout).trim() == "true";
+    if !is_bare {
+        return Ok(());
+    }
+
+    let git_dir_output = Command::new("git")
+        .args([
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--git-dir",
+        ])
+        .output()
+        .context("Failed to resolve worktree git dir")?;
+
+    if !git_dir_output.status.success() {
+        let stderr = String::from_utf8_lossy(&git_dir_output.stderr);
+        anyhow::bail!("Failed to resolve worktree git dir: {}", stderr.trim());
+    }
+
+    let git_dir_raw = String::from_utf8_lossy(&git_dir_output.stdout)
+        .trim()
+        .to_string();
+    let git_dir_path = PathBuf::from(&git_dir_raw);
+    let resolved_git_dir = if git_dir_path.is_absolute() {
+        git_dir_path
+    } else {
+        worktree_path
+            .join(git_dir_path)
+            .canonicalize()
+            .with_context(|| {
+                format!(
+                    "Failed to canonicalize worktree git dir at {}",
+                    worktree_path.display()
+                )
+            })?
+    };
+
+    let fix_output = Command::new("git")
+        .arg(format!("--git-dir={}", resolved_git_dir.display()))
+        .arg(format!("--work-tree={}", worktree_path.display()))
+        .args(["config", "--worktree", "core.bare", "false"])
+        .output()
+        .context("Failed to write worktree-specific config")?;
+
+    if !fix_output.status.success() {
+        let stderr = String::from_utf8_lossy(&fix_output.stderr);
+        anyhow::bail!(
+            "Failed to write worktree-specific config: {}",
+            stderr.trim()
+        );
+    }
+
+    let verify_output = Command::new("git")
+        .args([
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--is-bare-repository",
+        ])
+        .output()
+        .context("Failed to verify repaired worktree state")?;
+
+    if !verify_output.status.success() {
+        let stderr = String::from_utf8_lossy(&verify_output.stderr);
+        anyhow::bail!(
+            "Failed to verify repaired worktree state: {}",
+            stderr.trim()
+        );
+    }
+
+    if String::from_utf8_lossy(&verify_output.stdout).trim() != "false" {
+        anyhow::bail!(
+            "Worktree remains bare after repair attempt at {}",
+            worktree_path.display()
+        );
+    }
+
     Ok(())
 }
 
 /// Build command detail string for verbose mode (mirrors add_worktree logic)
-pub fn build_add_worktree_command_detail(bare_repo_path: &Path, branch: &str, worktree_path: &Path, base_branch: Option<&str>) -> String {
+pub fn build_add_worktree_command_detail(
+    bare_repo_path: &Path,
+    branch: &str,
+    worktree_path: &Path,
+    base_branch: Option<&str>,
+) -> String {
     let branch_exists = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "show-ref", "--verify", "--quiet", &format!("refs/heads/{}", branch)])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{}", branch),
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
 
     let remote_branch_exists = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "show-ref", "--verify", "--quiet", &format!("refs/remotes/origin/{}", branch)])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/remotes/origin/{}", branch),
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
@@ -262,7 +418,10 @@ pub fn build_add_worktree_command_detail(bare_repo_path: &Path, branch: &str, wo
     if branch_exists {
         format!("git -C {} worktree add {} {}", bare, wt, branch)
     } else if remote_branch_exists {
-        format!("git -C {} worktree add --track -b {} {} origin/{}", bare, branch, wt, branch)
+        format!(
+            "git -C {} worktree add --track -b {} {} origin/{}",
+            bare, branch, wt, branch
+        )
     } else {
         match base_branch {
             Some(base) => format!("git -C {} worktree add -b {} {} {}", bare, branch, wt, base),
@@ -298,7 +457,13 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
 
 pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
     let output = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "worktree", "prune", "-v"])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "worktree",
+            "prune",
+            "-v",
+        ])
         .output()
         .context("Failed to prune worktrees")?;
 
@@ -315,7 +480,13 @@ pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result
     let flag = if force { "-D" } else { "-d" };
 
     let output = Command::new("git")
-        .args(["-C", &bare_repo_path.to_string_lossy(), "branch", flag, branch])
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "branch",
+            flag,
+            branch,
+        ])
         .output()
         .context("Failed to delete branch")?;
 
@@ -344,13 +515,7 @@ pub fn fetch_worktree(worktree_path: &Path) -> Result<()> {
 
 pub fn get_last_commit_time(path: &Path) -> Result<String> {
     let output = Command::new("git")
-        .args([
-            "-C",
-            &path.to_string_lossy(),
-            "log",
-            "-1",
-            "--format=%ar",
-        ])
+        .args(["-C", &path.to_string_lossy(), "log", "-1", "--format=%ar"])
         .output()
         .context("Failed to get last commit time")?;
 
@@ -447,7 +612,6 @@ pub fn get_default_branch(bare_repo_path: &Path) -> Result<String> {
     Ok("main".to_string())
 }
 
-
 /// Pull changes from remote for a worktree
 pub fn pull_worktree(worktree_path: &Path) -> Result<String> {
     let output = Command::new("git")
@@ -492,7 +656,13 @@ pub fn push_worktree(worktree_path: &Path) -> Result<String> {
 pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
     // First, get the upstream branch
     let upstream_output = Command::new("git")
-        .args(["-C", &worktree_path.to_string_lossy(), "rev-parse", "--abbrev-ref", "@{upstream}"])
+        .args([
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--abbrev-ref",
+            "@{upstream}",
+        ])
         .output()
         .context("Failed to get upstream")?;
 
@@ -500,7 +670,9 @@ pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
         anyhow::bail!("No upstream branch configured");
     }
 
-    let upstream = String::from_utf8_lossy(&upstream_output.stdout).trim().to_string();
+    let upstream = String::from_utf8_lossy(&upstream_output.stdout)
+        .trim()
+        .to_string();
 
     // Merge the upstream
     let output = Command::new("git")
@@ -520,7 +692,12 @@ pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
 /// Merge a specific branch into a worktree
 pub fn merge_branch(worktree_path: &Path, source_branch: &str) -> Result<String> {
     let output = Command::new("git")
-        .args(["-C", &worktree_path.to_string_lossy(), "merge", source_branch])
+        .args([
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "merge",
+            source_branch,
+        ])
         .output()
         .context("Failed to merge")?;
 
@@ -559,4 +736,178 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
         .collect();
 
     Ok(branches)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::add_worktree;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let id = std::process::id();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("owt_git_unit_{}_{}_{}", name, id, ts));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn git_cmd() -> Command {
+        let mut cmd = Command::new("git");
+        cmd.env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR");
+        cmd
+    }
+
+    fn create_test_bare_repo(path: &PathBuf) -> String {
+        let temp = path.parent().unwrap().join("temp_init");
+        fs::create_dir_all(&temp).unwrap();
+
+        let init_output = git_cmd()
+            .current_dir(&temp)
+            .args(["init"])
+            .output()
+            .unwrap();
+        assert!(
+            init_output.status.success(),
+            "git init failed: {}",
+            String::from_utf8_lossy(&init_output.stderr)
+        );
+
+        let config_email = git_cmd()
+            .current_dir(&temp)
+            .args(["config", "user.email", "test@test.com"])
+            .output()
+            .unwrap();
+        assert!(
+            config_email.status.success(),
+            "git config email failed: {}",
+            String::from_utf8_lossy(&config_email.stderr)
+        );
+
+        let config_name = git_cmd()
+            .current_dir(&temp)
+            .args(["config", "user.name", "Test"])
+            .output()
+            .unwrap();
+        assert!(
+            config_name.status.success(),
+            "git config name failed: {}",
+            String::from_utf8_lossy(&config_name.stderr)
+        );
+
+        fs::write(temp.join("README.md"), "# Test").unwrap();
+
+        let add_output = git_cmd()
+            .current_dir(&temp)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        assert!(
+            add_output.status.success(),
+            "git add failed: {}",
+            String::from_utf8_lossy(&add_output.stderr)
+        );
+
+        let commit_output = git_cmd()
+            .current_dir(&temp)
+            .args(["commit", "-m", "Initial commit"])
+            .output()
+            .unwrap();
+        assert!(
+            commit_output.status.success(),
+            "git commit failed: {}",
+            String::from_utf8_lossy(&commit_output.stderr)
+        );
+
+        let branch_output = git_cmd()
+            .current_dir(&temp)
+            .args(["branch", "--show-current"])
+            .output()
+            .unwrap();
+        assert!(
+            branch_output.status.success(),
+            "git branch --show-current failed: {}",
+            String::from_utf8_lossy(&branch_output.stderr)
+        );
+        let branch = String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_string();
+        assert!(!branch.is_empty(), "current branch should not be empty");
+
+        let clone_output = git_cmd()
+            .args([
+                "clone",
+                "--bare",
+                &temp.to_string_lossy(),
+                &path.to_string_lossy(),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            clone_output.status.success(),
+            "git clone --bare failed: {}",
+            String::from_utf8_lossy(&clone_output.stderr)
+        );
+
+        let _ = fs::remove_dir_all(&temp);
+        branch
+    }
+
+    #[test]
+    fn add_worktree_creates_usable_worktree_with_worktree_config_extension_enabled() {
+        let base = temp_dir("add_worktree_worktree_config");
+        let bare_path = base.join("test.bare");
+        let branch = create_test_bare_repo(&bare_path);
+        let worktree_path = base.join("main");
+
+        let enable_ext = git_cmd()
+            .args([
+                "-C",
+                &bare_path.to_string_lossy(),
+                "config",
+                "extensions.worktreeConfig",
+                "true",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            enable_ext.status.success(),
+            "failed to enable extensions.worktreeConfig: {}",
+            String::from_utf8_lossy(&enable_ext.stderr)
+        );
+
+        let add_result = add_worktree(&bare_path, &branch, &worktree_path, None);
+        assert!(
+            add_result.is_ok(),
+            "add_worktree should succeed: {:?}",
+            add_result
+        );
+
+        let status_output = git_cmd()
+            .args([
+                "-C",
+                &worktree_path.to_string_lossy(),
+                "status",
+                "--porcelain",
+            ])
+            .output()
+            .unwrap();
+
+        assert!(
+            status_output.status.success(),
+            "new worktree should be usable, but git status failed: {}",
+            String::from_utf8_lossy(&status_output.stderr)
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
 }
