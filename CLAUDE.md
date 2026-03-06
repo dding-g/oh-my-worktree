@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For Codex agents, use `AGENTS.md` as the primary workflow guide. This file remains for Claude compatibility.
+
 ## Project Overview
 
 owt (oh-my-worktree) is a TUI tool for managing Git worktrees in bare repositories. It uses ratatui + crossterm for the terminal UI.
