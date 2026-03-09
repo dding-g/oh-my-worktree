@@ -152,10 +152,17 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
 }
 
 pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
+    ensure_worktree_is_usable(path)?;
+
     let output = Command::new("git")
         .args(["-C", &path.to_string_lossy(), "status", "--porcelain"])
         .output()
         .context("Failed to get status")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to get status: {}", stderr.trim());
+    }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -740,10 +747,10 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::add_worktree;
+    use super::{add_worktree, list_worktrees};
     use std::fs;
-    use std::path::PathBuf;
-    use std::process::Command;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -862,6 +869,131 @@ mod tests {
         branch
     }
 
+    fn git_output(args: &[&str]) -> Output {
+        git_cmd().args(args).output().unwrap()
+    }
+
+    fn enable_worktree_config(bare_path: &Path) {
+        let enable_ext = git_output(&[
+            "-C",
+            &bare_path.to_string_lossy(),
+            "config",
+            "extensions.worktreeConfig",
+            "true",
+        ]);
+        assert!(
+            enable_ext.status.success(),
+            "failed to enable extensions.worktreeConfig: {}",
+            String::from_utf8_lossy(&enable_ext.stderr)
+        );
+    }
+
+    fn create_local_branch(bare_path: &Path, branch: &str, base_branch: &str) {
+        let output = git_output(&[
+            "-C",
+            &bare_path.to_string_lossy(),
+            "branch",
+            branch,
+            base_branch,
+        ]);
+        assert!(
+            output.status.success(),
+            "failed to create branch {}: {}",
+            branch,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn resolve_git_path(worktree_path: &Path, git_path: &str) -> PathBuf {
+        let output = git_output(&[
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--git-path",
+            git_path,
+        ]);
+        assert!(
+            output.status.success(),
+            "failed to resolve git path {}: {}",
+            git_path,
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
+    }
+
+    fn resolve_git_dir(worktree_path: &Path) -> PathBuf {
+        let output = git_output(&[
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--git-dir",
+        ]);
+        assert!(
+            output.status.success(),
+            "failed to resolve git dir: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let git_dir = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+        if git_dir.is_absolute() {
+            git_dir
+        } else {
+            worktree_path.join(git_dir).canonicalize().unwrap()
+        }
+    }
+
+    fn assert_worktree_usable(worktree_path: &Path) {
+        let bare_output = git_output(&[
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "rev-parse",
+            "--is-bare-repository",
+        ]);
+        assert!(
+            bare_output.status.success(),
+            "failed to query bare state: {}",
+            String::from_utf8_lossy(&bare_output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&bare_output.stdout).trim(),
+            "false",
+            "worktree should not be bare"
+        );
+
+        let status_output = git_output(&[
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "status",
+            "--porcelain",
+        ]);
+        assert!(
+            status_output.status.success(),
+            "worktree should be usable, but git status failed: {}",
+            String::from_utf8_lossy(&status_output.stderr)
+        );
+    }
+
+    fn assert_worktree_config_marks_non_bare(worktree_path: &Path) {
+        let config_worktree_path = resolve_git_path(worktree_path, "config.worktree");
+        assert!(
+            config_worktree_path.exists(),
+            "config.worktree should exist at {}",
+            config_worktree_path.display()
+        );
+
+        let content = fs::read_to_string(&config_worktree_path).unwrap();
+        assert!(
+            content.contains("bare = false"),
+            "config.worktree should mark worktree non-bare, got: {}",
+            content
+        );
+    }
+
+    fn canonicalize_existing(path: &Path) -> PathBuf {
+        path.canonicalize().unwrap()
+    }
+
     #[test]
     fn add_worktree_creates_usable_worktree_with_worktree_config_extension_enabled() {
         let base = temp_dir("add_worktree_worktree_config");
@@ -869,21 +1001,7 @@ mod tests {
         let branch = create_test_bare_repo(&bare_path);
         let worktree_path = base.join("main");
 
-        let enable_ext = git_cmd()
-            .args([
-                "-C",
-                &bare_path.to_string_lossy(),
-                "config",
-                "extensions.worktreeConfig",
-                "true",
-            ])
-            .output()
-            .unwrap();
-        assert!(
-            enable_ext.status.success(),
-            "failed to enable extensions.worktreeConfig: {}",
-            String::from_utf8_lossy(&enable_ext.stderr)
-        );
+        enable_worktree_config(&bare_path);
 
         let add_result = add_worktree(&bare_path, &branch, &worktree_path, None);
         assert!(
@@ -892,21 +1010,148 @@ mod tests {
             add_result
         );
 
-        let status_output = git_cmd()
-            .args([
-                "-C",
-                &worktree_path.to_string_lossy(),
-                "status",
-                "--porcelain",
-            ])
-            .output()
-            .unwrap();
+        assert_worktree_usable(&worktree_path);
+        assert_worktree_config_marks_non_bare(&worktree_path);
 
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn add_worktree_repairs_nested_feature_branch_when_worktree_config_enabled() {
+        let base = temp_dir("nested_feature_worktree_config");
+        let bare_path = base.join("test.bare");
+        let default_branch = create_test_bare_repo(&bare_path);
+        let branch = "feature/syn-6485-qcp";
+        let worktree_path = base.join("feature").join("syn-6485-qcp");
+
+        enable_worktree_config(&bare_path);
+
+        let add_result = add_worktree(&bare_path, branch, &worktree_path, Some(&default_branch));
         assert!(
-            status_output.status.success(),
-            "new worktree should be usable, but git status failed: {}",
-            String::from_utf8_lossy(&status_output.stderr)
+            add_result.is_ok(),
+            "add_worktree should succeed: {:?}",
+            add_result
         );
+
+        assert_worktree_usable(&worktree_path);
+        assert_worktree_config_marks_non_bare(&worktree_path);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn add_worktree_repairs_nested_hotfix_branch_from_existing_ref() {
+        let base = temp_dir("nested_hotfix_existing_ref");
+        let bare_path = base.join("test.bare");
+        let default_branch = create_test_bare_repo(&bare_path);
+        let branch = "hotfix/syn-6485-qcp";
+        let worktree_path = base.join("hotfix").join("syn-6485-qcp");
+
+        enable_worktree_config(&bare_path);
+        create_local_branch(&bare_path, branch, &default_branch);
+
+        let add_result = add_worktree(&bare_path, branch, &worktree_path, Some(&default_branch));
+        assert!(
+            add_result.is_ok(),
+            "add_worktree should succeed: {:?}",
+            add_result
+        );
+
+        assert_worktree_usable(&worktree_path);
+        assert_worktree_config_marks_non_bare(&worktree_path);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn add_worktree_keeps_feature_and_hotfix_same_leaf_usable() {
+        let base = temp_dir("same_leaf_nested_worktrees");
+        let bare_path = base.join("test.bare");
+        let default_branch = create_test_bare_repo(&bare_path);
+        let feature_branch = "feature/foo";
+        let hotfix_branch = "hotfix/foo";
+        let feature_path = base.join("feature").join("foo");
+        let hotfix_path = base.join("hotfix").join("foo");
+
+        enable_worktree_config(&bare_path);
+
+        let feature_result = add_worktree(
+            &bare_path,
+            feature_branch,
+            &feature_path,
+            Some(&default_branch),
+        );
+        assert!(
+            feature_result.is_ok(),
+            "feature add_worktree should succeed: {:?}",
+            feature_result
+        );
+
+        let hotfix_result = add_worktree(
+            &bare_path,
+            hotfix_branch,
+            &hotfix_path,
+            Some(&default_branch),
+        );
+        assert!(
+            hotfix_result.is_ok(),
+            "hotfix add_worktree should succeed: {:?}",
+            hotfix_result
+        );
+
+        assert_worktree_usable(&feature_path);
+        assert_worktree_usable(&hotfix_path);
+
+        let feature_git_dir = resolve_git_dir(&feature_path);
+        let hotfix_git_dir = resolve_git_dir(&hotfix_path);
+        assert_ne!(
+            feature_git_dir, hotfix_git_dir,
+            "feature and hotfix worktrees should use distinct git dirs"
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn ensure_worktree_repairs_legacy_nested_worktree_after_worktree_config_enabled() {
+        let base = temp_dir("legacy_nested_worktree_repair");
+        let bare_path = base.join("test.bare");
+        let default_branch = create_test_bare_repo(&bare_path);
+        let branch = "feature/legacy";
+        let worktree_path = base.join("feature").join("legacy");
+
+        let add_result = add_worktree(&bare_path, branch, &worktree_path, Some(&default_branch));
+        assert!(
+            add_result.is_ok(),
+            "add_worktree should succeed before enabling extension: {:?}",
+            add_result
+        );
+
+        enable_worktree_config(&bare_path);
+
+        let broken_status = git_output(&[
+            "-C",
+            &worktree_path.to_string_lossy(),
+            "status",
+            "--porcelain",
+        ]);
+        assert!(
+            !broken_status.status.success(),
+            "legacy nested worktree should fail before self-heal once extension is enabled"
+        );
+
+        let worktrees =
+            list_worktrees(&bare_path).expect("list_worktrees should succeed after self-heal");
+        let expected_path = canonicalize_existing(&worktree_path);
+        assert!(
+            worktrees
+                .iter()
+                .any(|wt| canonicalize_existing(&wt.path) == expected_path),
+            "list_worktrees should include the repaired legacy worktree"
+        );
+
+        assert_worktree_usable(&worktree_path);
+        assert_worktree_config_marks_non_bare(&worktree_path);
 
         let _ = fs::remove_dir_all(&base);
     }
