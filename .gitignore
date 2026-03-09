@@ -21,6 +21,9 @@
 # env
 .env
 
+# local worktrees
+.worktrees/
+
 # Node.js (release-it)
 node_modules/
 package-lock.json
