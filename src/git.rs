@@ -226,32 +226,10 @@ pub fn add_worktree(
         "add".to_string(),
     ];
 
-    // Check if branch exists
-    let branch_exists = Command::new("git")
-        .args([
-            "-C",
-            &bare_repo_path.to_string_lossy(),
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{}", branch),
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
-    let remote_branch_exists = Command::new("git")
-        .args([
-            "-C",
-            &bare_repo_path.to_string_lossy(),
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/remotes/origin/{}", branch),
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let branch_exists = ref_exists(bare_repo_path, &format!("refs/heads/{}", branch));
+    let remote_branch_exists =
+        ref_exists(bare_repo_path, &format!("refs/remotes/origin/{}", branch));
+    let base_ref = resolve_base_ref(bare_repo_path, base_branch);
 
     if branch_exists {
         // Branch exists locally, just add worktree
@@ -269,8 +247,8 @@ pub fn add_worktree(
         args.push("-b".to_string());
         args.push(branch.to_string());
         args.push(worktree_path.to_string_lossy().to_string());
-        if let Some(base) = base_branch {
-            args.push(base.to_string());
+        if let Some(base) = base_ref {
+            args.push(base);
         }
     }
 
@@ -287,6 +265,99 @@ pub fn add_worktree(
     ensure_worktree_is_usable(worktree_path)?;
 
     Ok(())
+}
+
+fn ref_exists(bare_repo_path: &Path, reference: &str) -> bool {
+    Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            reference,
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn has_origin_remote(bare_repo_path: &Path) -> bool {
+    Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "remote",
+            "get-url",
+            "origin",
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn remote_branch_exists_on_origin(bare_repo_path: &Path, branch: &str) -> Result<bool> {
+    if !has_origin_remote(bare_repo_path) {
+        return Ok(false);
+    }
+
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            branch,
+        ])
+        .output()
+        .context("Failed to inspect remote branch")?;
+
+    if output.status.success() {
+        Ok(true)
+    } else if output.status.code() == Some(2) {
+        Ok(false)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to inspect origin/{}: {}", branch, stderr.trim());
+    }
+}
+
+pub fn fetch_remote_branch(bare_repo_path: &Path, branch: &str) -> Result<bool> {
+    if !remote_branch_exists_on_origin(bare_repo_path, branch)? {
+        return Ok(false);
+    }
+
+    let refspec = format!("refs/heads/{}:refs/remotes/origin/{}", branch, branch);
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &bare_repo_path.to_string_lossy(),
+            "fetch",
+            "origin",
+            &refspec,
+        ])
+        .output()
+        .context("Failed to fetch remote branch")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to fetch origin/{}: {}", branch, stderr.trim());
+    }
+
+    Ok(true)
+}
+
+fn resolve_base_ref(bare_repo_path: &Path, base_branch: Option<&str>) -> Option<String> {
+    base_branch.map(|base| {
+        let remote_ref = format!("refs/remotes/origin/{}", base);
+        if ref_exists(bare_repo_path, &remote_ref) {
+            format!("origin/{}", base)
+        } else {
+            base.to_string()
+        }
+    })
 }
 
 fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
@@ -393,31 +464,10 @@ pub fn build_add_worktree_command_detail(
     worktree_path: &Path,
     base_branch: Option<&str>,
 ) -> String {
-    let branch_exists = Command::new("git")
-        .args([
-            "-C",
-            &bare_repo_path.to_string_lossy(),
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{}", branch),
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
-
-    let remote_branch_exists = Command::new("git")
-        .args([
-            "-C",
-            &bare_repo_path.to_string_lossy(),
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/remotes/origin/{}", branch),
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let branch_exists = ref_exists(bare_repo_path, &format!("refs/heads/{}", branch));
+    let remote_branch_exists =
+        ref_exists(bare_repo_path, &format!("refs/remotes/origin/{}", branch));
+    let base_ref = resolve_base_ref(bare_repo_path, base_branch);
 
     let bare = bare_repo_path.display();
     let wt = worktree_path.display();
@@ -430,7 +480,7 @@ pub fn build_add_worktree_command_detail(
             bare, branch, wt, branch
         )
     } else {
-        match base_branch {
+        match base_ref {
             Some(base) => format!("git -C {} worktree add -b {} {} {}", bare, branch, wt, base),
             None => format!("git -C {} worktree add -b {} {}", bare, branch, wt),
         }
@@ -747,7 +797,7 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_worktree, list_worktrees};
+    use super::{add_worktree, fetch_remote_branch, list_worktrees};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
@@ -867,6 +917,74 @@ mod tests {
 
         let _ = fs::remove_dir_all(&temp);
         branch
+    }
+
+    fn git_in(path: &Path, args: &[&str]) -> Output {
+        git_cmd().current_dir(path).args(args).output().unwrap()
+    }
+
+    fn assert_git_success(output: &Output, context: &str) {
+        assert!(
+            output.status.success(),
+            "{}: {}",
+            context,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn write_and_commit(path: &Path, file: &str, content: &str, message: &str) -> String {
+        fs::write(path.join(file), content).unwrap();
+        assert_git_success(&git_in(path, &["add", "."]), "git add failed");
+        assert_git_success(
+            &git_in(path, &["commit", "-m", message]),
+            "git commit failed",
+        );
+        let output = git_in(path, &["rev-parse", "HEAD"]);
+        assert_git_success(&output, "git rev-parse HEAD failed");
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn create_source_and_bare_repo(base: &Path) -> (PathBuf, PathBuf) {
+        let source_path = base.join("source");
+        let bare_path = base.join("test.bare");
+
+        fs::create_dir_all(&source_path).unwrap();
+        assert_git_success(
+            &git_in(&source_path, &["init", "-b", "main"]),
+            "git init failed",
+        );
+        assert_git_success(
+            &git_in(&source_path, &["config", "user.email", "test@test.com"]),
+            "git config user.email failed",
+        );
+        assert_git_success(
+            &git_in(&source_path, &["config", "user.name", "Test"]),
+            "git config user.name failed",
+        );
+
+        write_and_commit(&source_path, "README.md", "# Test\n", "initial");
+        assert_git_success(
+            &git_in(&source_path, &["checkout", "-b", "staging"]),
+            "git checkout staging failed",
+        );
+        write_and_commit(&source_path, "staging.txt", "v1\n", "staging v1");
+        assert_git_success(
+            &git_in(&source_path, &["checkout", "main"]),
+            "git checkout main failed",
+        );
+
+        let clone_output = git_cmd()
+            .args([
+                "clone",
+                "--bare",
+                &source_path.to_string_lossy(),
+                &bare_path.to_string_lossy(),
+            ])
+            .output()
+            .unwrap();
+        assert_git_success(&clone_output, "git clone --bare failed");
+
+        (source_path, bare_path)
     }
 
     fn git_output(args: &[&str]) -> Output {
@@ -1152,6 +1270,61 @@ mod tests {
 
         assert_worktree_usable(&worktree_path);
         assert_worktree_config_marks_non_bare(&worktree_path);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn add_worktree_uses_latest_origin_base_branch_when_creating_new_branch() {
+        let base = temp_dir("selected_origin_base");
+        let (source_path, bare_path) = create_source_and_bare_repo(&base);
+        let staging_path = base.join("staging");
+        let feature_path = base.join("feature").join("test-base");
+
+        let add_staging = add_worktree(&bare_path, "staging", &staging_path, Some("main"));
+        assert!(
+            add_staging.is_ok(),
+            "staging worktree should be created: {:?}",
+            add_staging
+        );
+
+        assert_git_success(
+            &git_in(&source_path, &["checkout", "staging"]),
+            "git checkout staging failed",
+        );
+        let latest_staging_head =
+            write_and_commit(&source_path, "staging.txt", "v2\n", "staging v2");
+        assert_git_success(
+            &git_in(&source_path, &["checkout", "main"]),
+            "git checkout main failed",
+        );
+
+        let fetch_result = fetch_remote_branch(&bare_path, "staging");
+        assert!(
+            fetch_result.is_ok(),
+            "fetch_remote_branch should succeed: {:?}",
+            fetch_result
+        );
+
+        let add_feature = add_worktree(
+            &bare_path,
+            "feature/test-base",
+            &feature_path,
+            Some("staging"),
+        );
+        assert!(
+            add_feature.is_ok(),
+            "feature worktree should be created from staging: {:?}",
+            add_feature
+        );
+
+        let feature_head =
+            git_output(&["-C", &feature_path.to_string_lossy(), "rev-parse", "HEAD"]);
+        assert!(feature_head.status.success(), "git rev-parse failed");
+        assert_eq!(
+            String::from_utf8_lossy(&feature_head.stdout).trim(),
+            latest_staging_head
+        );
 
         let _ = fs::remove_dir_all(&base);
     }

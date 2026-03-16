@@ -3,7 +3,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Frame, Terminal};
 use std::cell::Cell;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -800,6 +800,36 @@ impl App {
         self.worktrees.get(self.selected_index)
     }
 
+    fn selected_base_branch(&self) -> Option<&str> {
+        self.selected_worktree()
+            .filter(|wt| !wt.is_bare)
+            .and_then(|wt| wt.branch.as_deref())
+    }
+
+    fn worktree_path_for_branch(&self, branch: &str) -> PathBuf {
+        self.bare_repo_path
+            .parent()
+            .map(|p| p.join(branch))
+            .unwrap_or_else(|| PathBuf::from(branch))
+    }
+
+    fn conflicting_worktree_for_branch(
+        &self,
+        branch: &str,
+        desired_path: &Path,
+    ) -> Option<&Worktree> {
+        self.worktrees.iter().find(|wt| {
+            !wt.is_bare && wt.branch.as_deref() == Some(branch) && wt.path != desired_path
+        })
+    }
+
+    pub fn add_modal_base_label(&self) -> String {
+        match self.selected_base_branch() {
+            Some(base) => format!("Base branch: {}", base),
+            None => "Base branch: HEAD".to_string(),
+        }
+    }
+
     fn refresh_worktrees(&mut self) {
         match git::list_worktrees(&self.bare_repo_path) {
             Ok(worktrees) => {
@@ -900,21 +930,16 @@ impl App {
             return;
         }
 
-        let worktree_path = self
-            .bare_repo_path
-            .parent()
-            .map(|p| p.join(&branch))
-            .unwrap_or_else(|| PathBuf::from(&branch));
-
-        let default_branch =
-            git::get_default_branch(&self.bare_repo_path).unwrap_or_else(|_| "main".to_string());
-
-        let cmd_detail = git::build_add_worktree_command_detail(
-            &self.bare_repo_path,
-            &branch,
-            &worktree_path,
-            Some(&default_branch),
-        );
+        let worktree_path = self.worktree_path_for_branch(&branch);
+        if let Some(existing) = self.conflicting_worktree_for_branch(&branch, &worktree_path) {
+            self.message = Some(AppMessage::error(format!(
+                "Branch '{}' is already checked out at {}. Remove or move that worktree first.",
+                branch,
+                existing.path.display()
+            )));
+            self.state = AppState::List;
+            return;
+        }
 
         let copy_files = self.config.copy_files.clone();
         let source_path = self.current_worktree_path.clone().or_else(|| {
@@ -930,15 +955,27 @@ impl App {
         let display_name = branch.clone();
         let display_name_for_thread = display_name.clone();
         let display_name_for_state = display_name.clone();
-        let cmd_detail_for_thread = cmd_detail.clone();
+        let base_branch = self.selected_base_branch().map(str::to_owned);
 
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
+            let base_branch_for_add = base_branch.as_deref();
+            if let Some(base) = base_branch_for_add {
+                let _ = git::fetch_remote_branch(&bare_repo_path, base);
+            }
+
+            let cmd_detail = git::build_add_worktree_command_detail(
+                &bare_repo_path,
+                &branch,
+                &worktree_path_for_thread,
+                base_branch_for_add,
+            );
+
             let result = git::add_worktree(
                 &bare_repo_path,
                 &branch,
                 &worktree_path_for_thread,
-                Some(&default_branch),
+                base_branch_for_add,
             );
 
             if result.is_ok() {
@@ -966,7 +1003,7 @@ impl App {
                 kind: OpKind::Add,
                 success: result.is_ok(),
                 message,
-                cmd_detail: cmd_detail_for_thread,
+                cmd_detail,
                 worktree_path: worktree_path_for_thread,
                 display_name: display_name_for_thread,
             });
@@ -974,8 +1011,11 @@ impl App {
 
         self.state = AppState::List;
         self.message = Some(AppMessage::info(format!(
-            "Creating worktree: {}...",
-            display_name
+            "Creating worktree: {}{}...",
+            display_name,
+            self.selected_base_branch()
+                .map(|base| format!(" (base: {})", base))
+                .unwrap_or_default()
         )));
         self.input_buffer.clear();
         self.active_op = Some((OpKind::Add, rx));
@@ -1654,5 +1694,83 @@ impl App {
             worktree_path: worktree_path_for_state,
             display_name: display_name_for_state,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_app(worktrees: Vec<Worktree>, selected_index: usize, bare_repo_path: &str) -> App {
+        App {
+            worktrees,
+            selected_index,
+            state: AppState::List,
+            message: None,
+            bare_repo_path: PathBuf::from(bare_repo_path),
+            input_buffer: String::new(),
+            should_quit: false,
+            config: Config::default(),
+            exit_action: ExitAction::Quit,
+            current_worktree_path: None,
+            merge_source_branch: None,
+            has_shell_integration: false,
+            filter_text: String::new(),
+            is_filtering: false,
+            last_key: None,
+            sort_mode: SortMode::default(),
+            verbose: false,
+            last_command_detail: None,
+            spinner_tick: 0,
+            theme: crate::ui::theme::detect_theme(),
+            viewport_height: Cell::new(0),
+            help_scroll_offset: 0,
+            script_status: ScriptStatus::Idle,
+            script_receiver: None,
+            active_op: None,
+            active_op_info: None,
+        }
+    }
+
+    #[test]
+    fn conflicting_worktree_for_branch_reports_existing_checkout_path() {
+        let app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/tmp/external/staging"),
+                branch: Some("staging".to_string()),
+                is_bare: false,
+                status: WorktreeStatus::Clean,
+                last_commit_time: None,
+                ahead_behind: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+
+        let desired_path = app.worktree_path_for_branch("staging");
+        let conflict = app
+            .conflicting_worktree_for_branch("staging", &desired_path)
+            .expect("staging checkout should be reported");
+
+        assert_eq!(desired_path, PathBuf::from("/repo/staging"));
+        assert_eq!(conflict.path, PathBuf::from("/tmp/external/staging"));
+    }
+
+    #[test]
+    fn add_modal_base_label_uses_selected_worktree_branch() {
+        let app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/repo/staging"),
+                branch: Some("staging".to_string()),
+                is_bare: false,
+                status: WorktreeStatus::Clean,
+                last_commit_time: None,
+                ahead_behind: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+
+        assert_eq!(app.add_modal_base_label(), "Base branch: staging");
     }
 }
