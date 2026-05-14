@@ -6,8 +6,10 @@ use std::path::PathBuf;
 pub struct Config {
     pub editor: Option<String>,
     pub terminal: Option<String>,
-    pub copy_files: Vec<String>,        // Files to copy when adding worktree
+    pub copy_files: Vec<String>, // Files to copy when adding worktree
     pub post_add_script: Option<String>, // Script to run after adding worktree
+    pub run_post_add_script_in_tmux: bool,
+    run_post_add_script_in_tmux_configured: bool,
 }
 
 impl Config {
@@ -56,6 +58,10 @@ impl Config {
         if other.post_add_script.is_some() {
             self.post_add_script = other.post_add_script;
         }
+        if other.run_post_add_script_in_tmux_configured {
+            self.run_post_add_script_in_tmux = other.run_post_add_script_in_tmux;
+            self.run_post_add_script_in_tmux_configured = true;
+        }
     }
 
     /// Global config path: ~/.config/owt/config.toml
@@ -102,7 +108,8 @@ impl Config {
             content.push_str(&format!("terminal = \"{}\"\n", terminal));
         }
         if !self.copy_files.is_empty() {
-            let files = self.copy_files
+            let files = self
+                .copy_files
                 .iter()
                 .map(|f| format!("\"{}\"", f))
                 .collect::<Vec<_>>()
@@ -112,6 +119,10 @@ impl Config {
         if let Some(ref script) = self.post_add_script {
             content.push_str(&format!("post_add_script = \"{}\"\n", script));
         }
+        content.push_str(&format!(
+            "run_post_add_script_in_tmux = {}\n",
+            self.run_post_add_script_in_tmux
+        ));
 
         fs::write(config_path, content)?;
         Ok(())
@@ -136,9 +147,14 @@ impl Config {
                     "editor" => config.editor = Some(value.to_string()),
                     "terminal" => config.terminal = Some(value.to_string()),
                     "post_add_script" => config.post_add_script = Some(value.to_string()),
+                    "run_post_add_script_in_tmux" => {
+                        config.run_post_add_script_in_tmux = parse_bool(value);
+                        config.run_post_add_script_in_tmux_configured = true;
+                    }
                     "copy_files" => {
                         let files: Vec<String> = value
-                            .trim_matches('[').trim_matches(']')
+                            .trim_matches('[')
+                            .trim_matches(']')
                             .split(',')
                             .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
                             .filter(|s| !s.is_empty())
@@ -152,6 +168,13 @@ impl Config {
 
         Ok(config)
     }
+}
+
+fn parse_bool(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "true" | "1" | "yes" | "on"
+    )
 }
 
 impl Config {
@@ -204,6 +227,7 @@ mod tests {
         let config = Config::parse("").unwrap();
         assert!(config.editor.is_none());
         assert!(config.terminal.is_none());
+        assert!(!config.run_post_add_script_in_tmux);
     }
 
     #[test]
@@ -212,10 +236,12 @@ mod tests {
 [core]
 editor = "code"
 terminal = "Ghostty"
+run_post_add_script_in_tmux = true
 "#;
         let config = Config::parse(content).unwrap();
         assert_eq!(config.editor, Some("code".to_string()));
         assert_eq!(config.terminal, Some("Ghostty".to_string()));
+        assert!(config.run_post_add_script_in_tmux);
     }
 
     #[test]
@@ -237,6 +263,33 @@ copy_files = [".env", ".envrc", "config.json"]
 "#;
         let config = Config::parse(content).unwrap();
         assert_eq!(config.copy_files, vec![".env", ".envrc", "config.json"]);
+    }
+
+    #[test]
+    fn test_save_writes_tmux_post_add_flag() {
+        let dir = std::env::temp_dir().join(format!(
+            "owt_config_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let config = Config {
+            editor: Some("code".to_string()),
+            run_post_add_script_in_tmux: true,
+            ..Default::default()
+        };
+
+        config.save_to(&path).unwrap();
+        let saved = fs::read_to_string(&path).unwrap();
+
+        assert!(saved.contains("editor = \"code\""));
+        assert!(saved.contains("run_post_add_script_in_tmux = true"));
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

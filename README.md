@@ -130,6 +130,19 @@ owt /path/to/project
 
 ## Configuration
 
+Config file: `~/.config/owt/config.toml`
+
+```toml
+editor = "code"
+terminal = "Ghostty"
+copy_files = [".env", ".envrc"]
+
+# Disabled by default. When enabled, .owt/post-add.sh is launched in a
+# detached tmux session after worktree creation and the session exits when
+# the script completes. There is no direct-shell fallback.
+run_post_add_script_in_tmux = false
+```
+
 ### Environment Variables
 
 | Variable | Description | Default |

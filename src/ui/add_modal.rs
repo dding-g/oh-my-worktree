@@ -6,8 +6,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::App;
 use super::theme::centered_rect_with_min;
+use crate::app::App;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
@@ -45,7 +45,9 @@ pub fn render(frame: &mut Frame, app: &App) {
     // Hint for name format
     let hint = Paragraph::new(Line::from(vec![Span::styled(
         "  e.g. feature/login, hotfix/bug-123",
-        Style::default().fg(t.text_muted).add_modifier(Modifier::ITALIC),
+        Style::default()
+            .fg(t.text_muted)
+            .add_modifier(Modifier::ITALIC),
     )]));
     frame.render_widget(hint, chunks[2]);
 
