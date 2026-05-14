@@ -24,6 +24,9 @@
 # local worktrees
 .worktrees/
 
+# local agent workspace
+.sisyphus/
+
 # Node.js (release-it)
 node_modules/
 package-lock.json
