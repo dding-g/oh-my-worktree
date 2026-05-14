@@ -1,6 +1,6 @@
 {
   "name": "oh-my-worktree-dev",
-  "version": "0.8.4",
+  "version": "0.9.0",
   "private": true,
   "scripts": {
     "release": "release-it",
