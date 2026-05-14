@@ -5,8 +5,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::App;
 use super::theme::centered_rect;
+use crate::app::App;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
@@ -24,41 +24,53 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(block, area);
 
     let keybindings = vec![
-        ("Navigation", vec![
-            ("j / ↓", "Move down"),
-            ("k / ↑", "Move up"),
-            ("gg / Home", "Go to top"),
-            ("G / End", "Go to bottom"),
-            ("Ctrl+d/u", "Half page down/up"),
-            ("g", "Jump to current worktree"),
-            ("/", "Search worktrees"),
-            ("Enter", "Enter worktree (cd)"),
-        ]),
-        ("Worktree Actions", vec![
-            ("a", "Add new worktree"),
-            ("d", "Delete worktree (f: force)"),
-            ("x", "Prune stale worktrees"),
-            ("r", "Refresh list"),
-            ("s", "Sort (name/recent/status)"),
-        ]),
-        ("Git Operations", vec![
-            ("f", "Fetch remotes"),
-            ("p", "Pull from remote"),
-            ("P", "Push to remote"),
-            ("m", "Merge upstream"),
-            ("M", "Merge branch (select)"),
-        ]),
-        ("External Apps", vec![
-            ("o", "Open in editor"),
-            ("t", "Open in terminal"),
-        ]),
-        ("Other", vec![
-            ("y", "Copy path to clipboard"),
-            ("v", "Toggle verbose mode"),
-            ("c", "View config"),
-            ("?", "Show this help"),
-            ("q", "Quit"),
-        ]),
+        (
+            "Navigation",
+            vec![
+                ("j / ↓", "Move down"),
+                ("k / ↑", "Move up"),
+                ("gg / Home", "Go to top"),
+                ("G / End", "Go to bottom"),
+                ("Ctrl+d/u", "Half page down/up"),
+                ("g", "Jump to current worktree"),
+                ("/", "Search worktrees"),
+                ("Enter", "Enter worktree (cd)"),
+            ],
+        ),
+        (
+            "Worktree Actions",
+            vec![
+                ("a", "Add new worktree"),
+                ("d", "Delete worktree (f: force)"),
+                ("x", "Prune stale worktrees"),
+                ("r", "Refresh list"),
+                ("s", "Sort (name/recent/status)"),
+            ],
+        ),
+        (
+            "Git Operations",
+            vec![
+                ("f", "Fetch remotes"),
+                ("p", "Pull from remote"),
+                ("P", "Push to remote"),
+                ("m", "Merge upstream"),
+                ("M", "Merge branch (select)"),
+            ],
+        ),
+        (
+            "External Apps",
+            vec![("o", "Open in editor"), ("t", "Open in terminal")],
+        ),
+        (
+            "Other",
+            vec![
+                ("y", "Copy path to clipboard"),
+                ("v", "Toggle verbose mode"),
+                ("c", "View config"),
+                ("?", "Show this help"),
+                ("q", "Quit"),
+            ],
+        ),
     ];
 
     let mut lines = Vec::new();

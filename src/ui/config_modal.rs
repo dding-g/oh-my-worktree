@@ -11,12 +11,15 @@ use crate::config::Config;
 use crate::types::AppState;
 use crate::ui::theme::{centered_rect, Theme};
 
-pub const CONFIG_ITEM_COUNT: usize = 4;
+pub const CONFIG_ITEM_COUNT: usize = 5;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
     let (selected_index, editing) = match app.state {
-        AppState::ConfigModal { selected_index, editing } => (selected_index, editing),
+        AppState::ConfigModal {
+            selected_index,
+            editing,
+        } => (selected_index, editing),
         _ => (0, false),
     };
 
@@ -42,6 +45,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         Constraint::Length(1), // Editor
         Constraint::Length(1), // Terminal
         Constraint::Length(1), // Copy files
+        Constraint::Length(1), // Run post-add in tmux
         Constraint::Length(1), // Post-add script
         Constraint::Min(1),    // Spacing
         Constraint::Length(1), // Help
@@ -51,7 +55,9 @@ pub fn render(frame: &mut Frame, app: &App) {
     // Config path header
     let path_header = Paragraph::new(Line::from(vec![Span::styled(
         "Config File:",
-        Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(t.text_primary)
+            .add_modifier(Modifier::BOLD),
     )]));
     frame.render_widget(path_header, chunks[1]);
 
@@ -66,15 +72,63 @@ pub fn render(frame: &mut Frame, app: &App) {
     // Settings header
     let settings_header = Paragraph::new(Line::from(vec![Span::styled(
         "Settings:",
-        Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(t.text_primary)
+            .add_modifier(Modifier::BOLD),
     )]));
     frame.render_widget(settings_header, chunks[4]);
 
     // Render each config item
-    render_config_item(frame, chunks[5], "editor", &get_editor_display(app), selected_index == 0, editing && selected_index == 0, &app.input_buffer, t);
-    render_config_item(frame, chunks[6], "terminal", &get_terminal_display(app), selected_index == 1, editing && selected_index == 1, &app.input_buffer, t);
-    render_config_item(frame, chunks[7], "copy_files", &get_copy_files_display(app), selected_index == 2, editing && selected_index == 2, &app.input_buffer, t);
-    render_config_item(frame, chunks[8], "post_add_script", &get_script_display(app), selected_index == 3, false, &app.input_buffer, t);
+    render_config_item(
+        frame,
+        chunks[5],
+        "editor",
+        &get_editor_display(app),
+        selected_index == 0,
+        editing && selected_index == 0,
+        &app.input_buffer,
+        t,
+    );
+    render_config_item(
+        frame,
+        chunks[6],
+        "terminal",
+        &get_terminal_display(app),
+        selected_index == 1,
+        editing && selected_index == 1,
+        &app.input_buffer,
+        t,
+    );
+    render_config_item(
+        frame,
+        chunks[7],
+        "copy_files",
+        &get_copy_files_display(app),
+        selected_index == 2,
+        editing && selected_index == 2,
+        &app.input_buffer,
+        t,
+    );
+    render_config_item(
+        frame,
+        chunks[8],
+        "run_post_add_script_in_tmux",
+        &get_tmux_script_display(app),
+        selected_index == 3,
+        false,
+        &app.input_buffer,
+        t,
+    );
+    render_config_item(
+        frame,
+        chunks[9],
+        "post_add_script",
+        &get_script_display(app),
+        selected_index == 4,
+        false,
+        &app.input_buffer,
+        t,
+    );
 
     // Help text
     let help_text = if editing {
@@ -89,16 +143,15 @@ pub fn render(frame: &mut Frame, app: &App) {
             Span::styled("j/k", Style::default().fg(t.cyan)),
             Span::raw(" nav  "),
             Span::styled("Enter", Style::default().fg(t.cyan)),
-            Span::raw(" edit  "),
+            Span::raw(" edit/toggle  "),
             Span::styled("s", Style::default().fg(t.cyan)),
             Span::raw(" save  "),
             Span::styled("Esc", Style::default().fg(t.cyan)),
             Span::raw(" close"),
         ]
     };
-    let help = Paragraph::new(Line::from(help_text))
-        .style(Style::default().fg(t.text_muted));
-    frame.render_widget(help, chunks[10]);
+    let help = Paragraph::new(Line::from(help_text)).style(Style::default().fg(t.text_muted));
+    frame.render_widget(help, chunks[11]);
 }
 
 fn render_config_item(
@@ -132,11 +185,16 @@ fn render_config_item(
             Span::styled(cursor, label_style),
             Span::styled(format!("{}: ", label), label_style),
             Span::styled(value, Style::default().fg(t.text_primary)),
-            Span::styled(" (Enter to edit with $EDITOR)", Style::default().fg(t.text_muted)),
+            Span::styled(
+                " (Enter to edit with $EDITOR)",
+                Style::default().fg(t.text_muted),
+            ),
         ]
     } else {
         let value_style = if is_selected {
-            Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(t.text_primary)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(t.text_primary)
         };
@@ -152,11 +210,19 @@ fn render_config_item(
 }
 
 fn get_editor_display(app: &App) -> String {
-    app.config.editor.as_deref().unwrap_or("(not set)").to_string()
+    app.config
+        .editor
+        .as_deref()
+        .unwrap_or("(not set)")
+        .to_string()
 }
 
 fn get_terminal_display(app: &App) -> String {
-    app.config.terminal.as_deref().unwrap_or("(not set)").to_string()
+    app.config
+        .terminal
+        .as_deref()
+        .unwrap_or("(not set)")
+        .to_string()
 }
 
 fn get_copy_files_display(app: &App) -> String {
@@ -173,6 +239,14 @@ fn get_script_display(app: &App) -> String {
         format!("{}", script_path.display())
     } else {
         "(not found)".to_string()
+    }
+}
+
+fn get_tmux_script_display(app: &App) -> String {
+    if app.config.run_post_add_script_in_tmux {
+        "enabled".to_string()
+    } else {
+        "disabled".to_string()
     }
 }
 

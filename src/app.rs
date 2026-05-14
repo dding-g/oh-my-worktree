@@ -12,7 +12,7 @@ use crate::config::Config;
 use crate::git;
 use crate::types::{
     ActiveOp, AppMessage, AppState, ExitAction, OpKind, OpResult, ScriptStatus, SortMode, Worktree,
-    WorktreeStatus,
+    WorktreeDetails, WorktreeStatus,
 };
 use crate::ui::theme::Theme;
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
@@ -49,6 +49,7 @@ pub struct App {
     pub script_receiver: Option<mpsc::Receiver<ScriptResult>>, // Channel for script completion
     pub active_op: Option<(OpKind, mpsc::Receiver<OpResult>)>,
     pub active_op_info: Option<ActiveOp>,
+    pub selected_details: Option<WorktreeDetails>,
 }
 
 impl App {
@@ -97,7 +98,7 @@ impl App {
             None
         };
 
-        Ok(Self {
+        let mut app = Self {
             worktrees,
             selected_index,
             state: AppState::List,
@@ -124,7 +125,10 @@ impl App {
             script_receiver: None,
             active_op: None,
             active_op_info: None,
-        })
+            selected_details: None,
+        };
+        app.update_selected_details();
+        Ok(app)
     }
 
     pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
@@ -143,7 +147,7 @@ impl App {
             match rx.try_recv() {
                 Ok(result) => {
                     let status_msg = if result.success {
-                        format!("Setup script completed: {}", result.message)
+                        format!("Setup script {}", result.message)
                     } else {
                         format!("Setup script failed: {}", result.message)
                     };
@@ -216,9 +220,8 @@ impl App {
             match kind {
                 OpKind::Delete => {
                     self.worktrees.retain(|wt| wt.path != worktree_path);
-                    if self.selected_index >= self.worktrees.len() {
-                        self.selected_index = self.worktrees.len().saturating_sub(1);
-                    }
+                    self.clamp_selection_to_non_bare();
+                    self.update_selected_details();
                 }
                 OpKind::Add => {
                     self.refresh_worktrees();
@@ -229,10 +232,12 @@ impl App {
                     {
                         self.selected_index = idx;
                     }
+                    self.update_selected_details();
                     self.run_post_add_script(&worktree_path);
                 }
                 OpKind::Fetch | OpKind::Pull | OpKind::Push | OpKind::Merge => {
                     self.refresh_worktrees();
+                    self.update_selected_details();
                 }
             }
 
@@ -631,6 +636,12 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if selected == 3 {
+                        self.config.run_post_add_script_in_tmux =
+                            !self.config.run_post_add_script_in_tmux;
+                        self.message = Some(AppMessage::info(
+                            "Setting updated (press 's' to save to file)",
+                        ));
+                    } else if selected == 4 {
                         // post_add_script - open with $EDITOR
                         self.open_post_add_script_editor();
                     } else {
@@ -751,21 +762,25 @@ impl App {
     fn move_selection_up(&mut self) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
+            self.update_selected_details();
         }
     }
 
     fn move_selection_down(&mut self) {
         if self.selected_index < self.worktrees.len().saturating_sub(1) {
             self.selected_index += 1;
+            self.update_selected_details();
         }
     }
 
     fn move_to_top(&mut self) {
         self.selected_index = 0;
+        self.update_selected_details();
     }
 
     fn move_to_bottom(&mut self) {
         self.selected_index = self.worktrees.len().saturating_sub(1);
+        self.update_selected_details();
     }
 
     fn move_selection_half_page_down(&mut self) {
@@ -773,12 +788,14 @@ impl App {
         let half_page = if vh > 0 { (vh / 2) as usize } else { 10 };
         let max_index = self.worktrees.len().saturating_sub(1);
         self.selected_index = (self.selected_index + half_page).min(max_index);
+        self.update_selected_details();
     }
 
     fn move_selection_half_page_up(&mut self) {
         let vh = self.viewport_height.get();
         let half_page = if vh > 0 { (vh / 2) as usize } else { 10 };
         self.selected_index = self.selected_index.saturating_sub(half_page);
+        self.update_selected_details();
     }
 
     fn jump_to_current_worktree(&mut self) {
@@ -790,6 +807,7 @@ impl App {
             {
                 self.selected_index = idx;
                 self.message = Some(AppMessage::info("Jumped to current worktree"));
+                self.update_selected_details();
             }
         } else {
             self.message = Some(AppMessage::error("No current worktree detected"));
@@ -808,6 +826,7 @@ impl App {
                 if self.selected_index >= self.worktrees.len() {
                     self.selected_index = self.worktrees.len().saturating_sub(1);
                 }
+                self.update_selected_details();
                 self.message = Some(AppMessage::info("Refreshed"));
             }
             Err(e) => {
@@ -885,6 +904,36 @@ impl App {
                 self.selected_index = idx;
             }
         }
+        self.update_selected_details();
+    }
+
+    fn clamp_selection_to_non_bare(&mut self) {
+        if self.worktrees.is_empty() {
+            self.selected_index = 0;
+            return;
+        }
+
+        if self.selected_index >= self.worktrees.len() {
+            self.selected_index = self.worktrees.len().saturating_sub(1);
+        }
+
+        if self
+            .worktrees
+            .get(self.selected_index)
+            .map(|wt| wt.is_bare)
+            .unwrap_or(false)
+        {
+            if let Some(idx) = self.worktrees.iter().position(|wt| !wt.is_bare) {
+                self.selected_index = idx;
+            }
+        }
+    }
+
+    fn update_selected_details(&mut self) {
+        self.selected_details = self
+            .selected_worktree()
+            .filter(|wt| !wt.is_bare)
+            .and_then(|wt| git::get_worktree_details(&wt.path).ok());
     }
 
     fn add_worktree(&mut self) {
@@ -993,54 +1042,58 @@ impl App {
             return;
         }
 
+        if !self.config.run_post_add_script_in_tmux {
+            return;
+        }
+
         let worktree_name = worktree_path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let (tx, rx) = mpsc::channel();
-        let script = script_path.clone();
-        let wt_path = worktree_path.clone();
+        let session_name = format!("owt-post-add-{}-{}", std::process::id(), self.spinner_tick);
+        let command = format!(
+            "cd {} && sh {}; status=$?; tmux kill-session -t {}; exit $status",
+            shell_quote(worktree_path),
+            shell_quote(&script_path),
+            session_name
+        );
+        let output = Command::new("tmux")
+            .args(["new-session", "-d", "-s", &session_name, &command])
+            .output();
 
-        self.script_status = ScriptStatus::Running {
-            worktree_name: worktree_name.clone(),
-        };
-        self.script_receiver = Some(rx);
-
-        std::thread::spawn(move || {
-            let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string());
-            let output = Command::new(&shell)
-                .arg("-l")
-                .arg("-c")
-                .arg(format!("sh '{}'", script.display()))
-                .current_dir(&wt_path)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .output();
-
-            let result = match output {
-                Ok(out) => {
-                    if out.status.success() {
-                        ScriptResult {
-                            success: true,
-                            message: worktree_name,
-                        }
-                    } else {
-                        let stderr = String::from_utf8_lossy(&out.stderr);
-                        ScriptResult {
-                            success: false,
-                            message: stderr.trim().to_string(),
-                        }
-                    }
-                }
-                Err(e) => ScriptResult {
-                    success: false,
-                    message: e.to_string(),
-                },
-            };
-            let _ = tx.send(result);
-        });
+        match output {
+            Ok(out) if out.status.success() => {
+                let (tx, rx) = mpsc::channel();
+                self.script_status = ScriptStatus::Running {
+                    worktree_name: worktree_name.clone(),
+                };
+                self.script_receiver = Some(rx);
+                let _ = tx.send(ScriptResult {
+                    success: true,
+                    message: format!("launched in tmux for {}", worktree_name),
+                });
+                self.message = Some(AppMessage::info(format!(
+                    "Setup script launched in tmux for {}",
+                    worktree_name
+                )));
+            }
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let detail = if stderr.is_empty() { stdout } else { stderr };
+                self.message = Some(AppMessage::error(format!(
+                    "Failed to launch setup script in tmux: {}",
+                    detail
+                )));
+            }
+            Err(e) => {
+                self.message = Some(AppMessage::error(format!(
+                    "Failed to launch setup script in tmux: {}",
+                    e
+                )));
+            }
+        }
     }
 
     fn delete_selected_worktree(&mut self, delete_branch: bool, force: bool) {
@@ -1655,4 +1708,8 @@ impl App {
             display_name: display_name_for_state,
         });
     }
+}
+
+fn shell_quote(path: &std::path::Path) -> String {
+    format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }

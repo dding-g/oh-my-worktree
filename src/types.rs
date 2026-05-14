@@ -61,6 +61,12 @@ pub struct Worktree {
     pub ahead_behind: Option<AheadBehind>,
 }
 
+#[derive(Debug, Clone)]
+pub struct WorktreeDetails {
+    pub status_summary: String,
+    pub recent_commits: Vec<String>,
+}
+
 impl Worktree {
     pub fn display_name(&self) -> String {
         if self.is_bare {
@@ -82,9 +88,12 @@ impl Worktree {
 pub enum AppState {
     List,
     AddModal,
-    ConfirmDelete { delete_branch: bool, force: bool },
+    ConfirmDelete {
+        delete_branch: bool,
+        force: bool,
+    },
     ConfigModal {
-        selected_index: usize,  // 0-3 (editor, terminal, copy_files, post_add_script)
+        selected_index: usize,
         editing: bool,
     },
     HelpModal,

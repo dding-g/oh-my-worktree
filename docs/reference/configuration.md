@@ -25,6 +25,9 @@ terminal = "Ghostty"
 # Files to copy when creating a new worktree
 copy_files = [".env", ".env.local"]
 
+# Launch .owt/post-add.sh in a detached tmux session after worktree creation
+run_post_add_script_in_tmux = false
+
 # Branch type shortcuts
 [[branch_types]]
 name = "feature"
@@ -52,6 +55,7 @@ shortcut = "h"
 | `editor` | string | Editor command to open worktrees |
 | `terminal` | string | Terminal app name (macOS) or command (Linux) |
 | `copy_files` | array | Files to copy to new worktrees |
+| `run_post_add_script_in_tmux` | boolean | Run `.owt/post-add.sh` in tmux after creating a worktree |
 | `branch_types` | array | Branch type configurations |
 
 ### Branch Type Configuration
@@ -100,7 +104,7 @@ Project config overrides global config.
 
 ## Post-Add Script
 
-Create `.owt/post-add.sh` to run commands after creating a worktree:
+Create `.owt/post-add.sh` to run commands after creating a worktree, then enable tmux execution in config:
 
 ```bash
 #!/bin/bash
@@ -115,6 +119,12 @@ Make it executable:
 ```bash
 chmod +x .owt/post-add.sh
 ```
+
+```toml
+run_post_add_script_in_tmux = true
+```
+
+Post-add scripts are tmux-only. If `run_post_add_script_in_tmux` is `false`, owt does not run the script. When enabled, owt starts a detached tmux session in the new worktree and the session is removed after the script finishes.
 
 ## Editing Config in TUI
 
@@ -133,6 +143,7 @@ If no config file exists, owt uses these defaults:
 editor = "$EDITOR or vim"
 terminal = "$TERMINAL or Terminal"
 copy_files = []
+run_post_add_script_in_tmux = false
 
 [[branch_types]]
 name = "feature"

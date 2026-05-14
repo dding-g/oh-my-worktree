@@ -15,7 +15,7 @@ enum Command {
     Setup,
     Help,
     Version,
-    TestCd,  // Test command for debugging cd functionality
+    TestCd, // Test command for debugging cd functionality
 }
 
 fn main() -> Result<()> {
@@ -70,10 +70,7 @@ fn run_tui(path: PathBuf) -> Result<()> {
     let mut tty_for_control = tty.try_clone()?;
 
     crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(
-        tty_for_control,
-        crossterm::terminal::EnterAlternateScreen
-    )?;
+    crossterm::execute!(tty_for_control, crossterm::terminal::EnterAlternateScreen)?;
 
     let backend = ratatui::backend::CrosstermBackend::new(tty);
     let mut terminal = ratatui::Terminal::new(backend)?;
@@ -83,10 +80,7 @@ fn run_tui(path: PathBuf) -> Result<()> {
     let result = app.run(&mut terminal);
 
     // Restore terminal
-    crossterm::execute!(
-        tty_for_control,
-        crossterm::terminal::LeaveAlternateScreen
-    )?;
+    crossterm::execute!(tty_for_control, crossterm::terminal::LeaveAlternateScreen)?;
     crossterm::terminal::disable_raw_mode()?;
 
     // Handle exit action - write path for shell integration
@@ -143,7 +137,8 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
     let repo_name = extract_repo_name(url);
 
     // Determine paths
-    let base_dir = target_path.unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let base_dir =
+        target_path.unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     let project_dir = base_dir.join(&repo_name);
     let bare_repo_path = project_dir.join(".bare");
     let worktree_path = project_dir.join("main");
@@ -155,7 +150,8 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
     println!("  Created bare repo: {}", bare_repo_path.display());
 
     // Get default branch
-    let default_branch = git::get_default_branch(&bare_repo_path).unwrap_or_else(|_| "main".to_string());
+    let default_branch =
+        git::get_default_branch(&bare_repo_path).unwrap_or_else(|_| "main".to_string());
 
     // Create first worktree
     println!("Creating worktree for '{}'...", default_branch);
@@ -265,7 +261,10 @@ owt() {
         let content = fs::read_to_string(&config_path)?;
         if content.contains("owt()") || content.contains("owt ()") {
             println!("\n✓ Shell integration already installed!");
-            println!("  If it's not working, try: source {}", config_path.display());
+            println!(
+                "  If it's not working, try: source {}",
+                config_path.display()
+            );
             return Ok(());
         }
     }
@@ -276,7 +275,10 @@ owt() {
         .unwrap_or(false);
 
     if is_symlink {
-        println!("\n⚠ {} is a symlink (possibly managed by Nix/home-manager)", config_path.display());
+        println!(
+            "\n⚠ {} is a symlink (possibly managed by Nix/home-manager)",
+            config_path.display()
+        );
         println!("  Cannot modify directly.\n");
         println!("Add this to your shell configuration manually:\n");
         println!("{}", SHELL_FUNCTION);
@@ -290,7 +292,10 @@ owt() {
     }
 
     // Ask for confirmation
-    print!("\nAdd owt shell integration to {}? [Y/n] ", config_path.display());
+    print!(
+        "\nAdd owt shell integration to {}? [Y/n] ",
+        config_path.display()
+    );
     io::stdout().flush()?;
 
     let mut input = String::new();

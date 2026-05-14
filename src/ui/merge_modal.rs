@@ -6,9 +6,9 @@ use ratatui::{
     Frame,
 };
 
+use super::theme::centered_rect;
 use crate::app::App;
 use crate::types::AppState;
-use super::theme::centered_rect;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;

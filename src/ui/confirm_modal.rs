@@ -6,14 +6,17 @@ use ratatui::{
     Frame,
 };
 
+use super::theme::centered_rect;
 use crate::app::App;
 use crate::types::{AppState, WorktreeStatus};
-use super::theme::centered_rect;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
     let (delete_branch, force) = match app.state {
-        AppState::ConfirmDelete { delete_branch, force } => (delete_branch, force),
+        AppState::ConfirmDelete {
+            delete_branch,
+            force,
+        } => (delete_branch, force),
         _ => (false, false),
     };
 
@@ -81,9 +84,14 @@ pub fn render(frame: &mut Frame, app: &App) {
         let force_color = if force { t.red } else { t.text_muted };
         let force_opt = Paragraph::new(Line::from(vec![
             Span::styled(force_checkbox, Style::default().fg(force_color)),
-            Span::styled(" Force delete (--force)", Style::default().fg(
-                if is_dirty { t.text_primary } else { t.text_muted }
-            )),
+            Span::styled(
+                " Force delete (--force)",
+                Style::default().fg(if is_dirty {
+                    t.text_primary
+                } else {
+                    t.text_muted
+                }),
+            ),
         ]));
         frame.render_widget(force_opt, chunks[6]);
 

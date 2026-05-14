@@ -128,6 +128,19 @@ owt /path/to/project
 
 ## 설정
 
+설정 파일: `~/.config/owt/config.toml`
+
+```toml
+editor = "code"
+terminal = "Ghostty"
+copy_files = [".env", ".envrc"]
+
+# 기본값은 비활성화입니다. 활성화하면 worktree 생성 후 .owt/post-add.sh를
+# detached tmux 세션에서 실행하고, 스크립트 완료 시 세션이 종료됩니다.
+# 직접 shell 실행 fallback은 없습니다.
+run_post_add_script_in_tmux = false
+```
+
 ### 환경 변수
 
 | 변수 | 설명 | 기본값 |

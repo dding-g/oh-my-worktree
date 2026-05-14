@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::types::{AheadBehind, Worktree, WorktreeStatus};
+use crate::types::{AheadBehind, Worktree, WorktreeDetails, WorktreeStatus};
 
 /// Check for .bare folder pattern (common worktree layout)
 /// Returns the path to .bare if found
@@ -160,8 +160,7 @@ pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
         .context("Failed to get status")?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to get status: {}", stderr.trim());
+        anyhow::bail!("Failed to get status: {}", command_failure_detail(&output));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -280,8 +279,10 @@ pub fn add_worktree(
         .context("Failed to add worktree")?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to add worktree: {}", stderr.trim());
+        anyhow::bail!(
+            "Failed to add worktree: {}",
+            command_failure_detail(&output)
+        );
     }
 
     ensure_worktree_is_usable(worktree_path)?;
@@ -455,8 +456,10 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
         .context("Failed to remove worktree")?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to remove worktree: {}", stderr.trim());
+        anyhow::bail!(
+            "Failed to remove worktree: {}",
+            command_failure_detail(&output)
+        );
     }
 
     Ok(())
@@ -531,6 +534,98 @@ pub fn get_last_commit_time(path: &Path) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+pub fn get_worktree_details(path: &Path) -> Result<WorktreeDetails> {
+    ensure_worktree_is_usable(path)?;
+
+    Ok(WorktreeDetails {
+        status_summary: get_status_summary(path)?,
+        recent_commits: get_recent_commit_graph(path, 8)?,
+    })
+}
+
+pub fn get_status_summary(path: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "status",
+            "--short",
+            "--branch",
+        ])
+        .output()
+        .context("Failed to get status summary")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to get status summary: {}",
+            command_failure_detail(&output)
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines();
+    let branch = lines
+        .next()
+        .map(|line| line.trim_start_matches("## ").to_string())
+        .unwrap_or_else(|| "unknown branch".to_string());
+    let changed = lines.count();
+
+    if changed == 0 {
+        Ok(format!("{} · clean", branch))
+    } else {
+        Ok(format!(
+            "{} · {} changed file{}",
+            branch,
+            changed,
+            if changed == 1 { "" } else { "s" }
+        ))
+    }
+}
+
+pub fn get_recent_commit_graph(path: &Path, limit: usize) -> Result<Vec<String>> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "log",
+            "--graph",
+            "--decorate",
+            "--oneline",
+            &format!("-n{}", limit),
+        ])
+        .output()
+        .context("Failed to get recent commits")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to get recent commits: {}",
+            command_failure_detail(&output)
+        );
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| line.to_string())
+        .collect())
+}
+
+fn command_failure_detail(output: &std::process::Output) -> String {
+    let status = output
+        .status
+        .code()
+        .map(|code| code.to_string())
+        .unwrap_or_else(|| "terminated by signal".to_string());
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    match (stdout.is_empty(), stderr.is_empty()) {
+        (true, true) => format!("exit {}", status),
+        (false, true) => format!("exit {}; stdout: {}", status, stdout),
+        (true, false) => format!("exit {}; stderr: {}", status, stderr),
+        (false, false) => format!("exit {}; stderr: {}; stdout: {}", status, stderr, stdout),
+    }
 }
 
 pub fn get_ahead_behind(path: &Path) -> Option<AheadBehind> {
@@ -747,7 +842,7 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_worktree, list_worktrees};
+    use super::{add_worktree, get_worktree_details, list_worktrees};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
@@ -1012,6 +1107,25 @@ mod tests {
 
         assert_worktree_usable(&worktree_path);
         assert_worktree_config_marks_non_bare(&worktree_path);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn worktree_details_include_status_summary_and_recent_commits() {
+        let base = temp_dir("worktree_details");
+        let bare_path = base.join("test.bare");
+        let branch = create_test_bare_repo(&bare_path);
+        let worktree_path = base.join("main");
+
+        add_worktree(&bare_path, &branch, &worktree_path, None).unwrap();
+        let details = get_worktree_details(&worktree_path).unwrap();
+
+        assert!(details.status_summary.contains("clean"));
+        assert!(details
+            .recent_commits
+            .iter()
+            .any(|line| line.contains("Initial commit")));
 
         let _ = fs::remove_dir_all(&base);
     }
