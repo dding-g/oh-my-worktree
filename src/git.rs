@@ -4,6 +4,16 @@ use std::process::Command;
 
 use crate::types::{AheadBehind, Worktree, WorktreeDetails, WorktreeStatus};
 
+fn git_command() -> Command {
+    let mut command = Command::new("git");
+    command
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_COMMON_DIR");
+    command
+}
+
 /// Check for .bare folder pattern (common worktree layout)
 /// Returns the path to .bare if found
 pub fn find_bare_in_parent(path: &Path) -> Option<PathBuf> {
@@ -17,7 +27,7 @@ pub fn find_bare_in_parent(path: &Path) -> Option<PathBuf> {
 }
 
 pub fn is_bare_repo(path: &Path) -> Result<bool> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &path.to_string_lossy(),
@@ -32,7 +42,7 @@ pub fn is_bare_repo(path: &Path) -> Result<bool> {
 }
 
 pub fn is_git_repo(path: &Path) -> bool {
-    Command::new("git")
+    git_command()
         .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-dir"])
         .output()
         .map(|o| o.status.success())
@@ -41,7 +51,7 @@ pub fn is_git_repo(path: &Path) -> bool {
 
 /// Get the common git directory (bare repo root for worktrees)
 pub fn get_git_common_dir(path: &Path) -> Result<PathBuf> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &path.to_string_lossy(),
@@ -66,7 +76,7 @@ pub fn get_git_common_dir(path: &Path) -> Result<PathBuf> {
 }
 
 pub fn list_worktrees(bare_repo_path: &Path) -> Result<Vec<Worktree>> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -154,7 +164,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
 pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
     ensure_worktree_is_usable(path)?;
 
-    let output = Command::new("git")
+    let output = git_command()
         .args(["-C", &path.to_string_lossy(), "status", "--porcelain"])
         .output()
         .context("Failed to get status")?;
@@ -251,7 +261,7 @@ pub fn add_worktree(
         }
     }
 
-    let output = Command::new("git")
+    let output = git_command()
         .args(&args)
         .output()
         .context("Failed to add worktree")?;
@@ -269,7 +279,7 @@ pub fn add_worktree(
 }
 
 fn ref_exists(bare_repo_path: &Path, reference: &str) -> bool {
-    Command::new("git")
+    git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -284,7 +294,7 @@ fn ref_exists(bare_repo_path: &Path, reference: &str) -> bool {
 }
 
 fn has_origin_remote(bare_repo_path: &Path) -> bool {
-    Command::new("git")
+    git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -302,7 +312,7 @@ fn remote_branch_exists_on_origin(bare_repo_path: &Path, branch: &str) -> Result
         return Ok(false);
     }
 
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -331,7 +341,7 @@ pub fn fetch_remote_branch(bare_repo_path: &Path, branch: &str) -> Result<bool> 
     }
 
     let refspec = format!("refs/heads/{}:refs/remotes/origin/{}", branch, branch);
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -362,7 +372,7 @@ fn resolve_base_ref(bare_repo_path: &Path, base_branch: Option<&str>) -> Option<
 }
 
 fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
-    let bare_check = Command::new("git")
+    let bare_check = git_command()
         .args([
             "-C",
             &worktree_path.to_string_lossy(),
@@ -382,7 +392,7 @@ fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let git_dir_output = Command::new("git")
+    let git_dir_output = git_command()
         .args([
             "-C",
             &worktree_path.to_string_lossy(),
@@ -415,7 +425,7 @@ fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
             })?
     };
 
-    let fix_output = Command::new("git")
+    let fix_output = git_command()
         .arg(format!("--git-dir={}", resolved_git_dir.display()))
         .arg(format!("--work-tree={}", worktree_path.display()))
         .args(["config", "--worktree", "core.bare", "false"])
@@ -430,7 +440,7 @@ fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
         );
     }
 
-    let verify_output = Command::new("git")
+    let verify_output = git_command()
         .args([
             "-C",
             &worktree_path.to_string_lossy(),
@@ -500,7 +510,7 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
 
     args.push(&*worktree_str);
 
-    let output = Command::new("git")
+    let output = git_command()
         .args(&args)
         .output()
         .context("Failed to remove worktree")?;
@@ -516,7 +526,7 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
 }
 
 pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -539,7 +549,7 @@ pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
 pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result<()> {
     let flag = if force { "-D" } else { "-d" };
 
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -560,7 +570,7 @@ pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result
 
 /// Fetch only the remote tracking branch for a specific worktree
 pub fn fetch_worktree(worktree_path: &Path) -> Result<()> {
-    let output = Command::new("git")
+    let output = git_command()
         .args(["-C", &worktree_path.to_string_lossy(), "fetch", "origin"])
         .output()
         .context("Failed to fetch")?;
@@ -574,7 +584,7 @@ pub fn fetch_worktree(worktree_path: &Path) -> Result<()> {
 }
 
 pub fn get_last_commit_time(path: &Path) -> Result<String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args(["-C", &path.to_string_lossy(), "log", "-1", "--format=%ar"])
         .output()
         .context("Failed to get last commit time")?;
@@ -596,7 +606,7 @@ pub fn get_worktree_details(path: &Path) -> Result<WorktreeDetails> {
 }
 
 pub fn get_status_summary(path: &Path) -> Result<String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &path.to_string_lossy(),
@@ -635,7 +645,7 @@ pub fn get_status_summary(path: &Path) -> Result<String> {
 }
 
 pub fn get_recent_commit_graph(path: &Path, limit: usize) -> Result<Vec<String>> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &path.to_string_lossy(),
@@ -680,7 +690,7 @@ fn command_failure_detail(output: &std::process::Output) -> String {
 
 pub fn get_ahead_behind(path: &Path) -> Option<AheadBehind> {
     // Get the upstream tracking branch
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &path.to_string_lossy(),
@@ -709,7 +719,7 @@ pub fn get_ahead_behind(path: &Path) -> Option<AheadBehind> {
 }
 
 pub fn clone_bare(url: &str, path: &Path) -> Result<()> {
-    let output = Command::new("git")
+    let output = git_command()
         .args(["clone", "--bare", url, &path.to_string_lossy()])
         .output()
         .context("Failed to clone repository")?;
@@ -724,7 +734,7 @@ pub fn clone_bare(url: &str, path: &Path) -> Result<()> {
 
 pub fn get_default_branch(bare_repo_path: &Path) -> Result<String> {
     // Try to get the default branch from HEAD
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
@@ -744,7 +754,7 @@ pub fn get_default_branch(bare_repo_path: &Path) -> Result<String> {
 
     // Fallback: try common branch names
     for branch in &["main", "master"] {
-        let check = Command::new("git")
+        let check = git_command()
             .args([
                 "-C",
                 &bare_repo_path.to_string_lossy(),
@@ -766,7 +776,7 @@ pub fn get_default_branch(bare_repo_path: &Path) -> Result<String> {
 
 /// Pull changes from remote for a worktree
 pub fn pull_worktree(worktree_path: &Path) -> Result<String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args(["-C", &worktree_path.to_string_lossy(), "pull"])
         .output()
         .context("Failed to pull")?;
@@ -782,7 +792,7 @@ pub fn pull_worktree(worktree_path: &Path) -> Result<String> {
 
 /// Push changes to remote for a worktree
 pub fn push_worktree(worktree_path: &Path) -> Result<String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args(["-C", &worktree_path.to_string_lossy(), "push"])
         .output()
         .context("Failed to push")?;
@@ -807,7 +817,7 @@ pub fn push_worktree(worktree_path: &Path) -> Result<String> {
 /// Finds the configured upstream and merges it
 pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
     // First, get the upstream branch
-    let upstream_output = Command::new("git")
+    let upstream_output = git_command()
         .args([
             "-C",
             &worktree_path.to_string_lossy(),
@@ -827,7 +837,7 @@ pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
         .to_string();
 
     // Merge the upstream
-    let output = Command::new("git")
+    let output = git_command()
         .args(["-C", &worktree_path.to_string_lossy(), "merge", &upstream])
         .output()
         .context("Failed to merge upstream")?;
@@ -843,7 +853,7 @@ pub fn merge_upstream(worktree_path: &Path) -> Result<String> {
 
 /// Merge a specific branch into a worktree
 pub fn merge_branch(worktree_path: &Path, source_branch: &str) -> Result<String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &worktree_path.to_string_lossy(),
@@ -864,7 +874,7 @@ pub fn merge_branch(worktree_path: &Path, source_branch: &str) -> Result<String>
 
 /// List local branches for merge selection
 pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
-    let output = Command::new("git")
+    let output = git_command()
         .args([
             "-C",
             &bare_repo_path.to_string_lossy(),
