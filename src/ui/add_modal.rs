@@ -11,8 +11,8 @@ use crate::app::App;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
-    // min: 5 inner rows + 2 border = 7
-    let area = centered_rect_with_min(60, 28, 7, frame.area());
+    // min: 6 inner rows + 2 border = 8
+    let area = centered_rect_with_min(60, 32, 8, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
@@ -29,6 +29,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         Constraint::Length(1), // Spacing
         Constraint::Length(1), // Label + Input
         Constraint::Length(1), // Hint
+        Constraint::Length(1), // Base branch
         Constraint::Min(1),    // Spacing
         Constraint::Length(1), // Help
     ])
@@ -51,6 +52,12 @@ pub fn render(frame: &mut Frame, app: &App) {
     )]));
     frame.render_widget(hint, chunks[2]);
 
+    let base_branch = Paragraph::new(Line::from(vec![Span::styled(
+        format!("  {}", app.add_modal_base_label()),
+        Style::default().fg(t.text_muted),
+    )]));
+    frame.render_widget(base_branch, chunks[3]);
+
     // Help text
     let help = Paragraph::new(Line::from(vec![
         Span::styled("Enter", Style::default().fg(t.cyan)),
@@ -59,5 +66,5 @@ pub fn render(frame: &mut Frame, app: &App) {
         Span::raw(" cancel"),
     ]))
     .style(Style::default().fg(t.text_muted));
-    frame.render_widget(help, chunks[4]);
+    frame.render_widget(help, chunks[5]);
 }
