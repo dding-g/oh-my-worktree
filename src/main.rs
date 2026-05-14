@@ -87,8 +87,7 @@ fn run_tui(path: PathBuf) -> Result<()> {
     match &app.exit_action {
         types::ExitAction::ChangeDirectory(worktree_path) => {
             if let Some(ref output_path) = output_file {
-                // Write to temp file for shell integration
-                let mut file = File::create(output_path)?;
+                let mut file = open_shell_output_file(output_path)?;
                 writeln!(file, "{}", worktree_path.display())?;
                 // Log for debugging
                 eprintln!("→ {}", worktree_path.display());
@@ -108,7 +107,6 @@ fn run_tui(path: PathBuf) -> Result<()> {
 }
 
 fn run_test_cd() -> Result<()> {
-    use std::fs::File;
     use std::io::Write;
 
     // This tests the cd functionality without TUI
@@ -121,7 +119,7 @@ fn run_test_cd() -> Result<()> {
 
     if let Some(ref output_path) = output_file {
         eprintln!("Writing to: {}", output_path);
-        let mut file = File::create(output_path)?;
+        let mut file = open_shell_output_file(output_path)?;
         writeln!(file, "{}", test_path.display())?;
         eprintln!("Write successful!");
     } else {
@@ -130,6 +128,29 @@ fn run_test_cd() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn open_shell_output_file(output_path: &str) -> Result<std::fs::File> {
+    let metadata = std::fs::symlink_metadata(output_path)?;
+    let file_type = metadata.file_type();
+
+    if file_type.is_symlink() || !file_type.is_file() {
+        anyhow::bail!("OWT_OUTPUT_FILE must point to an existing regular file");
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        if metadata.permissions().mode() & 0o077 != 0 {
+            anyhow::bail!("OWT_OUTPUT_FILE must not be group/world accessible");
+        }
+    }
+
+    Ok(std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(output_path)?)
 }
 
 fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
