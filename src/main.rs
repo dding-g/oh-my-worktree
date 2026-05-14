@@ -220,15 +220,23 @@ fn run_setup() -> Result<()> {
     const SHELL_FUNCTION: &str = r#"
 # owt shell integration - enables 'Enter' key to change directory
 owt() {
-  local tmpfile=$(mktemp)
-  trap "rm -f '$tmpfile'" EXIT
-  OWT_OUTPUT_FILE="$tmpfile" command owt "$@"
-  if [[ -f "$tmpfile" ]]; then
-    local result=$(cat "$tmpfile")
-    if [[ -d "$result" ]]; then
-      cd "$result"
+  local output_file
+  output_file=$(mktemp) || return
+
+  OWT_OUTPUT_FILE="$output_file" command owt "$@"
+  local exit_code=$?
+
+  if [ -f "$output_file" ]; then
+    local target
+    target=$(cat "$output_file")
+    rm -f "$output_file"
+
+    if [ -n "$target" ] && [ -d "$target" ]; then
+      cd "$target" || return
     fi
   fi
+
+  return $exit_code
 }
 "#;
 
@@ -365,7 +373,7 @@ fn parse_args() -> Command {
         }
         "init" => Command::Init,
         "setup" => Command::Setup,
-        "test-cd" => Command::TestCd,
+        "test-cd" | "--test-cd" => Command::TestCd,
         arg if arg.starts_with('-') => {
             // Handle flags for TUI mode
             let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

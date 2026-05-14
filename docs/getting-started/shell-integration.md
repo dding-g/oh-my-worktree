@@ -25,15 +25,19 @@ Add to `~/.bashrc`:
 
 ```bash
 owt() {
-    local output_file=$(mktemp)
+    local output_file
+    output_file=$(mktemp) || return
+
     OWT_OUTPUT_FILE="$output_file" command owt "$@"
     local exit_code=$?
 
     if [ -f "$output_file" ]; then
-        local target=$(cat "$output_file")
+        local target
+        target=$(cat "$output_file")
         rm -f "$output_file"
+
         if [ -n "$target" ] && [ -d "$target" ]; then
-            cd "$target"
+            cd "$target" || return
         fi
     fi
 
@@ -47,15 +51,19 @@ Add to `~/.zshrc`:
 
 ```zsh
 owt() {
-    local output_file=$(mktemp)
+    local output_file
+    output_file=$(mktemp) || return
+
     OWT_OUTPUT_FILE="$output_file" command owt "$@"
     local exit_code=$?
 
     if [ -f "$output_file" ]; then
-        local target=$(cat "$output_file")
+        local target
+        target=$(cat "$output_file")
         rm -f "$output_file"
+
         if [ -n "$target" ] && [ -d "$target" ]; then
-            cd "$target"
+            cd "$target" || return
         fi
     fi
 
