@@ -9,12 +9,23 @@ nav_order: 2
 
 Get up and running with owt in minutes.
 
-## New Project
+## Existing Regular Repository
 
-The easiest way to start is with `owt clone`:
+If you already have a regular Git repository, start there. You do not need to convert it to a bare repository.
 
 ```bash
-# Clone any Git repository as a bare repo with worktree structure
+cd /path/to/regular-git-repo
+owt
+```
+
+When you add a worktree from a regular repository, `owt` creates it under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` if you want a different root directory.
+
+## New Project with `.bare`
+
+Use `owt clone` when you want the project-local `.bare` sibling layout:
+
+```bash
+# Clone any Git repository into the .bare sibling layout
 owt clone https://github.com/user/repo.git
 
 # This creates:
@@ -27,9 +38,7 @@ cd repo/main
 owt
 ```
 
-## Convert Existing Project
-
-If you already have a regular Git repository, you can run `owt` directly from that repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
+## Optional: Convert Existing Project to `.bare`
 
 If you prefer the `.bare` sibling layout, use `owt init` for a guided conversion:
 
@@ -37,7 +46,7 @@ If you prefer the `.bare` sibling layout, use `owt init` for a guided conversion
 owt init
 ```
 
-This will show step-by-step instructions for converting your repository.
+This shows step-by-step instructions for converting your repository. Conversion is optional; regular repositories are supported directly.
 
 ### Manual Conversion
 

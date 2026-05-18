@@ -2,13 +2,26 @@
 
 [한국어](./README.ko.md) | [English](./README.md)
 
-Git worktree를 쉽게 관리할 수 있는 TUI 도구입니다.
+일반 Git repository와 bare `.bare` layout 모두에서 Git worktree를 관리할 수 있는 TUI 도구입니다.
 
 <img width="786" height="580" alt="Image" src="./owt.png" />
 
 ## Git Worktree란?
 
 Git worktree를 사용하면 하나의 저장소에서 여러 브랜치를 동시에 체크아웃할 수 있습니다. stash나 branch 전환 없이 여러 작업을 병렬로 진행할 수 있습니다.
+
+일반 repository layout:
+
+```
+repo/                       # 기존 non-bare repository
+└── .git/
+
+~/.owt/worktree/repo/
+├── feature-auth/           # owt가 생성한 새 worktree
+└── hotfix-payment/         # 또 다른 worktree
+```
+
+Bare `.bare` layout:
 
 ```
 project/
@@ -20,15 +33,15 @@ project/
 
 **owt**는 이 워크플로우를 간단한 TUI로 관리할 수 있게 해줍니다.
 
-일반 non-bare Git 저장소 안에서도 `owt`를 실행할 수 있습니다. 이 경우 새 worktree는 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성되며, 설정으로 변경할 수 있습니다.
+기존 일반 Git repository 안에서 `owt`를 바로 실행하거나, `owt clone`으로 project-local `.bare` sibling layout을 만들 수 있습니다. 일반 repository에서 새 worktree를 만들면 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성되며, `worktree_root` 설정으로 변경할 수 있습니다.
 
 ## 명령어
 
 | 명령어 | 설명 |
 |--------|------|
 | `owt` | TUI 실행 (기본) |
-| `owt clone <URL> [PATH]` | bare repo 클론 + 첫 worktree 생성 |
-| `owt init` | 기존 repo를 bare 구조로 변환 가이드 |
+| `owt clone <URL> [PATH]` | `.bare` layout으로 clone + 첫 worktree 생성 |
+| `owt init` | 기존 repo를 `.bare` layout으로 변환하는 가이드 표시 |
 | `owt setup` | 쉘 통합 설치 |
 
 ## 설치
@@ -62,20 +75,9 @@ cargo build --release
 
 ## 시작하기
 
-### 새 프로젝트
+### 기존 일반 Repository
 
-```bash
-# bare repo로 클론 + 첫 번째 worktree 자동 생성
-owt clone https://github.com/user/repo.git
-
-# TUI 실행
-cd repo/main
-owt
-```
-
-### 기존 프로젝트 변환
-
-기존 일반 Git 저장소 안에서도 `owt`를 바로 실행할 수 있습니다. 먼저 bare repository로 변환할 필요가 없습니다.
+이미 작업 중인 repository에서 바로 시작할 수 있습니다. 변환은 필요하지 않습니다.
 
 ```bash
 cd /path/to/regular-git-repo
@@ -83,6 +85,19 @@ owt
 ```
 
 일반 repository에서 새 worktree를 만들면 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성됩니다. 다른 위치를 쓰고 싶다면 `worktree_root`를 설정하세요.
+
+### `.bare`로 새 프로젝트 시작
+
+```bash
+# .bare sibling layout으로 clone + 첫 번째 worktree 자동 생성
+owt clone https://github.com/user/repo.git
+
+# TUI 실행
+cd repo/main
+owt
+```
+
+### 선택 사항: 기존 프로젝트를 `.bare`로 변환
 
 `.bare` sibling 구조를 선호한다면 다음 명령을 실행하세요:
 
@@ -172,7 +187,7 @@ export TERMINAL=Ghostty
 ## 요구사항
 
 - Git 2.5+ (worktree 지원)
-- Bare repository
+- 일반 Git repository 또는 bare repository layout
 
 ## 라이선스
 

@@ -6,7 +6,7 @@ nav_order: 1
 
 # owt (oh-my-worktree)
 
-A TUI tool for managing Git worktrees in bare and regular repositories.
+A TUI tool for managing Git worktrees from either regular repositories or bare `.bare` layouts.
 {: .fs-6 .fw-300 }
 
 [Get Started](/oh-my-worktree/getting-started/installation){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
@@ -29,6 +29,19 @@ A TUI tool for managing Git worktrees in bare and regular repositories.
 ## What are Git Worktrees?
 
 Git worktrees allow you to check out multiple branches simultaneously from a single repository. This means you can work on multiple features, review PRs, or fix hotfixes in parallel without stashing or switching branches.
+
+Regular repository layout:
+
+```
+repo/                       # existing non-bare repository
+└── .git/
+
+~/.owt/worktree/repo/
+├── feature-auth/           # new worktree created by owt
+└── hotfix-payment/         # another worktree
+```
+
+Bare `.bare` layout:
 
 ```
 project/
@@ -53,10 +66,14 @@ project/
 # Install via npm
 npm install -g oh-my-worktree
 
-# Clone a repo as bare + worktree
+# Run directly inside an existing regular Git repository
+cd /path/to/regular-git-repo
+owt
+
+# Or clone into the .bare sibling layout
 owt clone https://github.com/user/repo.git
 
-# Navigate into a worktree and launch
+# Navigate into the first .bare worktree and launch
 cd repo/main
 owt
 ```

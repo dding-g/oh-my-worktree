@@ -4,7 +4,7 @@ This file provides guidance to Codex-style coding agents when working in this re
 
 ## Project Overview
 
-`owt` (oh-my-worktree) is a Rust TUI CLI for managing Git worktrees in bare repositories.
+`owt` (oh-my-worktree) is a Rust TUI CLI for managing Git worktrees in both regular non-bare repositories and bare repository layouts.
 
 - Runtime: Rust 2021
 - UI stack: `ratatui` + `crossterm`
@@ -40,11 +40,20 @@ cargo fmt
 - `src/types.rs`: shared app/domain types
 - `src/ui/`: TUI rendering (`main_view`, `add_modal`, `confirm_modal`, `help_modal`, etc.)
 
+## Repository Layout Policy
+
+- Regular non-bare repositories are first-class: users can run `owt` directly without converting to a bare repository.
+- In regular repositories, new worktrees default to `~/.owt/worktree/<repo-name>/` unless `worktree_root` is configured.
+- The `.bare` sibling layout remains supported and is the layout created by `owt clone`; describe it as a recommended project-local layout, not the only supported product shape.
+- `owt init` is a conversion guide for users who prefer `.bare`, not a prerequisite for using `owt`.
+- Keep the Korean SSOT policy in `docs/ssot/01-repository-worktree-policy.md` aligned with README and usage documentation when changing repository-layout behavior or positioning.
+
 ## Development Conventions
 
 - Preserve existing module boundaries: UI in `src/ui`, git behavior in `src/git.rs`.
 - Prefer minimal, focused changes over broad refactors.
 - When changing keybindings or user-facing behavior, update relevant docs (`README.md`, `README.ko.md`, `docs/`).
+- When changing repository-layout behavior or wording, update both `README.md` and `README.ko.md`, then verify `docs/ssot/01-repository-worktree-policy.md` still matches the behavior.
 - For git/worktree behavior changes, add or update regression tests first.
 
 ## Testing Expectations

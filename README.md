@@ -2,7 +2,7 @@
 
 [한국어](./README.ko.md) | [English](./README.md)
 
-A TUI tool for managing Git worktrees in bare and regular repositories.
+A TUI tool for managing Git worktrees from either regular repositories or bare `.bare` layouts.
 
 **[GitHub](https://github.com/dding-g/oh-my-worktree)**
 
@@ -11,6 +11,19 @@ A TUI tool for managing Git worktrees in bare and regular repositories.
 ## What is Git Worktree?
 
 Git worktree allows you to check out multiple branches simultaneously from a single repository. Work on multiple tasks in parallel without stashing or switching branches.
+
+Regular repository layout:
+
+```
+repo/                       # existing non-bare repository
+└── .git/
+
+~/.owt/worktree/repo/
+├── feature-auth/           # new worktree created by owt
+└── hotfix-payment/         # another worktree
+```
+
+Bare `.bare` layout:
 
 ```
 project/
@@ -22,15 +35,15 @@ project/
 
 **owt** makes this workflow effortless with a simple TUI.
 
-You can also run `owt` inside a regular non-bare Git repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default unless you configure another root.
+Run `owt` directly inside an existing regular Git repository, or use `owt clone` to create the project-local `.bare` sibling layout. In regular repositories, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default unless you configure another `worktree_root`.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `owt` | Launch TUI (default) |
-| `owt clone <URL> [PATH]` | Clone as bare repo + create first worktree |
-| `owt init` | Guide to convert existing repo to bare structure |
+| `owt clone <URL> [PATH]` | Clone into the `.bare` layout + create the first worktree |
+| `owt init` | Show a guide for converting an existing repo to the `.bare` layout |
 | `owt setup` | Install shell integration |
 
 ## Installation
@@ -64,20 +77,9 @@ cargo build --release
 
 ## Getting Started
 
-### New Project
+### Existing Regular Repository
 
-```bash
-# Clone as bare repo + create first worktree automatically
-owt clone https://github.com/user/repo.git
-
-# Run TUI
-cd repo/main
-owt
-```
-
-### Convert Existing Project
-
-You can run `owt` directly inside an existing regular Git repository. You do not need to convert it to a bare repository first.
+Start where you already work. No conversion is required.
 
 ```bash
 cd /path/to/regular-git-repo
@@ -85,6 +87,19 @@ owt
 ```
 
 When you create a worktree from a regular repository, `owt` creates it under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` if you want a different location.
+
+### New Project with `.bare`
+
+```bash
+# Clone into the .bare sibling layout + create the first worktree automatically
+owt clone https://github.com/user/repo.git
+
+# Run TUI
+cd repo/main
+owt
+```
+
+### Optional: Convert Existing Project to `.bare`
 
 If you prefer the `.bare` sibling layout, run:
 
@@ -174,7 +189,7 @@ export TERMINAL=Ghostty
 ## Requirements
 
 - Git 2.5+ (worktree support)
-- Bare repository
+- A regular Git repository or a bare repository layout
 
 ## License
 

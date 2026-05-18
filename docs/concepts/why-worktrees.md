@@ -26,7 +26,7 @@ This gets especially painful when:
 
 ## The Solution: Worktrees
 
-With worktrees, each branch has its own directory:
+With worktrees, each branch has its own directory. In the `.bare` layout, those directories are project-local siblings:
 
 ```
 project/
@@ -41,6 +41,8 @@ Now you can:
 - **Keep environments** for each branch
 - **Run multiple branches** simultaneously
 - **Compare code** side by side
+
+You can also run `owt` from a regular non-bare repository. In that layout, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
 
 ## Common Workflows
 

@@ -74,7 +74,7 @@ git worktree add main main
 
 ## Alternative Structures
 
-owt also supports traditional bare repository layouts:
+The `.bare` pattern is not required. `owt` also supports traditional bare repository layouts:
 
 ```
 # Traditional layout
@@ -83,6 +83,6 @@ project-main/       <- worktree
 project-feature/    <- worktree
 ```
 
-For regular non-bare repositories, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` to choose another root directory.
+For regular non-bare repositories, run `owt` directly from the existing repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` to choose another root directory.
 
-However, the `.bare` pattern is still recommended for a cleaner project-local structure.
+Choose the `.bare` pattern when you want a cleaner project-local sibling structure.

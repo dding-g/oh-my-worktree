@@ -54,4 +54,4 @@ owt --version
 ## Requirements
 
 - **Git 2.5+** (worktree support)
-- A Git repository. The `.bare` layout is recommended, but regular non-bare repositories are supported.
+- A regular Git repository or a bare repository layout. The `.bare` layout is recommended when you want project-local sibling worktrees.
