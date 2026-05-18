@@ -47,6 +47,16 @@ cargo fmt
 - The `.bare` sibling layout remains supported and is the layout created by `owt clone`; describe it as a recommended project-local layout, not the only supported product shape.
 - `owt init` is a conversion guide for users who prefer `.bare`, not a prerequisite for using `owt`.
 - Keep the Korean SSOT policy in `docs/ssot/01-repository-worktree-policy.md` aligned with README and usage documentation when changing repository-layout behavior or positioning.
+- Treat `docs/ssot/00-ssot-index.md` as the entrypoint for product/behavior policy contracts; update the relevant SSOT whenever CLI commands, TUI use cases, Git operation safety, config trust boundaries, shell integration, or docs/release asset policy changes.
+
+## Compound Engineering
+
+- Before non-trivial changes, read `docs/solutions/README.md` and the relevant compound docs under `docs/solutions/` to reuse prior project knowledge.
+- Add or refresh a `docs/solutions/` compound doc when a change creates durable knowledge about architecture, worktree behavior, config trust boundaries, shell integration, docs policy, release assets, or AI-agent workflow.
+- Use `docs/solutions/best-practices/ai-agent-project-map.md` as the fast project map for future AI agents.
+- Use `docs/solutions/documentation-gaps/repository-layout-documentation-contract.md` when changing README, docs, npm README, AGENTS, CLAUDE, or SSOT wording about regular repositories and `.bare` layouts.
+- Use `docs/solutions/developer-experience/compound-engineering-workflow.md` to decide whether knowledge belongs in `AGENTS.md`, `docs/ssot/`, `docs/solutions/`, or user-facing docs.
+- Compound docs should include YAML frontmatter, concrete file references, when-to-apply guidance, and related links. Keep them durable and pattern-focused rather than session transcripts.
 
 ## Development Conventions
 

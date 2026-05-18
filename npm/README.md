@@ -1,6 +1,6 @@
 # owt (oh-my-worktree)
 
-A TUI tool for managing Git worktrees in bare and regular repositories.
+A TUI tool for managing Git worktrees from either regular repositories or bare `.bare` layouts.
 
 Run it from a `.bare` worktree layout or from a regular non-bare Git repository. For regular repositories, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
 
@@ -19,7 +19,11 @@ npx oh-my-worktree
 ## Quick Start
 
 ```bash
-# Clone a repository as bare with first worktree
+# Run directly inside an existing regular Git repository
+cd /path/to/regular-git-repo
+owt
+
+# Or clone into the .bare sibling layout
 owt clone https://github.com/user/repo.git
 cd repo/main
 

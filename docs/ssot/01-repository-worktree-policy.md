@@ -2,8 +2,10 @@
 title: owt Repository Worktree Policy
 description: regular repository와 bare `.bare` layout에서 `owt`가 보장하는 worktree 동작 계약
 ref:
+  - docs/ssot/00-ssot-index.md
   - README.md
   - README.ko.md
+  - npm/README.md
   - docs/index.md
   - docs/getting-started/quick-start.md
   - docs/usage/worktrees.md
@@ -31,6 +33,12 @@ document_contract:
     - Rust module internals
     - release process
     - generated site styling
+  related_ssot:
+    config_trust: docs/ssot/02-configuration-trust-boundary-policy.md
+    cli_tui_use_cases: docs/ssot/03-cli-tui-use-case-contract.md
+    git_operations: docs/ssot/04-git-operation-safety-policy.md
+    shell_integration: docs/ssot/05-shell-integration-exit-contract.md
+    docs_release_assets: docs/ssot/06-documentation-release-asset-policy.md
 ```
 
 # 2. 범위
@@ -140,6 +148,7 @@ readme_positioning:
 | `docs/concepts/bare-repository.md` | bare repository를 project-local sibling workflow에 유용한 선택지로 설명한다. |
 | `docs/concepts/worktree-pattern.md` | `.bare`는 supported/recommended layout이지 유일한 layout이 아님을 명시한다. |
 | `docs/reference/configuration.md` | `worktree_root`가 regular repository worktree root를 바꾸는 설정임을 명시한다. |
+| `npm/README.md` | package registry용 축약 문서에서도 regular repository와 `.bare` layout을 둘 다 지원한다고 설명한다. |
 
 # 7. 변경 검증 규칙
 
