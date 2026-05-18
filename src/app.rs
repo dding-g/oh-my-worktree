@@ -1819,6 +1819,115 @@ fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let id = std::process::id();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("owt_app_unit_{}_{}_{}", name, id, ts));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn git_cmd() -> Command {
+        let mut cmd = Command::new("git");
+        cmd.env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR");
+        cmd
+    }
+
+    fn assert_git_success(output: std::process::Output, context: &str) {
+        assert!(
+            output.status.success(),
+            "{}: {}",
+            context,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn create_test_project(base: &Path) -> (PathBuf, PathBuf) {
+        let source_path = base.join("source");
+        let bare_path = base.join("repo").join(".bare");
+        let main_path = base.join("repo").join("main");
+
+        fs::create_dir_all(&source_path).unwrap();
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source_path)
+                .args(["init", "-b", "main"])
+                .output()
+                .unwrap(),
+            "git init failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source_path)
+                .args(["config", "user.email", "test@test.com"])
+                .output()
+                .unwrap(),
+            "git config user.email failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source_path)
+                .args(["config", "user.name", "Test"])
+                .output()
+                .unwrap(),
+            "git config user.name failed",
+        );
+
+        fs::write(source_path.join("README.md"), "# Test\n").unwrap();
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source_path)
+                .args(["add", "."])
+                .output()
+                .unwrap(),
+            "git add failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source_path)
+                .args(["commit", "-m", "initial"])
+                .output()
+                .unwrap(),
+            "git commit failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .args([
+                    "clone",
+                    "--bare",
+                    &source_path.to_string_lossy(),
+                    &bare_path.to_string_lossy(),
+                ])
+                .output()
+                .unwrap(),
+            "git clone --bare failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .args([
+                    "-C",
+                    &bare_path.to_string_lossy(),
+                    "worktree",
+                    "add",
+                    &main_path.to_string_lossy(),
+                    "main",
+                ])
+                .output()
+                .unwrap(),
+            "git worktree add main failed",
+        );
+
+        (bare_path, main_path)
+    }
 
     fn test_app(worktrees: Vec<Worktree>, selected_index: usize, bare_repo_path: &str) -> App {
         App {
@@ -1936,5 +2045,44 @@ mod tests {
         let canonical = tmp.canonicalize().unwrap_or_else(|_| tmp.clone());
 
         assert!(paths_refer_to_same_location(&tmp, &canonical));
+    }
+
+    #[test]
+    fn add_completion_selects_created_worktree_before_enter() {
+        let base = temp_dir("add_completion_enter");
+        let (bare_path, main_path) = create_test_project(&base);
+        let project_root = bare_path.parent().unwrap().to_path_buf();
+        let feature_path = project_root.join("feature").join("enter-after-create");
+
+        git::add_worktree(
+            &bare_path,
+            "feature/enter-after-create",
+            &feature_path,
+            Some("main"),
+        )
+        .unwrap();
+
+        let mut app =
+            App::new(bare_path.clone(), project_root, true, Some(main_path), true).unwrap();
+
+        app.handle_op_result(OpResult {
+            kind: OpKind::Add,
+            success: true,
+            message: "Created worktree: feature/enter-after-create".to_string(),
+            cmd_detail: String::new(),
+            worktree_path: feature_path.clone(),
+            display_name: "feature/enter-after-create".to_string(),
+        });
+        app.enter_worktree();
+
+        match app.exit_action {
+            ExitAction::ChangeDirectory(path) => {
+                assert!(paths_refer_to_same_location(&path, &feature_path));
+            }
+            ExitAction::Quit => panic!("enter should request directory change"),
+        }
+        assert!(app.should_quit);
+
+        let _ = fs::remove_dir_all(base);
     }
 }

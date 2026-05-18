@@ -330,8 +330,8 @@ fn has_origin_remote(bare_repo_path: &Path) -> bool {
             "get-url",
             "origin",
         ])
-        .status()
-        .map(|s| s.success())
+        .output()
+        .map(|output| output.status.success())
         .unwrap_or(false)
 }
 
@@ -521,7 +521,7 @@ pub fn build_add_worktree_command_detail(
     } else {
         match base_ref {
             Some(base) => format!("git -C {} worktree add -b {} {} {}", bare, branch, wt, base),
-            None => format!("git -C {} worktree add -b {} {}", bare, branch, wt),
+            _ => format!("git -C {} worktree add -b {} {}", bare, branch, wt),
         }
     }
 }
@@ -935,8 +935,11 @@ mod tests {
         add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root, list_worktrees,
     };
     use std::fs;
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
+    use std::sync::{Mutex, OnceLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -1124,6 +1127,59 @@ mod tests {
         String::from_utf8_lossy(&branch_output.stdout)
             .trim()
             .to_string()
+    }
+
+    #[cfg(unix)]
+    fn stdio_capture_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[cfg(unix)]
+    fn capture_stdio<F>(name: &str, f: F) -> (String, String)
+    where
+        F: FnOnce(),
+    {
+        let _guard = stdio_capture_lock().lock().unwrap();
+        let dir = temp_dir(name);
+        let stdout_path = dir.join("stdout");
+        let stderr_path = dir.join("stderr");
+        let stdout_file = fs::File::create(&stdout_path).unwrap();
+        let stderr_file = fs::File::create(&stderr_path).unwrap();
+
+        std::io::stdout().flush().unwrap();
+        std::io::stderr().flush().unwrap();
+
+        let saved_stdout = unsafe { libc::dup(libc::STDOUT_FILENO) };
+        let saved_stderr = unsafe { libc::dup(libc::STDERR_FILENO) };
+        assert!(saved_stdout >= 0, "failed to duplicate stdout");
+        assert!(saved_stderr >= 0, "failed to duplicate stderr");
+
+        unsafe {
+            libc::dup2(stdout_file.as_raw_fd(), libc::STDOUT_FILENO);
+            libc::dup2(stderr_file.as_raw_fd(), libc::STDERR_FILENO);
+        }
+
+        f();
+
+        std::io::stdout().flush().unwrap();
+        std::io::stderr().flush().unwrap();
+
+        unsafe {
+            libc::dup2(saved_stdout, libc::STDOUT_FILENO);
+            libc::dup2(saved_stderr, libc::STDERR_FILENO);
+            libc::close(saved_stdout);
+            libc::close(saved_stderr);
+        }
+
+        drop(stdout_file);
+        drop(stderr_file);
+
+        let stdout = fs::read_to_string(stdout_path).unwrap();
+        let stderr = fs::read_to_string(stderr_path).unwrap();
+        let _ = fs::remove_dir_all(dir);
+
+        (stdout, stderr)
     }
 
     fn git_in(path: &Path, args: &[&str]) -> Output {
@@ -1559,6 +1615,36 @@ mod tests {
 
         assert_worktree_usable(&worktree_path);
         assert_worktree_config_marks_non_bare(&worktree_path);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fetch_remote_branch_does_not_leak_remote_url_to_stdio() {
+        let base = temp_dir("fetch_remote_branch_stdio");
+        let (source_path, bare_path) = create_source_and_bare_repo(&base);
+        let origin_url = source_path.to_string_lossy();
+
+        let (stdout, stderr) = capture_stdio("fetch_remote_branch_stdio_capture", || {
+            let result = fetch_remote_branch(&bare_path, "staging");
+            assert!(
+                result.is_ok(),
+                "fetch_remote_branch should succeed: {:?}",
+                result
+            );
+        });
+
+        assert!(
+            !stdout.contains(origin_url.as_ref()),
+            "git helper must not pollute owt stdout with origin URL: {}",
+            stdout
+        );
+        assert!(
+            !stderr.contains(origin_url.as_ref()),
+            "git helper must not pollute owt stderr with origin URL: {}",
+            stderr
+        );
 
         let _ = fs::remove_dir_all(&base);
     }
