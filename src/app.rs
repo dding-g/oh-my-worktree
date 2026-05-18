@@ -28,6 +28,8 @@ pub struct App {
     pub state: AppState,
     pub message: Option<AppMessage>,
     pub bare_repo_path: PathBuf,
+    pub project_root_path: PathBuf,
+    pub repo_is_bare: bool,
     pub input_buffer: String,
     pub should_quit: bool,
     pub config: Config,
@@ -50,17 +52,20 @@ pub struct App {
     pub active_op: Option<(OpKind, mpsc::Receiver<OpResult>)>,
     pub active_op_info: Option<ActiveOp>,
     pub selected_details: Option<WorktreeDetails>,
+    pub add_base_branch: String,
 }
 
 impl App {
     pub fn new(
         bare_repo_path: PathBuf,
+        project_root_path: PathBuf,
+        repo_is_bare: bool,
         launch_path: Option<PathBuf>,
         has_shell_integration: bool,
     ) -> Result<Self> {
         let worktrees = git::list_worktrees(&bare_repo_path)?;
         // Load config with project-level override support
-        let config = Config::load_with_project(Some(&bare_repo_path)).unwrap_or_default();
+        let config = Config::load_with_project(Some(&project_root_path)).unwrap_or_default();
 
         // Determine current worktree from launch path
         let current_worktree_path = launch_path.and_then(|lp| {
@@ -104,6 +109,8 @@ impl App {
             state: AppState::List,
             message: initial_message,
             bare_repo_path,
+            project_root_path,
+            repo_is_bare,
             input_buffer: String::new(),
             should_quit: false,
             config,
@@ -126,6 +133,7 @@ impl App {
             active_op: None,
             active_op_info: None,
             selected_details: None,
+            add_base_branch: "main".to_string(),
         };
         app.update_selected_details();
         Ok(app)
@@ -228,7 +236,7 @@ impl App {
                     if let Some(idx) = self
                         .worktrees
                         .iter()
-                        .position(|wt| wt.path == worktree_path)
+                        .position(|wt| paths_refer_to_same_location(&wt.path, &worktree_path))
                     {
                         self.selected_index = idx;
                     }
@@ -375,6 +383,12 @@ impl App {
                 self.last_key = None;
             }
             KeyCode::Enter => {
+                self.poll_background_op();
+                if self.active_op.is_some() {
+                    self.message = Some(AppMessage::info("Operation still in progress"));
+                    self.last_key = None;
+                    return;
+                }
                 self.enter_worktree();
                 self.last_key = None;
             }
@@ -536,6 +550,9 @@ impl App {
                     self.add_worktree();
                 }
             }
+            KeyCode::Tab => {
+                self.cycle_add_base_branch();
+            }
             KeyCode::Backspace => {
                 self.input_buffer.pop();
             }
@@ -635,13 +652,13 @@ impl App {
                     };
                 }
                 KeyCode::Enter => {
-                    if selected == 3 {
+                    if selected == 4 {
                         self.config.run_post_add_script_in_tmux =
                             !self.config.run_post_add_script_in_tmux;
                         self.message = Some(AppMessage::info(
                             "Setting updated (press 's' to save to file)",
                         ));
-                    } else if selected == 4 {
+                    } else if selected == 5 {
                         // post_add_script - open with $EDITOR
                         self.open_post_add_script_editor();
                     } else {
@@ -666,7 +683,8 @@ impl App {
         match index {
             0 => self.config.editor.clone().unwrap_or_default(),
             1 => self.config.terminal.clone().unwrap_or_default(),
-            2 => self.config.copy_files.join(", "),
+            2 => self.config.worktree_root.clone().unwrap_or_default(),
+            3 => self.config.copy_files.join(", "),
             _ => String::new(),
         }
     }
@@ -683,6 +701,10 @@ impl App {
                 self.config.terminal = if value.is_empty() { None } else { Some(value) };
             }
             2 => {
+                // worktree_root
+                self.config.worktree_root = if value.is_empty() { None } else { Some(value) };
+            }
+            3 => {
                 // copy_files
                 self.config.copy_files = value
                     .split(',')
@@ -698,7 +720,7 @@ impl App {
     }
 
     fn save_config(&mut self) {
-        match self.config.save() {
+        match self.config.save_to_project(&self.project_root_path) {
             Ok(()) => {
                 self.message = Some(AppMessage::info("Config saved"));
             }
@@ -709,7 +731,7 @@ impl App {
     }
 
     fn open_post_add_script_editor(&mut self) {
-        let script_path = Config::post_add_script_path(&self.bare_repo_path);
+        let script_path = Config::post_add_script_path(&self.project_root_path);
         let editor = self.config.get_editor();
 
         // Create .owt directory and script file if they don't exist
@@ -818,17 +840,27 @@ impl App {
         self.worktrees.get(self.selected_index)
     }
 
-    fn selected_base_branch(&self) -> Option<&str> {
-        self.selected_worktree()
-            .filter(|wt| !wt.is_bare)
-            .and_then(|wt| wt.branch.as_deref())
+    fn worktree_path_for_branch(&self, branch: &str) -> PathBuf {
+        if self.repo_is_bare {
+            return self
+                .bare_repo_path
+                .parent()
+                .map(|p| p.join(branch))
+                .unwrap_or_else(|| PathBuf::from(branch));
+        }
+
+        self.config
+            .resolved_worktree_root()
+            .join(self.repo_namespace())
+            .join(branch)
     }
 
-    fn worktree_path_for_branch(&self, branch: &str) -> PathBuf {
-        self.bare_repo_path
-            .parent()
-            .map(|p| p.join(branch))
-            .unwrap_or_else(|| PathBuf::from(branch))
+    fn repo_namespace(&self) -> String {
+        self.project_root_path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "repo".to_string())
     }
 
     fn conflicting_worktree_for_branch(
@@ -837,14 +869,38 @@ impl App {
         desired_path: &Path,
     ) -> Option<&Worktree> {
         self.worktrees.iter().find(|wt| {
-            !wt.is_bare && wt.branch.as_deref() == Some(branch) && wt.path != desired_path
+            !wt.is_bare
+                && wt.branch.as_deref() == Some(branch)
+                && !paths_refer_to_same_location(&wt.path, desired_path)
         })
     }
 
     pub fn add_modal_base_label(&self) -> String {
-        match self.selected_base_branch() {
-            Some(base) => format!("Base branch: {}", base),
-            None => "Base branch: HEAD".to_string(),
+        format!("Base branch: {}", self.add_base_branch)
+    }
+
+    fn cycle_add_base_branch(&mut self) {
+        match git::list_local_branches(&self.bare_repo_path) {
+            Ok(branches) if branches.is_empty() => {
+                self.message = Some(AppMessage::error("No local branches available"));
+            }
+            Ok(branches) => {
+                let current = branches
+                    .iter()
+                    .position(|branch| branch == &self.add_base_branch);
+                let next = current.map_or(0, |idx| (idx + 1) % branches.len());
+                self.add_base_branch = branches[next].clone();
+                self.message = Some(AppMessage::info(format!(
+                    "Base branch: {}",
+                    self.add_base_branch
+                )));
+            }
+            Err(e) => {
+                self.message = Some(AppMessage::error(format!(
+                    "Failed to list base branches: {}",
+                    e
+                )));
+            }
         }
     }
 
@@ -1004,14 +1060,12 @@ impl App {
         let display_name = branch.clone();
         let display_name_for_thread = display_name.clone();
         let display_name_for_state = display_name.clone();
-        let base_branch = self.selected_base_branch().map(str::to_owned);
+        let base_branch = self.add_base_branch.clone();
 
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
-            let base_branch_for_add = base_branch.as_deref();
-            if let Some(base) = base_branch_for_add {
-                let _ = git::fetch_remote_branch(&bare_repo_path, base);
-            }
+            let base_branch_for_add = Some(base_branch.as_str());
+            let _ = git::fetch_remote_branch(&bare_repo_path, &base_branch);
 
             let cmd_detail = git::build_add_worktree_command_detail(
                 &bare_repo_path,
@@ -1062,9 +1116,7 @@ impl App {
         self.message = Some(AppMessage::info(format!(
             "Creating worktree: {}{}...",
             display_name,
-            self.selected_base_branch()
-                .map(|base| format!(" (base: {})", base))
-                .unwrap_or_default()
+            format!(" (base: {})", self.add_base_branch)
         )));
         self.input_buffer.clear();
         self.active_op = Some((OpKind::Add, rx));
@@ -1076,7 +1128,7 @@ impl App {
     }
 
     fn run_post_add_script(&mut self, worktree_path: &PathBuf) {
-        let script_path = Config::post_add_script_path(&self.bare_repo_path);
+        let script_path = Config::post_add_script_path(&self.project_root_path);
 
         if !script_path.exists() {
             return;
@@ -1753,6 +1805,17 @@ fn shell_quote(path: &std::path::Path) -> String {
     format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }
 
+fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1764,6 +1827,8 @@ mod tests {
             state: AppState::List,
             message: None,
             bare_repo_path: PathBuf::from(bare_repo_path),
+            project_root_path: PathBuf::from("/repo"),
+            repo_is_bare: true,
             input_buffer: String::new(),
             should_quit: false,
             config: Config::default(),
@@ -1786,6 +1851,7 @@ mod tests {
             active_op: None,
             active_op_info: None,
             selected_details: None,
+            add_base_branch: "main".to_string(),
         }
     }
 
@@ -1814,7 +1880,7 @@ mod tests {
     }
 
     #[test]
-    fn add_modal_base_label_uses_selected_worktree_branch() {
+    fn add_modal_base_label_uses_session_default_branch() {
         let app = test_app(
             vec![Worktree {
                 path: PathBuf::from("/repo/staging"),
@@ -1828,6 +1894,47 @@ mod tests {
             "/repo/.bare",
         );
 
-        assert_eq!(app.add_modal_base_label(), "Base branch: staging");
+        assert_eq!(app.add_modal_base_label(), "Base branch: main");
+    }
+
+    #[test]
+    fn non_bare_worktree_path_uses_configurable_root_and_repo_namespace() {
+        let mut app = test_app(vec![], 0, "/repo");
+        app.repo_is_bare = false;
+        app.config.worktree_root = Some("/tmp/owt-worktrees".to_string());
+
+        assert_eq!(
+            app.worktree_path_for_branch("feature/login"),
+            PathBuf::from("/tmp/owt-worktrees/repo/feature/login")
+        );
+    }
+
+    #[test]
+    fn bare_repo_ignores_worktree_root_and_keeps_sibling_layout() {
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.config.worktree_root = Some("/tmp/owt-worktrees".to_string());
+
+        assert_eq!(
+            app.worktree_path_for_branch("feature/login"),
+            PathBuf::from("/repo/feature/login")
+        );
+    }
+
+    #[test]
+    fn bare_repo_without_worktree_root_keeps_sibling_layout() {
+        let app = test_app(vec![], 0, "/repo/.bare");
+
+        assert_eq!(
+            app.worktree_path_for_branch("feature/login"),
+            PathBuf::from("/repo/feature/login")
+        );
+    }
+
+    #[test]
+    fn paths_match_after_canonicalization() {
+        let tmp = std::env::temp_dir();
+        let canonical = tmp.canonicalize().unwrap_or_else(|_| tmp.clone());
+
+        assert!(paths_refer_to_same_location(&tmp, &canonical));
     }
 }

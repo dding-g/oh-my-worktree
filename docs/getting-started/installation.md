@@ -54,4 +54,4 @@ owt --version
 ## Requirements
 
 - **Git 2.5+** (worktree support)
-- A bare repository (see [Quick Start](/oh-my-worktree/getting-started/quick-start))
+- A Git repository. The `.bare` layout is recommended, but regular non-bare repositories are supported.

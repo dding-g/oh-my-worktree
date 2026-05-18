@@ -1,7 +1,7 @@
 {
   "name": "oh-my-worktree",
   "version": "0.9.0",
-  "description": "A TUI tool for managing Git worktrees in bare repositories with branch type support",
+  "description": "A TUI tool for managing Git worktrees in bare and regular repositories",
   "keywords": [
     "git",
     "worktree",

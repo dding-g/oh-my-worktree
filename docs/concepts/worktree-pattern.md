@@ -7,7 +7,7 @@ nav_order: 2
 
 # The .bare Pattern
 
-owt uses a specific folder structure for organizing worktrees.
+owt supports regular Git worktrees, but the `.bare` pattern is the default structure created by `owt clone`.
 
 ## Structure
 
@@ -52,6 +52,7 @@ owt looks for the `.bare` folder in the parent directory of your current locatio
 1. If you're in a worktree, owt finds `.bare` in the parent
 2. If you're in the project root, owt finds `.bare` directly
 3. owt can also work with traditional `repo.git` bare repositories
+4. If no bare repo is found, owt falls back to the current regular Git repository
 
 ## Creating This Structure
 
@@ -82,4 +83,6 @@ project-main/       <- worktree
 project-feature/    <- worktree
 ```
 
-However, the `.bare` pattern is recommended for a cleaner structure.
+For regular non-bare repositories, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` to choose another root directory.
+
+However, the `.bare` pattern is still recommended for a cleaner project-local structure.

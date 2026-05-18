@@ -34,7 +34,7 @@ my-project.git/
 
 ## Why Use Bare Repositories?
 
-Bare repositories are the foundation for the worktree workflow because:
+Bare repositories are the recommended default for the worktree workflow because:
 
 1. **No conflicts**: The bare repo has no working directory to conflict with worktrees
 2. **Clean structure**: All worktrees are siblings, creating a clear organization
@@ -53,6 +53,12 @@ project/
 ```
 
 This keeps the bare repository hidden while your worktrees are visible at the top level.
+
+## Regular Repositories
+
+owt can also run inside a regular non-bare Git repository. Existing worktrees are listed through Git's native worktree support, and new worktrees are created under `~/.owt/worktree/<repo-name>/` by default. Set `worktree_root` in config to use a different root directory.
+
+The `.bare` layout still keeps the original sibling behavior: new worktrees are created next to the existing worktrees.
 
 ## Creating a Bare Repository
 

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub struct Config {
     pub editor: Option<String>,
     pub terminal: Option<String>,
+    pub worktree_root: Option<String>,
     pub copy_files: Vec<String>, // Files to copy when adding worktree
     pub post_add_script: Option<String>, // Script to run after adding worktree
     pub run_post_add_script_in_tmux: bool,
@@ -20,8 +21,8 @@ impl Config {
         Self::load_with_project(None)
     }
 
-    /// Load config with optional project path for project-level config
-    pub fn load_with_project(bare_repo_path: Option<&std::path::Path>) -> Result<Self> {
+    /// Load config with optional project root for project-level config
+    pub fn load_with_project(project_root_path: Option<&std::path::Path>) -> Result<Self> {
         // Start with global config
         let global_path = Self::global_config_path();
         let mut config = if global_path.exists() {
@@ -32,35 +33,35 @@ impl Config {
         };
 
         // Override with project-level config if exists
-        if let Some(bare_path) = bare_repo_path {
-            let project_path = Self::project_config_path(bare_path);
+        if let Some(project_root) = project_root_path {
+            let project_path = Self::project_config_path(project_root);
             if project_path.exists() {
                 let content = fs::read_to_string(&project_path)?;
                 let project_config = Self::parse(&content)?;
-                config.merge_from(project_config);
+                config.merge_from_project(project_config);
             }
         }
 
         Ok(config)
     }
 
-    /// Merge project config into self (project overrides global)
-    fn merge_from(&mut self, other: Config) {
+    /// Merge project config into self (project overrides global safe values).
+    /// Script auto-run must stay globally trusted and cannot be enabled by a repo.
+    fn merge_from_project(&mut self, other: Config) {
         if other.editor.is_some() {
             self.editor = other.editor;
         }
         if other.terminal.is_some() {
             self.terminal = other.terminal;
         }
+        if other.worktree_root.is_some() {
+            self.worktree_root = other.worktree_root;
+        }
         if !other.copy_files.is_empty() {
             self.copy_files = other.copy_files;
         }
         if other.post_add_script.is_some() {
             self.post_add_script = other.post_add_script;
-        }
-        if other.run_post_add_script_in_tmux_configured {
-            self.run_post_add_script_in_tmux = other.run_post_add_script_in_tmux;
-            self.run_post_add_script_in_tmux_configured = true;
         }
     }
 
@@ -70,9 +71,9 @@ impl Config {
         config_dir.join("config.toml")
     }
 
-    /// Project config path: .owt/config.toml (relative to bare repo parent)
-    pub fn project_config_path(bare_repo_path: &std::path::Path) -> PathBuf {
-        Self::owt_dir(bare_repo_path).join("config.toml")
+    /// Project config path: .owt/config.toml under the project root
+    pub fn project_config_path(project_root_path: &std::path::Path) -> PathBuf {
+        Self::owt_dir(project_root_path).join("config.toml")
     }
 
     /// Legacy: for backwards compatibility
@@ -82,16 +83,18 @@ impl Config {
     }
 
     /// Save config to global config file
+    #[allow(dead_code)]
     pub fn save(&self) -> Result<()> {
         self.save_to(&Self::global_config_path())
     }
 
     /// Save config to project-level config file
-    pub fn save_to_project(&self, bare_repo_path: &std::path::Path) -> Result<()> {
-        self.save_to(&Self::project_config_path(bare_repo_path))
+    pub fn save_to_project(&self, project_root_path: &std::path::Path) -> Result<()> {
+        self.save_to_project_path(&Self::project_config_path(project_root_path))
     }
 
     /// Save config to specified path
+    #[allow(dead_code)]
     fn save_to(&self, config_path: &PathBuf) -> Result<()> {
         let config_dir = config_path.parent().unwrap();
 
@@ -106,6 +109,9 @@ impl Config {
         }
         if let Some(ref terminal) = self.terminal {
             content.push_str(&format!("terminal = \"{}\"\n", terminal));
+        }
+        if let Some(ref worktree_root) = self.worktree_root {
+            content.push_str(&format!("worktree_root = \"{}\"\n", worktree_root));
         }
         if !self.copy_files.is_empty() {
             let files = self
@@ -123,6 +129,41 @@ impl Config {
             "run_post_add_script_in_tmux = {}\n",
             self.run_post_add_script_in_tmux
         ));
+
+        fs::write(config_path, content)?;
+        Ok(())
+    }
+
+    fn save_to_project_path(&self, config_path: &PathBuf) -> Result<()> {
+        let config_dir = config_path.parent().unwrap();
+
+        if !config_dir.exists() {
+            fs::create_dir_all(config_dir)?;
+        }
+
+        let mut content = String::new();
+
+        if let Some(ref editor) = self.editor {
+            content.push_str(&format!("editor = \"{}\"\n", editor));
+        }
+        if let Some(ref terminal) = self.terminal {
+            content.push_str(&format!("terminal = \"{}\"\n", terminal));
+        }
+        if let Some(ref worktree_root) = self.worktree_root {
+            content.push_str(&format!("worktree_root = \"{}\"\n", worktree_root));
+        }
+        if !self.copy_files.is_empty() {
+            let files = self
+                .copy_files
+                .iter()
+                .map(|f| format!("\"{}\"", f))
+                .collect::<Vec<_>>()
+                .join(", ");
+            content.push_str(&format!("copy_files = [{}]\n", files));
+        }
+        if let Some(ref script) = self.post_add_script {
+            content.push_str(&format!("post_add_script = \"{}\"\n", script));
+        }
 
         fs::write(config_path, content)?;
         Ok(())
@@ -146,6 +187,7 @@ impl Config {
                 match key {
                     "editor" => config.editor = Some(value.to_string()),
                     "terminal" => config.terminal = Some(value.to_string()),
+                    "worktree_root" => config.worktree_root = Some(value.to_string()),
                     "post_add_script" => config.post_add_script = Some(value.to_string()),
                     "run_post_add_script_in_tmux" => {
                         config.run_post_add_script_in_tmux = parse_bool(value);
@@ -191,18 +233,46 @@ impl Config {
             .or_else(|| std::env::var("TERMINAL").ok())
     }
 
-    /// Get the .owt directory path (in bare repo parent)
-    pub fn owt_dir(bare_repo_path: &std::path::Path) -> PathBuf {
-        bare_repo_path
-            .parent()
-            .map(|p| p.join(".owt"))
-            .unwrap_or_else(|| PathBuf::from(".owt"))
+    pub fn default_worktree_root() -> PathBuf {
+        home_dir()
+            .map(|home| home.join(".owt").join("worktree"))
+            .unwrap_or_else(|| PathBuf::from(".owt").join("worktree"))
+    }
+
+    pub fn resolved_worktree_root(&self) -> PathBuf {
+        self.worktree_root
+            .as_deref()
+            .map(expand_home_path)
+            .unwrap_or_else(Self::default_worktree_root)
+    }
+
+    /// Get the .owt directory path under the project root
+    pub fn owt_dir(project_root_path: &std::path::Path) -> PathBuf {
+        project_root_path.join(".owt")
     }
 
     /// Get the post-add script path
-    pub fn post_add_script_path(bare_repo_path: &std::path::Path) -> PathBuf {
-        Self::owt_dir(bare_repo_path).join("post-add.sh")
+    pub fn post_add_script_path(project_root_path: &std::path::Path) -> PathBuf {
+        Self::owt_dir(project_root_path).join("post-add.sh")
     }
+}
+
+fn expand_home_path(path: &str) -> PathBuf {
+    if path == "~" {
+        return home_dir().unwrap_or_else(|| PathBuf::from(path));
+    }
+
+    if let Some(rest) = path.strip_prefix("~/") {
+        return home_dir()
+            .map(|home| home.join(rest))
+            .unwrap_or_else(|| PathBuf::from(path));
+    }
+
+    PathBuf::from(path)
+}
+
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 fn dirs_config_dir() -> PathBuf {
@@ -236,11 +306,13 @@ mod tests {
 [core]
 editor = "code"
 terminal = "Ghostty"
+worktree_root = "~/.owt/worktree"
 run_post_add_script_in_tmux = true
 "#;
         let config = Config::parse(content).unwrap();
         assert_eq!(config.editor, Some("code".to_string()));
         assert_eq!(config.terminal, Some("Ghostty".to_string()));
+        assert_eq!(config.worktree_root, Some("~/.owt/worktree".to_string()));
         assert!(config.run_post_add_script_in_tmux);
     }
 
@@ -293,6 +365,56 @@ copy_files = [".env", ".envrc", "config.json"]
     }
 
     #[test]
+    fn test_project_config_does_not_enable_tmux_post_add() {
+        let dir = std::env::temp_dir().join(format!(
+            "owt_project_config_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let project_dir = dir.join("project");
+        fs::create_dir_all(project_dir.join(".owt")).unwrap();
+        fs::write(
+            project_dir.join(".owt").join("config.toml"),
+            "run_post_add_script_in_tmux = true\n",
+        )
+        .unwrap();
+
+        let config = Config::load_with_project(Some(&project_dir)).unwrap();
+
+        assert!(!config.run_post_add_script_in_tmux);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_save_to_project_omits_tmux_post_add_flag() {
+        let dir = std::env::temp_dir().join(format!(
+            "owt_project_save_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let config = Config {
+            editor: Some("code".to_string()),
+            run_post_add_script_in_tmux: true,
+            ..Default::default()
+        };
+
+        config.save_to_project(&dir).unwrap();
+        let saved = fs::read_to_string(dir.join(".owt").join("config.toml")).unwrap();
+
+        assert!(saved.contains("editor = \"code\""));
+        assert!(!saved.contains("run_post_add_script_in_tmux"));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn test_parse_ignores_unknown_sections() {
         // Old config files with [[branch_types]] should not break parsing
         let content = r#"
@@ -306,5 +428,18 @@ shortcut = "f"
 "#;
         let config = Config::parse(content).unwrap();
         assert_eq!(config.editor, Some("vim".to_string()));
+    }
+
+    #[test]
+    fn test_resolved_worktree_root_uses_configured_absolute_path() {
+        let config = Config {
+            worktree_root: Some("/tmp/custom-worktrees".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            config.resolved_worktree_root(),
+            PathBuf::from("/tmp/custom-worktrees")
+        );
     }
 }

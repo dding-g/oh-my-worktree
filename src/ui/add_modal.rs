@@ -12,7 +12,7 @@ use crate::app::App;
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
     // min: 6 inner rows + 2 border = 8
-    let area = centered_rect_with_min(60, 32, 8, frame.area());
+    let area = centered_rect_with_min(64, 32, 8, frame.area());
 
     // Clear the background
     frame.render_widget(Clear, area);
@@ -53,7 +53,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(hint, chunks[2]);
 
     let base_branch = Paragraph::new(Line::from(vec![Span::styled(
-        format!("  {}", app.add_modal_base_label()),
+        format!("  {}  (Tab to change)", app.add_modal_base_label()),
         Style::default().fg(t.text_muted),
     )]));
     frame.render_widget(base_branch, chunks[3]);
@@ -62,6 +62,8 @@ pub fn render(frame: &mut Frame, app: &App) {
     let help = Paragraph::new(Line::from(vec![
         Span::styled("Enter", Style::default().fg(t.cyan)),
         Span::raw(" confirm  "),
+        Span::styled("Tab", Style::default().fg(t.cyan)),
+        Span::raw(" base  "),
         Span::styled("Esc", Style::default().fg(t.cyan)),
         Span::raw(" cancel"),
     ]))

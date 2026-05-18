@@ -1,5 +1,5 @@
 title: owt (oh-my-worktree)
-description: A TUI tool for managing Git worktrees in bare repositories
+description: A TUI tool for managing Git worktrees in bare and regular repositories
 theme: just-the-docs
 
 url: https://dding-g.github.io

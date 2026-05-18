@@ -2,7 +2,7 @@
 name = "oh-my-worktree"
 version = "0.9.0"
 edition = "2021"
-description = "Bare repository based Git worktree management TUI tool"
+description = "Git worktree management TUI tool"
 
 [[bin]]
 name = "owt"
