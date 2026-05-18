@@ -20,6 +20,7 @@
     }
 
     :root {
+      color-scheme: dark;
       --gray-50: #fafafa;
       --gray-100: #f4f4f5;
       --gray-200: #e4e4e7;
@@ -61,6 +62,32 @@
       --shadow-glow: 0 0 60px rgba(16, 185, 129, 0.15);
     }
 
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --accent: #059669;
+      --accent-light: #10b981;
+      --accent-subtle: rgba(5, 150, 105, 0.1);
+      --blue: #2563eb;
+      --amber: #d97706;
+
+      --bg: #f7f6f1;
+      --bg-subtle: #eeece4;
+      --bg-elevated: #ffffff;
+      --bg-card: rgba(255, 255, 255, 0.72);
+
+      --border: rgba(24, 24, 27, 0.1);
+      --border-hover: rgba(24, 24, 27, 0.18);
+
+      --text-primary: #18181b;
+      --text-secondary: #52525b;
+      --text-tertiary: #71717a;
+
+      --shadow-sm: 0 1px 2px rgba(24,24,27,0.08);
+      --shadow-md: 0 4px 14px rgba(24,24,27,0.1);
+      --shadow-lg: 0 18px 55px rgba(24,24,27,0.14);
+      --shadow-glow: 0 0 60px rgba(5, 150, 105, 0.12);
+    }
+
     html {
       font-size: 16px;
       scroll-behavior: smooth;
@@ -74,6 +101,7 @@
       color: var(--text-primary);
       line-height: 1.6;
       overflow-x: hidden;
+      transition: background 0.2s ease, color 0.2s ease;
     }
 
     .bg-gradient {
@@ -83,10 +111,16 @@
       right: 0;
       height: 100vh;
       background:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.15), transparent),
-        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(59, 130, 246, 0.08), transparent);
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.12), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(245, 158, 11, 0.05), transparent);
       pointer-events: none;
       z-index: -1;
+    }
+
+    :root[data-theme="light"] .bg-gradient {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5, 150, 105, 0.14), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(217, 119, 6, 0.1), transparent);
     }
 
     .container {
@@ -103,7 +137,7 @@
       z-index: 100;
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      background: rgba(0, 0, 0, 0.8);
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
       border-bottom: 1px solid var(--border);
     }
 
@@ -144,6 +178,37 @@
       gap: 8px;
     }
 
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .theme-toggle:hover {
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+    }
+
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .theme-toggle-icon {
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
     .nav-links a {
       color: var(--text-secondary);
       text-decoration: none;
@@ -180,9 +245,9 @@
 
     .hero-content {
       text-align: center;
-      max-width: 800px;
+      max-width: 980px;
       margin: 0 auto;
-      padding: 80px 0;
+      padding: 72px 0 80px;
     }
 
     .badge {
@@ -212,7 +277,7 @@
     }
 
     .hero h1 {
-      font-size: clamp(3rem, 8vw, 5rem);
+      font-size: clamp(3rem, 8vw, 5.4rem);
       font-weight: 700;
       letter-spacing: -0.04em;
       line-height: 1.05;
@@ -223,12 +288,37 @@
       background-clip: text;
     }
 
+    :root[data-theme="light"] .hero h1 {
+      background: linear-gradient(180deg, #18181b 0%, rgba(24,24,27,0.72) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
     .hero-description {
       font-size: 1.25rem;
       color: var(--text-secondary);
-      max-width: 560px;
+      max-width: 680px;
       margin: 0 auto 40px;
       line-height: 1.7;
+    }
+
+    .hero-points {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: -16px auto 36px;
+    }
+
+    .hero-point {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.025);
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
     }
 
     .hero-cta {
@@ -315,8 +405,50 @@
     }
 
     .hero-visual {
-      margin-top: 80px;
+      margin-top: 64px;
       position: relative;
+    }
+
+    .screenshot-card {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 10px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+        var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      box-shadow: 0 24px 90px rgba(0,0,0,0.5), 0 0 70px rgba(16,185,129,0.1);
+    }
+
+    :root[data-theme="light"] .screenshot-card {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.68)),
+        var(--bg-card);
+      box-shadow: 0 24px 80px rgba(24,24,27,0.18), 0 0 70px rgba(5,150,105,0.1);
+    }
+
+    .screenshot-frame {
+      overflow: hidden;
+      border-radius: 18px;
+      background: #050505;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .screenshot-frame img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .screenshot-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 4px 2px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
     }
 
     .terminal {
@@ -994,8 +1126,32 @@
         display: none;
       }
 
+      .theme-toggle {
+        padding: 8px 10px;
+      }
+
+      .theme-toggle-label {
+        display: none;
+      }
+
       .hero-content {
         padding: 60px 0;
+      }
+
+      .hero-points,
+      .screenshot-caption {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .screenshot-card {
+        padding: 6px;
+        border-radius: 18px;
+      }
+
+      .screenshot-frame {
+        border-radius: 13px;
       }
 
       .features-grid,
@@ -1057,6 +1213,10 @@
         <a href="#features">Features</a>
         <a href="#installation">Install</a>
         <a href="#keybindings">Keys</a>
+        <button class="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="false" data-theme-toggle>
+          <span class="theme-toggle-icon" aria-hidden="true">☾</span>
+          <span class="theme-toggle-label">Dark</span>
+        </button>
         <a href="https://github.com/dding-g/oh-my-worktree" target="_blank" class="nav-cta">GitHub</a>
       </nav>
     </div>
@@ -1068,15 +1228,21 @@
         <div class="hero-content">
           <div class="badge animate-in delay-1">
             <span class="badge-dot"></span>
-            v0.5.1 · Now Available
+            v0.10.0 · Regular repos supported
           </div>
 
-          <h1 class="animate-in delay-2">Git worktrees,<br>simplified.</h1>
+          <h1 class="animate-in delay-2">Git worktrees,<br>without context switching.</h1>
 
           <p class="hero-description animate-in delay-3">
-            A blazingly fast TUI for managing Git worktrees in bare and regular repositories.
-            Work on multiple branches simultaneously without the context switching pain.
+            A focused terminal UI for managing Git worktrees in both bare and regular repositories.
+            Run it where your repo already lives, then jump between branches without stashing or rebuilding.
           </p>
+
+          <div class="hero-points animate-in delay-3">
+            <span class="hero-point">bare + regular repos</span>
+            <span class="hero-point">~/.owt/worktree defaults</span>
+            <span class="hero-point">keyboard-first TUI</span>
+          </div>
 
           <div class="hero-cta animate-in delay-4">
             <a href="#installation" class="btn btn-primary">Get Started</a>
@@ -1100,60 +1266,13 @@
         </div>
 
         <div class="hero-visual animate-in delay-4">
-          <div class="terminal">
-            <div class="terminal-header">
-              <span class="terminal-btn close"></span>
-              <span class="terminal-btn minimize"></span>
-              <span class="terminal-btn maximize"></span>
-              <span class="terminal-title">owt — ~/projects/app.git</span>
+          <div class="screenshot-card">
+            <div class="screenshot-frame">
+              <img data-screenshot src="owt-darkmode.png" width="1536" height="1024" alt="owt terminal UI showing a list of Git worktrees, branch status, and selected worktree details">
             </div>
-            <div class="terminal-body">
-              <div class="term-line">
-                <span class="term-prompt">❯</span>
-                <span class="term-cmd">owt</span>
-              </div>
-
-              <div class="tui-preview">
-                <div class="tui-header">
-                  <span>Worktrees</span>
-                  <span>3 total</span>
-                </div>
-                <div class="tui-body">
-                  <div class="tui-row active">
-                    <div class="tui-row-left">
-                      <span class="tui-indicator"></span>
-                      <span class="tui-name">main</span>
-                      <span class="tui-branch">origin/main</span>
-                    </div>
-                    <span class="tui-status status-clean">✓ clean</span>
-                  </div>
-                  <div class="tui-row">
-                    <div class="tui-row-left">
-                      <span class="tui-indicator"></span>
-                      <span class="tui-name">feature/auth</span>
-                      <span class="tui-branch">origin/feature/auth</span>
-                      <span class="tui-ahead-behind"><span class="tui-ahead">↑2</span> <span class="tui-behind">↓1</span></span>
-                    </div>
-                    <span class="tui-status status-modified">~ modified</span>
-                  </div>
-                  <div class="tui-row">
-                    <div class="tui-row-left">
-                      <span class="tui-indicator"></span>
-                      <span class="tui-name">hotfix/payment</span>
-                      <span class="tui-branch">origin/hotfix/payment</span>
-                    </div>
-                    <span class="tui-status status-clean">✓ clean</span>
-                  </div>
-                </div>
-                <div class="tui-footer">
-                  <kbd>a</kbd>add <kbd>d</kbd>delete <kbd>p</kbd>pull <kbd>P</kbd>push <kbd>/</kbd>search <kbd>q</kbd>quit
-                </div>
-              </div>
-
-              <div class="term-line">
-                <span class="term-prompt">❯</span>
-                <span class="cursor"></span>
-              </div>
+            <div class="screenshot-caption">
+              <span>real TUI screenshot</span>
+              <span>status, branches, actions, and details in one view</span>
             </div>
           </div>
         </div>
@@ -1242,13 +1361,13 @@
           <div class="feature-card">
             <div class="feature-icon">⚡</div>
             <h3>Quick Actions</h3>
-            <p>Create, delete, and switch worktrees with single keystrokes. Supports feature/bugfix/hotfix prefixes.</p>
+            <p>Create, delete, pull, push, and switch worktrees with single keystrokes from the TUI.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">🔍</div>
             <h3>Smart Detection</h3>
-            <p>Run from any worktree directory. owt automatically finds the bare repository root.</p>
+            <p>Run from a bare worktree layout or a regular Git repository. owt finds the right repo context.</p>
           </div>
 
           <div class="feature-card">
@@ -1509,6 +1628,38 @@
   </footer>
 
   <script>
+    const themeToggle = document.querySelector('[data-theme-toggle]');
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    const screenshot = document.querySelector('[data-screenshot]');
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('owt-theme', theme);
+
+      const isLight = theme === 'light';
+      if (themeMeta) {
+        themeMeta.setAttribute('content', isLight ? '#f7f6f1' : '#000000');
+      }
+      if (screenshot) {
+        screenshot.setAttribute('src', isLight ? 'owt.png' : 'owt-darkmode.png');
+      }
+      if (themeToggle) {
+        themeToggle.setAttribute('aria-label', isLight ? 'Switch to dark mode' : 'Switch to light mode');
+        themeToggle.setAttribute('aria-pressed', String(isLight));
+        themeToggle.querySelector('.theme-toggle-icon').textContent = isLight ? '☀' : '☾';
+        themeToggle.querySelector('.theme-toggle-label').textContent = isLight ? 'Light' : 'Dark';
+      }
+    }
+
+    const storedTheme = localStorage.getItem('owt-theme');
+    const preferredTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    applyTheme(storedTheme || preferredTheme);
+
+    themeToggle?.addEventListener('click', () => {
+      const currentTheme = document.documentElement.dataset.theme || 'dark';
+      applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+    });
+
     document.querySelectorAll('.copy-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const text = btn.dataset.copy;

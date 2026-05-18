@@ -1,5 +1,7 @@
 # owt (oh-my-worktree)
 
+[한국어](./README.ko.md) | [English](./README.md)
+
 Git worktree를 쉽게 관리할 수 있는 TUI 도구입니다.
 
 <img width="786" height="580" alt="Image" src="./owt.png" />
@@ -73,7 +75,14 @@ owt
 
 ### 기존 프로젝트 변환
 
-기존 일반 Git 저장소 안에서도 `owt`를 바로 실행할 수 있습니다. 새 worktree는 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성됩니다.
+기존 일반 Git 저장소 안에서도 `owt`를 바로 실행할 수 있습니다. 먼저 bare repository로 변환할 필요가 없습니다.
+
+```bash
+cd /path/to/regular-git-repo
+owt
+```
+
+일반 repository에서 새 worktree를 만들면 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성됩니다. 다른 위치를 쓰고 싶다면 `worktree_root`를 설정하세요.
 
 `.bare` sibling 구조를 선호한다면 다음 명령을 실행하세요:
 

@@ -1,5 +1,7 @@
 # owt (oh-my-worktree)
 
+[한국어](./README.ko.md) | [English](./README.md)
+
 A TUI tool for managing Git worktrees in bare and regular repositories.
 
 **[GitHub](https://github.com/dding-g/oh-my-worktree)**
@@ -75,7 +77,14 @@ owt
 
 ### Convert Existing Project
 
-You can run `owt` directly inside an existing regular Git repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
+You can run `owt` directly inside an existing regular Git repository. You do not need to convert it to a bare repository first.
+
+```bash
+cd /path/to/regular-git-repo
+owt
+```
+
+When you create a worktree from a regular repository, `owt` creates it under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` if you want a different location.
 
 If you prefer the `.bare` sibling layout, run:
 
