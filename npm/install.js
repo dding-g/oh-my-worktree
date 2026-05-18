@@ -108,7 +108,7 @@ async function install() {
   const binaryName = getPlatform();
   const version = getPackageVersion();
   const binDir = path.join(__dirname, 'bin');
-  const binPath = path.join(binDir, BINARY_NAME + (process.platform === 'win32' ? '.exe' : ''));
+  const binPath = path.join(binDir, BINARY_NAME + '-bin' + (process.platform === 'win32' ? '.exe' : ''));
 
   // Create bin directory
   if (!fs.existsSync(binDir)) {

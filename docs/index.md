@@ -6,7 +6,7 @@ nav_order: 1
 
 # owt (oh-my-worktree)
 
-A TUI tool for managing Git worktrees in bare repositories.
+A TUI tool for managing Git worktrees in bare and regular repositories.
 {: .fs-6 .fw-300 }
 
 [Get Started](/oh-my-worktree/getting-started/installation){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
@@ -65,6 +65,6 @@ owt
 
 - **Vim-style navigation** - `j`/`k` to move, `/` to search
 - **Status indicators** - See staged, unstaged, conflict at a glance
-- **Branch type shortcuts** - Quick prefixes for feature/bugfix/hotfix
+- **Base branch selection** - Press `Tab` when adding a worktree to cycle local base branches
 - **Shell integration** - `Enter` changes directory to selected worktree
 - **Configurable** - Custom editor, terminal, and post-add scripts

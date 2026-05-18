@@ -22,30 +22,15 @@ editor = "code"
 # Terminal app (macOS)
 terminal = "Ghostty"
 
+# Root directory for new worktrees from regular non-bare repositories
+worktree_root = "~/.owt/worktree"
+
 # Files to copy when creating a new worktree
 copy_files = [".env", ".env.local"]
 
 # Launch .owt/post-add.sh in a detached tmux session after worktree creation
 run_post_add_script_in_tmux = false
 
-# Branch type shortcuts
-[[branch_types]]
-name = "feature"
-prefix = "feature/"
-base = "main"
-shortcut = "f"
-
-[[branch_types]]
-name = "bugfix"
-prefix = "bugfix/"
-base = "main"
-shortcut = "b"
-
-[[branch_types]]
-name = "hotfix"
-prefix = "hotfix/"
-base = "main"
-shortcut = "h"
 ```
 
 ### Options
@@ -54,20 +39,9 @@ shortcut = "h"
 |:-------|:-----|:------------|
 | `editor` | string | Editor command to open worktrees |
 | `terminal` | string | Terminal app name (macOS) or command (Linux) |
+| `worktree_root` | string | Root directory for new worktrees from regular non-bare repositories. Defaults to `~/.owt/worktree` |
 | `copy_files` | array | Files to copy to new worktrees |
-| `run_post_add_script_in_tmux` | boolean | Run `.owt/post-add.sh` in tmux after creating a worktree |
-| `branch_types` | array | Branch type configurations |
-
-### Branch Type Configuration
-
-Each branch type has:
-
-| Field | Description |
-|:------|:------------|
-| `name` | Display name |
-| `prefix` | Prefix added to branch names |
-| `base` | Base branch for new worktrees |
-| `shortcut` | Single character shortcut |
+| `run_post_add_script_in_tmux` | boolean | Run `.owt/post-add.sh` in tmux after creating a worktree. This must be enabled from global config; project config cannot enable script auto-run. |
 
 ## Environment Variables
 
@@ -90,7 +64,7 @@ export TERMINAL=Ghostty
 
 ## Project-Level Configuration
 
-You can create a project-specific config in `.owt/config.toml` next to your `.bare` folder:
+You can create a project-specific config in `.owt/config.toml` at the project root. For the `.bare` convention, this lives next to your `.bare` folder:
 
 ```
 project/
@@ -124,7 +98,7 @@ chmod +x .owt/post-add.sh
 run_post_add_script_in_tmux = true
 ```
 
-Post-add scripts are tmux-only. If `run_post_add_script_in_tmux` is `false`, owt does not run the script. When enabled, owt starts a detached tmux session in the new worktree and the session is removed after the script finishes.
+Post-add scripts are tmux-only. If `run_post_add_script_in_tmux` is `false`, owt does not run the script. When enabled from global config, owt starts a detached tmux session in the new worktree and the session is removed after the script finishes. Project config can define the script path, but cannot enable automatic script execution.
 
 ## Editing Config in TUI
 
@@ -142,24 +116,7 @@ If no config file exists, owt uses these defaults:
 ```toml
 editor = "$EDITOR or vim"
 terminal = "$TERMINAL or Terminal"
+worktree_root = "~/.owt/worktree"
 copy_files = []
 run_post_add_script_in_tmux = false
-
-[[branch_types]]
-name = "feature"
-prefix = "feature/"
-base = "main"
-shortcut = "f"
-
-[[branch_types]]
-name = "bugfix"
-prefix = "bugfix/"
-base = "main"
-shortcut = "b"
-
-[[branch_types]]
-name = "hotfix"
-prefix = "hotfix/"
-base = "main"
-shortcut = "h"
 ```

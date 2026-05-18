@@ -62,25 +62,11 @@ Complete list of keyboard shortcuts.
 
 ## Add Worktree Modal
 
-### Type Selection
-
-| Key | Action |
-|:----|:-------|
-| `f` | Feature branch |
-| `b` | Bugfix branch |
-| `h` | Hotfix branch |
-| `c` | Custom (no prefix) |
-| `Esc` | Cancel |
-
-### Branch Input
-
 | Key | Action |
 |:----|:-------|
 | `Enter` | Create worktree |
-| `Esc` | Back to type selection |
-| `Shift+F` | Fetch base branch |
-| `Shift+L` | Use local as base |
-| `Shift+U` | Use remote as base |
+| `Tab` | Cycle base branch |
+| `Esc` | Cancel |
 
 ## Delete Confirmation
 

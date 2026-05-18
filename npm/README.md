@@ -1,6 +1,8 @@
 # owt (oh-my-worktree)
 
-A TUI tool for managing Git worktrees in bare repositories.
+A TUI tool for managing Git worktrees in bare and regular repositories.
+
+Run it from a `.bare` worktree layout or from a regular non-bare Git repository. For regular repositories, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
 
 ## Installation
 
@@ -57,22 +59,9 @@ owt
 | `?` | Show help |
 | `q` | Quit |
 
-## Branch Types (v0.4.1+)
+## Adding Worktrees
 
-When adding a new worktree, select branch type for automatic base branch:
-
-| Key | Type | Base |
-|-----|------|------|
-| `f` | feature | develop |
-| `h` | hotfix | main |
-| `r` | release | develop |
-| `b` | bugfix | develop |
-| `c` | custom | (select manually) |
-
-In branch input screen:
-- `Shift+F` - Fetch remote base branch
-- `Shift+U` - Use remote as base
-- `Shift+L` - Use local as base
+Press `a`, type the new branch name, and press `Enter`. Use `Tab` in the add dialog to cycle the base branch for the new worktree.
 
 ## Status Icons
 
@@ -91,19 +80,14 @@ Config file: `~/.config/owt/config.toml`
 ```toml
 editor = "code"
 terminal = "Ghostty"
+worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
-
-[[branch_types]]
-name = "feature"
-prefix = "feature/"
-base = "develop"
-shortcut = "f"
 ```
 
 ## Requirements
 
 - Git 2.5+ (for worktree support)
-- A bare Git repository
+- A Git repository
 
 ## More Information
 

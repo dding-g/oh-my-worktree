@@ -28,25 +28,25 @@ Branch types are [configurable](/oh-my-worktree/reference/configuration).
 
 ### Step 2: Enter Branch Name
 
-Type your branch name. If you selected a branch type, the prefix is already added.
+Type your branch name. Use `Tab` to cycle the base branch for the new worktree. The first default is `main`; after you choose a different base branch, that branch remains the default for later worktrees in the same session.
 
 **Keyboard shortcuts in this screen:**
 
 | Key | Action |
 |:----|:-------|
 | `Enter` | Create worktree |
+| `Tab` | Cycle base branch |
 | `Esc` | Cancel |
-| `Shift+F` | Fetch base branch from remote |
-| `Shift+L` | Use local branch as base |
-| `Shift+U` | Use remote branch as base |
 
 ### What Happens
 
 When you create a worktree:
 
-1. A new folder is created next to your existing worktrees
+1. A new folder is created next to your existing worktrees for the `.bare` layout, or under `~/.owt/worktree/<repo-name>/` for regular non-bare repos
 2. If configured, files are copied from an existing worktree (e.g., `.env`)
 3. If configured, a post-add script runs (e.g., `npm install`)
+
+Set `worktree_root` in `~/.config/owt/config.toml` to change the root used for regular repositories or to override the default location for new worktrees.
 
 ## Switching Worktrees
 

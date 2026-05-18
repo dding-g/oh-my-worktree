@@ -43,27 +43,30 @@ fn run_tui(path: PathBuf) -> Result<()> {
     // Check if we should write result to a file (for shell integration)
     let output_file = env::var("OWT_OUTPUT_FILE").ok();
 
-    // Try to find the bare repo in multiple ways:
-    // 1. Check for .bare folder in current directory (common worktree layout)
-    // 2. Check if current path is a git repo (worktree or bare)
+    let (repo_path, project_root_path, repo_is_bare) =
+        if let Some(bare_path) = git::find_bare_in_parent(&path) {
+            let project_root = bare_path
+                .parent()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| path.clone());
+            (bare_path, project_root, true)
+        } else if git::is_git_repo(&path) {
+            let common_dir = git::get_git_common_dir(&path)?;
 
-    let bare_repo_path = if let Some(bare_path) = git::find_bare_in_parent(&path) {
-        // Found .bare folder pattern
-        bare_path
-    } else if git::is_git_repo(&path) {
-        // Get the common git directory (works for both bare repos and worktrees)
-        let common_dir = git::get_git_common_dir(&path)?;
-
-        // Check if the common dir is a bare repository
-        if !git::is_bare_repo(&common_dir)? {
-            print_not_bare_repo_error();
+            if git::is_bare_repo(&common_dir)? {
+                let project_root = common_dir
+                    .parent()
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| path.clone());
+                (common_dir, project_root, true)
+            } else {
+                let worktree_root = git::get_worktree_root(&path)?;
+                (worktree_root.clone(), worktree_root, false)
+            }
+        } else {
+            print_not_git_repo_error();
             std::process::exit(1);
-        }
-        common_dir
-    } else {
-        print_not_git_repo_error();
-        std::process::exit(1);
-    };
+        };
 
     // Always use /dev/tty for TUI to support shell integration
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
@@ -76,7 +79,13 @@ fn run_tui(path: PathBuf) -> Result<()> {
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let has_shell_integration = output_file.is_some();
-    let mut app = app::App::new(bare_repo_path, Some(path), has_shell_integration)?;
+    let mut app = app::App::new(
+        repo_path,
+        project_root_path,
+        repo_is_bare,
+        Some(path),
+        has_shell_integration,
+    )?;
     let result = app.run(&mut terminal);
 
     // Restore terminal
@@ -435,10 +444,10 @@ USAGE:
     owt setup                    Install shell integration for directory changing
 
 ARGS:
-    [PATH]    Path to the bare repository (default: current directory)
+    [PATH]    Path to a Git repository or worktree (default: current directory)
 
 OPTIONS:
-    -p, --path <PATH>    Path to the bare repository
+    -p, --path <PATH>    Path to a Git repository or worktree
     -h, --help           Print help information
     -v, --version        Print version information
 
@@ -491,24 +500,5 @@ fn print_not_git_repo_error() {
 
 The current directory is not a git repository.
 Please navigate to a git repository or specify the path with --path."#
-    );
-}
-
-fn print_not_bare_repo_error() {
-    eprintln!(
-        r#"Error: Not a bare repository
-
-owt requires a bare repository with worktrees.
-
-Quick setup:
-  owt clone <url>           Clone as bare repo
-  owt init                  Convert existing repo
-
-Manual setup:
-  1. mv .git ../myproject.git
-  2. cd ../myproject.git
-  3. git config --bool core.bare true
-  4. git worktree add ../myproject/main main
-  5. owt"#
     );
 }

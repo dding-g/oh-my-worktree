@@ -1,10 +1,10 @@
 # owt (oh-my-worktree)
 
-A TUI tool for managing Git worktrees in bare repositories.
+A TUI tool for managing Git worktrees in bare and regular repositories.
 
 **[GitHub](https://github.com/dding-g/oh-my-worktree)**
 
-<img width="786" height="580" alt="Image" src="https://github.com/user-attachments/assets/929a7bf2-cd66-4a87-a73e-8b9567cb0a08" />
+<img width="786" height="580" alt="Image" src="./owt.png" />
 
 ## What is Git Worktree?
 
@@ -19,6 +19,8 @@ project/
 ```
 
 **owt** makes this workflow effortless with a simple TUI.
+
+You can also run `owt` inside a regular non-bare Git repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default unless you configure another root.
 
 ## Commands
 
@@ -72,6 +74,10 @@ owt
 ```
 
 ### Convert Existing Project
+
+You can run `owt` directly inside an existing regular Git repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
+
+If you prefer the `.bare` sibling layout, run:
 
 ```bash
 owt init
@@ -135,6 +141,7 @@ Config file: `~/.config/owt/config.toml`
 ```toml
 editor = "code"
 terminal = "Ghostty"
+worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
 
 # Disabled by default. When enabled, .owt/post-add.sh is launched in a

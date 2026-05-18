@@ -29,7 +29,9 @@ owt
 
 ## Convert Existing Project
 
-If you already have a regular Git repository, use `owt init` for a guided conversion:
+If you already have a regular Git repository, you can run `owt` directly from that repository. New worktrees are created under `~/.owt/worktree/<repo-name>/` by default.
+
+If you prefer the `.bare` sibling layout, use `owt init` for a guided conversion:
 
 ```bash
 owt init

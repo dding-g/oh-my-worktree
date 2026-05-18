@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const binName = process.platform === 'win32' ? 'owt.exe' : 'owt';
+const binName = process.platform === 'win32' ? 'owt-bin.exe' : 'owt-bin';
 const binPath = path.join(__dirname, binName);
 
 if (!fs.existsSync(binPath)) {

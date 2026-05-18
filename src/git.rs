@@ -75,6 +75,25 @@ pub fn get_git_common_dir(path: &Path) -> Result<PathBuf> {
     }
 }
 
+pub fn get_worktree_root(path: &Path) -> Result<PathBuf> {
+    let output = git_command()
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "rev-parse",
+            "--show-toplevel",
+        ])
+        .output()
+        .context("Failed to get git worktree root")?;
+
+    if !output.status.success() {
+        anyhow::bail!("Not a git worktree");
+    }
+
+    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(PathBuf::from(root).canonicalize()?)
+}
+
 pub fn list_worktrees(bare_repo_path: &Path) -> Result<Vec<Worktree>> {
     let output = git_command()
         .args([
@@ -228,6 +247,15 @@ pub fn add_worktree(
     worktree_path: &Path,
     base_branch: Option<&str>,
 ) -> Result<()> {
+    if let Some(parent) = worktree_path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create worktree parent directory {}",
+                parent.display()
+            )
+        })?;
+    }
+
     let mut args = vec![
         "-C".to_string(),
         bare_repo_path.to_string_lossy().to_string(),
@@ -902,7 +930,9 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_worktree, fetch_remote_branch, get_worktree_details, list_worktrees};
+    use super::{
+        add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root, list_worktrees,
+    };
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
@@ -1022,6 +1052,77 @@ mod tests {
 
         let _ = fs::remove_dir_all(&temp);
         branch
+    }
+
+    fn create_test_regular_repo(path: &Path) -> String {
+        fs::create_dir_all(path).unwrap();
+
+        let init_output = git_cmd().current_dir(path).args(["init"]).output().unwrap();
+        assert!(
+            init_output.status.success(),
+            "git init failed: {}",
+            String::from_utf8_lossy(&init_output.stderr)
+        );
+
+        let config_email = git_cmd()
+            .current_dir(path)
+            .args(["config", "user.email", "test@test.com"])
+            .output()
+            .unwrap();
+        assert!(
+            config_email.status.success(),
+            "git config email failed: {}",
+            String::from_utf8_lossy(&config_email.stderr)
+        );
+
+        let config_name = git_cmd()
+            .current_dir(path)
+            .args(["config", "user.name", "Test"])
+            .output()
+            .unwrap();
+        assert!(
+            config_name.status.success(),
+            "git config name failed: {}",
+            String::from_utf8_lossy(&config_name.stderr)
+        );
+
+        fs::write(path.join("README.md"), "# Test").unwrap();
+        let add_output = git_cmd()
+            .current_dir(path)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        assert!(
+            add_output.status.success(),
+            "git add failed: {}",
+            String::from_utf8_lossy(&add_output.stderr)
+        );
+
+        let commit_output = git_cmd()
+            .current_dir(path)
+            .args(["commit", "-m", "Initial commit"])
+            .output()
+            .unwrap();
+        assert!(
+            commit_output.status.success(),
+            "git commit failed: {}",
+            String::from_utf8_lossy(&commit_output.stderr)
+        );
+
+        let branch_output = git_cmd()
+            .current_dir(path)
+            .args(["branch", "--show-current"])
+            .output()
+            .unwrap();
+        assert!(
+            branch_output.status.success(),
+            "git branch --show-current failed: {}",
+            String::from_utf8_lossy(&branch_output.stderr)
+        );
+
+        String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_string()
     }
 
     fn git_in(path: &Path, args: &[&str]) -> Output {
@@ -1235,6 +1336,51 @@ mod tests {
 
         assert_worktree_usable(&worktree_path);
         assert_worktree_config_marks_non_bare(&worktree_path);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn add_worktree_works_from_non_bare_repository() {
+        let base = temp_dir("add_worktree_non_bare");
+        let repo_path = base.join("repo");
+        let default_branch = create_test_regular_repo(&repo_path);
+        let worktree_path = base.join("owt-root").join("repo").join("feature-login");
+
+        add_worktree(
+            &repo_path,
+            "feature-login",
+            &worktree_path,
+            Some(&default_branch),
+        )
+        .unwrap();
+
+        assert_worktree_usable(&worktree_path);
+        let worktrees = list_worktrees(&repo_path).unwrap();
+        let canonical_repo_path = canonicalize_existing(&repo_path);
+        let canonical_worktree_path = canonicalize_existing(&worktree_path);
+        assert!(worktrees
+            .iter()
+            .any(|wt| canonicalize_existing(&wt.path) == canonical_repo_path));
+        assert!(worktrees
+            .iter()
+            .any(|wt| canonicalize_existing(&wt.path) == canonical_worktree_path));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn get_worktree_root_resolves_repo_root_from_subdirectory() {
+        let base = temp_dir("get_worktree_root");
+        let repo_path = base.join("repo");
+        create_test_regular_repo(&repo_path);
+        let subdir = repo_path.join("nested");
+        fs::create_dir_all(&subdir).unwrap();
+
+        assert_eq!(
+            get_worktree_root(&subdir).unwrap(),
+            canonicalize_existing(&repo_path)
+        );
 
         let _ = fs::remove_dir_all(&base);
     }

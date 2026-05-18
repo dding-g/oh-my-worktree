@@ -2,7 +2,7 @@
 
 Git worktree를 쉽게 관리할 수 있는 TUI 도구입니다.
 
-<img width="786" height="580" alt="Image" src="https://github.com/user-attachments/assets/929a7bf2-cd66-4a87-a73e-8b9567cb0a08" />
+<img width="786" height="580" alt="Image" src="./owt.png" />
 
 ## Git Worktree란?
 
@@ -17,6 +17,8 @@ project/
 ```
 
 **owt**는 이 워크플로우를 간단한 TUI로 관리할 수 있게 해줍니다.
+
+일반 non-bare Git 저장소 안에서도 `owt`를 실행할 수 있습니다. 이 경우 새 worktree는 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성되며, 설정으로 변경할 수 있습니다.
 
 ## 명령어
 
@@ -70,6 +72,10 @@ owt
 ```
 
 ### 기존 프로젝트 변환
+
+기존 일반 Git 저장소 안에서도 `owt`를 바로 실행할 수 있습니다. 새 worktree는 기본적으로 `~/.owt/worktree/<repo-name>/` 아래에 생성됩니다.
+
+`.bare` sibling 구조를 선호한다면 다음 명령을 실행하세요:
 
 ```bash
 owt init
@@ -133,6 +139,7 @@ owt /path/to/project
 ```toml
 editor = "code"
 terminal = "Ghostty"
+worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
 
 # 기본값은 비활성화입니다. 활성화하면 worktree 생성 후 .owt/post-add.sh를

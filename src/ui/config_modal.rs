@@ -11,7 +11,7 @@ use crate::config::Config;
 use crate::types::AppState;
 use crate::ui::theme::{centered_rect, Theme};
 
-pub const CONFIG_ITEM_COUNT: usize = 5;
+pub const CONFIG_ITEM_COUNT: usize = 6;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
@@ -44,6 +44,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         Constraint::Length(1), // Settings header
         Constraint::Length(1), // Editor
         Constraint::Length(1), // Terminal
+        Constraint::Length(1), // Worktree root
         Constraint::Length(1), // Copy files
         Constraint::Length(1), // Run post-add in tmux
         Constraint::Length(1), // Post-add script
@@ -62,7 +63,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(path_header, chunks[1]);
 
     // Config path value
-    let config_path = get_config_path();
+    let config_path = get_config_path(app);
     let path_value = Paragraph::new(Line::from(vec![Span::styled(
         config_path,
         Style::default().fg(t.text_muted),
@@ -102,8 +103,8 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_config_item(
         frame,
         chunks[7],
-        "copy_files",
-        &get_copy_files_display(app),
+        "worktree_root",
+        &get_worktree_root_display(app),
         selected_index == 2,
         editing && selected_index == 2,
         &app.input_buffer,
@@ -112,19 +113,29 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_config_item(
         frame,
         chunks[8],
-        "run_post_add_script_in_tmux",
-        &get_tmux_script_display(app),
+        "copy_files",
+        &get_copy_files_display(app),
         selected_index == 3,
-        false,
+        editing && selected_index == 3,
         &app.input_buffer,
         t,
     );
     render_config_item(
         frame,
         chunks[9],
+        "run_post_add_script_in_tmux",
+        &get_tmux_script_display(app),
+        selected_index == 4,
+        false,
+        &app.input_buffer,
+        t,
+    );
+    render_config_item(
+        frame,
+        chunks[10],
         "post_add_script",
         &get_script_display(app),
-        selected_index == 4,
+        selected_index == 5,
         false,
         &app.input_buffer,
         t,
@@ -151,7 +162,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         ]
     };
     let help = Paragraph::new(Line::from(help_text)).style(Style::default().fg(t.text_muted));
-    frame.render_widget(help, chunks[11]);
+    frame.render_widget(help, chunks[12]);
 }
 
 fn render_config_item(
@@ -233,8 +244,19 @@ fn get_copy_files_display(app: &App) -> String {
     }
 }
 
+fn get_worktree_root_display(app: &App) -> String {
+    if app.repo_is_bare {
+        return "bare sibling layout".to_string();
+    }
+
+    app.config
+        .worktree_root
+        .clone()
+        .unwrap_or_else(|| format!("{} (default)", Config::default_worktree_root().display()))
+}
+
 fn get_script_display(app: &App) -> String {
-    let script_path = Config::post_add_script_path(&app.bare_repo_path);
+    let script_path = Config::post_add_script_path(&app.project_root_path);
     if script_path.exists() {
         format!("{}", script_path.display())
     } else {
@@ -250,14 +272,8 @@ fn get_tmux_script_display(app: &App) -> String {
     }
 }
 
-fn get_config_path() -> String {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        return format!("{}/owt/config.toml", xdg);
-    }
-
-    if let Ok(home) = std::env::var("HOME") {
-        return format!("{}/.config/owt/config.toml", home);
-    }
-
-    ".config/owt/config.toml".to_string()
+fn get_config_path(app: &App) -> String {
+    Config::project_config_path(&app.project_root_path)
+        .display()
+        .to_string()
 }
