@@ -680,7 +680,8 @@ pub fn get_recent_commit_graph(path: &Path, limit: usize) -> Result<Vec<String>>
             "log",
             "--graph",
             "--decorate",
-            "--oneline",
+            "--date=short",
+            "--pretty=format:%h %ad%d %s",
             &format!("-n{}", limit),
         ])
         .output()
@@ -1396,12 +1397,30 @@ mod tests {
         let details = get_worktree_details(&worktree_path).unwrap();
 
         assert!(details.status_summary.contains("clean"));
-        assert!(details
+        let initial_commit = details
             .recent_commits
             .iter()
-            .any(|line| line.contains("Initial commit")));
+            .find(|line| line.contains("Initial commit"))
+            .expect("recent commits should include the commit subject");
+        assert!(
+            initial_commit
+                .split_whitespace()
+                .any(|token| is_short_commit_date(token)),
+            "recent commit should include a short date: {}",
+            initial_commit
+        );
 
         let _ = fs::remove_dir_all(&base);
+    }
+
+    fn is_short_commit_date(token: &str) -> bool {
+        let bytes = token.as_bytes();
+        bytes.len() == 10
+            && bytes[4] == b'-'
+            && bytes[7] == b'-'
+            && bytes[..4].iter().all(u8::is_ascii_digit)
+            && bytes[5..7].iter().all(u8::is_ascii_digit)
+            && bytes[8..].iter().all(u8::is_ascii_digit)
     }
 
     #[test]

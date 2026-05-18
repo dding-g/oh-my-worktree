@@ -302,10 +302,19 @@ fn render_commit_line(commit: &str, t: &Theme) -> Line<'static> {
         ));
     };
 
+    let Some((date, rest)) = split_commit_date(rest) else {
+        return Line::from(Span::styled(
+            commit.to_string(),
+            Style::default().fg(t.text_primary),
+        ));
+    };
+
     let (decoration, message) = split_decoration(rest);
     let mut spans = vec![
         Span::styled(graph, Style::default().fg(t.text_muted)),
         Span::styled(hash, Style::default().fg(t.amber).bold()),
+        Span::raw(" "),
+        Span::styled(date, Style::default().fg(t.text_muted)),
     ];
 
     if let Some(decoration) = decoration {
@@ -344,6 +353,11 @@ fn split_commit_line(commit: &str) -> Option<(String, String, String)> {
 
 fn is_commit_hash(token: &str) -> bool {
     (4..=40).contains(&token.len()) && token.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn split_commit_date(rest: String) -> Option<(String, String)> {
+    let (date, rest) = rest.split_once(' ')?;
+    Some((date.to_string(), rest.trim_start().to_string()))
 }
 
 fn split_decoration(rest: String) -> (Option<String>, String) {
