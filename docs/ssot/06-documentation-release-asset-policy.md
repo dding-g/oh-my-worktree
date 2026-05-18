@@ -85,6 +85,7 @@ release_version_files:
 # 6. 검증 규칙
 
 - docs-only 변경은 `git diff --check`를 실행한다.
+- 문서 동기화와 release asset 정책은 Rust behavior가 아니므로 unit test 대상이 아니라 target diff inspection과 필요 시 docs build로 검증한다.
 - GitHub Pages/Jekyll local build는 dependency가 설치된 경우에만 필수로 본다.
 - release asset을 옮기면 `docs/index.html`, `docs/site.webmanifest`, favicon references를 함께 확인한다.
 - homepage screenshot이나 favicon 변경은 source archive와 published asset의 목적을 commit message나 compound doc에 남긴다.

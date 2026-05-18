@@ -390,6 +390,43 @@ copy_files = [".env", ".envrc", "config.json"]
     }
 
     #[test]
+    fn test_project_config_applies_safe_overrides() {
+        let dir = std::env::temp_dir().join(format!(
+            "owt_project_safe_override_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let project_dir = dir.join("project");
+        fs::create_dir_all(project_dir.join(".owt")).unwrap();
+        fs::write(
+            project_dir.join(".owt").join("config.toml"),
+            r#"
+editor = "code"
+terminal = "Ghostty"
+worktree_root = "/tmp/owt-worktrees"
+copy_files = [".env", ".envrc"]
+post_add_script = "setup.sh"
+run_post_add_script_in_tmux = true
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load_with_project(Some(&project_dir)).unwrap();
+
+        assert_eq!(config.editor, Some("code".to_string()));
+        assert_eq!(config.terminal, Some("Ghostty".to_string()));
+        assert_eq!(config.worktree_root, Some("/tmp/owt-worktrees".to_string()));
+        assert_eq!(config.copy_files, vec![".env", ".envrc"]);
+        assert_eq!(config.post_add_script, Some("setup.sh".to_string()));
+        assert!(!config.run_post_add_script_in_tmux);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn test_save_to_project_omits_tmux_post_add_flag() {
         let dir = std::env::temp_dir().join(format!(
             "owt_project_save_test_{}_{}",
@@ -441,5 +478,41 @@ shortcut = "f"
             config.resolved_worktree_root(),
             PathBuf::from("/tmp/custom-worktrees")
         );
+    }
+
+    #[test]
+    fn test_resolved_worktree_root_expands_home_path() {
+        let config = Config {
+            worktree_root: Some("~/custom-worktrees".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            config.resolved_worktree_root(),
+            home_dir().unwrap().join("custom-worktrees")
+        );
+    }
+
+    #[test]
+    fn test_editor_and_terminal_precedence() {
+        std::env::set_var("EDITOR", "nano");
+        std::env::set_var("TERMINAL", "Ghostty");
+
+        let default_config = Config::default();
+        assert_eq!(default_config.get_editor(), "nano");
+        assert_eq!(default_config.get_terminal(), Some("Ghostty".to_string()));
+
+        let configured = Config {
+            editor: Some("code".to_string()),
+            terminal: Some("WezTerm".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(configured.get_editor(), "code");
+        assert_eq!(configured.get_terminal(), Some("WezTerm".to_string()));
+
+        std::env::remove_var("EDITOR");
+        std::env::remove_var("TERMINAL");
+        assert_eq!(Config::default().get_editor(), "vim");
+        assert_eq!(Config::default().get_terminal(), None);
     }
 }

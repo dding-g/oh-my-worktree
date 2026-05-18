@@ -18,6 +18,39 @@ enum Command {
     TestCd, // Test command for debugging cd functionality
 }
 
+#[cfg(test)]
+impl Command {
+    fn tui_path(&self) -> Option<&std::path::Path> {
+        match self {
+            Command::Tui { path } => Some(path.as_path()),
+            _ => None,
+        }
+    }
+}
+
+const SHELL_FUNCTION: &str = r#"
+# owt shell integration - enables 'Enter' key to change directory
+owt() {
+  local output_file
+  output_file=$(mktemp) || return
+
+  OWT_OUTPUT_FILE="$output_file" command owt "$@"
+  local exit_code=$?
+
+  if [ -f "$output_file" ]; then
+    local target
+    target=$(cat "$output_file")
+    rm -f "$output_file"
+
+    if [ -n "$target" ] && [ -d "$target" ]; then
+      cd "$target" || return
+    fi
+  fi
+
+  return $exit_code
+}
+"#;
+
 fn main() -> Result<()> {
     match parse_args() {
         Command::Help => {
@@ -247,29 +280,6 @@ fn run_setup() -> Result<()> {
     use std::fs;
     use std::io::{self, Write};
 
-    const SHELL_FUNCTION: &str = r#"
-# owt shell integration - enables 'Enter' key to change directory
-owt() {
-  local output_file
-  output_file=$(mktemp) || return
-
-  OWT_OUTPUT_FILE="$output_file" command owt "$@"
-  local exit_code=$?
-
-  if [ -f "$output_file" ]; then
-    local target
-    target=$(cat "$output_file")
-    rm -f "$output_file"
-
-    if [ -n "$target" ] && [ -d "$target" ]; then
-      cd "$target" || return
-    fi
-  fi
-
-  return $exit_code
-}
-"#;
-
     // Detect shell from SHELL environment variable
     let shell = env::var("SHELL").unwrap_or_default();
     let home = env::var("HOME").ok().map(PathBuf::from);
@@ -381,10 +391,17 @@ fn extract_repo_name(url: &str) -> String {
 
 fn parse_args() -> Command {
     let args: Vec<String> = env::args().collect();
+    parse_args_from(args, || {
+        env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    })
+}
+
+fn parse_args_from(args: Vec<String>, current_dir: impl Fn() -> PathBuf) -> Command {
+    let current_dir = &current_dir;
 
     if args.len() < 2 {
         return Command::Tui {
-            path: env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            path: current_dir(),
         };
     }
 
@@ -406,7 +423,7 @@ fn parse_args() -> Command {
         "test-cd" | "--test-cd" => Command::TestCd,
         arg if arg.starts_with('-') => {
             // Handle flags for TUI mode
-            let mut path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let mut path = current_dir();
             let mut i = 1;
             while i < args.len() {
                 match args[i].as_str() {
@@ -473,18 +490,8 @@ ENVIRONMENT:
     TERMINAL    Terminal app to use (default: Terminal.app on macOS)
 
 SHELL INTEGRATION:
-    To enable 'Enter' key to change directory, add this to your shell config:
-
-    # For bash (~/.bashrc) or zsh (~/.zshrc):
-    owt() {{
-      local result
-      result=$(command owt "$@")
-      if [[ -d "$result" ]]; then
-        cd "$result"
-      else
-        echo "$result"
-      fi
-    }}
+    Run `owt setup` to install the secure OWT_OUTPUT_FILE shell integration.
+    The TUI draws through /dev/tty so stdout can remain reserved for cd handoff.
 
 EXAMPLES:
     owt clone https://github.com/user/repo.git
@@ -501,4 +508,247 @@ fn print_not_git_repo_error() {
 The current directory is not a git repository.
 Please navigate to a git repository or specify the path with --path."#
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command as ProcessCommand, Output};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let id = std::process::id();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("owt_main_unit_{}_{}_{}", name, id, ts));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn git_cmd() -> ProcessCommand {
+        let mut cmd = ProcessCommand::new("git");
+        cmd.env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR");
+        cmd
+    }
+
+    fn assert_git_success(output: Output, context: &str) {
+        assert!(
+            output.status.success(),
+            "{}: {}",
+            context,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn create_source_repo(path: &Path) {
+        fs::create_dir_all(path).unwrap();
+        assert_git_success(
+            git_cmd()
+                .current_dir(path)
+                .args(["init", "-b", "main"])
+                .output()
+                .unwrap(),
+            "git init failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(path)
+                .args(["config", "user.email", "test@test.com"])
+                .output()
+                .unwrap(),
+            "git config user.email failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(path)
+                .args(["config", "user.name", "Test"])
+                .output()
+                .unwrap(),
+            "git config user.name failed",
+        );
+        fs::write(path.join("README.md"), "# Test\n").unwrap();
+        assert_git_success(
+            git_cmd()
+                .current_dir(path)
+                .args(["add", "."])
+                .output()
+                .unwrap(),
+            "git add failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(path)
+                .args(["commit", "-m", "initial"])
+                .output()
+                .unwrap(),
+            "git commit failed",
+        );
+    }
+
+    #[test]
+    fn parse_args_defaults_to_current_directory_tui() {
+        let command = parse_args_from(vec!["owt".to_string()], || PathBuf::from("/repo/main"));
+
+        assert_eq!(command.tui_path(), Some(Path::new("/repo/main")));
+    }
+
+    #[test]
+    fn parse_args_accepts_path_flag_and_positional_path() {
+        let flag_command = parse_args_from(
+            vec![
+                "owt".to_string(),
+                "--path".to_string(),
+                "/tmp/repo".to_string(),
+            ],
+            || PathBuf::from("/repo/main"),
+        );
+        let positional_command =
+            parse_args_from(vec!["owt".to_string(), "/tmp/other".to_string()], || {
+                PathBuf::from("/repo/main")
+            });
+
+        assert_eq!(flag_command.tui_path(), Some(Path::new("/tmp/repo")));
+        assert_eq!(positional_command.tui_path(), Some(Path::new("/tmp/other")));
+    }
+
+    #[test]
+    fn parse_args_recognizes_documented_subcommands() {
+        assert!(matches!(
+            parse_args_from(vec!["owt".to_string(), "init".to_string()], PathBuf::new),
+            Command::Init
+        ));
+        assert!(matches!(
+            parse_args_from(vec!["owt".to_string(), "setup".to_string()], PathBuf::new),
+            Command::Setup
+        ));
+        assert!(matches!(
+            parse_args_from(vec!["owt".to_string(), "test-cd".to_string()], PathBuf::new),
+            Command::TestCd
+        ));
+        assert!(matches!(
+            parse_args_from(
+                vec!["owt".to_string(), "--version".to_string()],
+                PathBuf::new
+            ),
+            Command::Version
+        ));
+        assert!(matches!(
+            parse_args_from(vec!["owt".to_string(), "help".to_string()], PathBuf::new),
+            Command::Help
+        ));
+        assert!(matches!(
+            parse_args_from(
+                vec![
+                    "owt".to_string(),
+                    "clone".to_string(),
+                    "https://example.com/repo.git".to_string(),
+                    "/tmp/projects".to_string()
+                ],
+                PathBuf::new
+            ),
+            Command::Clone { url, path }
+                if url == "https://example.com/repo.git" && path == Some(PathBuf::from("/tmp/projects"))
+        ));
+    }
+
+    #[test]
+    fn extract_repo_name_handles_documented_url_forms() {
+        let cases = [
+            ("https://github.com/user/repo.git", "repo"),
+            ("git@github.com:user/repo.git", "repo"),
+            ("https://github.com/user/repo", "repo"),
+            ("repo.git", "repo"),
+            ("/path/to/repo.git", "repo"),
+            ("https://github.com/user/repo.git/", "repo"),
+        ];
+
+        for (url, expected) in cases {
+            assert_eq!(extract_repo_name(url), expected, "failed for {url}");
+        }
+    }
+
+    #[test]
+    fn run_clone_creates_dot_bare_layout_and_first_worktree() {
+        let base = temp_dir("run_clone_layout");
+        let source = base.join("source-repo");
+        let target_parent = base.join("projects");
+        create_source_repo(&source);
+
+        run_clone(&source.to_string_lossy(), Some(target_parent.clone())).unwrap();
+
+        let project_dir = target_parent.join("source-repo");
+        assert!(project_dir.join(".bare").is_dir());
+        assert!(project_dir.join("main").is_dir());
+        assert!(git::is_bare_repo(&project_dir.join(".bare")).unwrap());
+        assert!(git::is_git_repo(&project_dir.join("main")));
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn shell_function_uses_output_file_and_cd_guard() {
+        assert!(SHELL_FUNCTION.contains("OWT_OUTPUT_FILE=\"$output_file\" command owt \"$@\""));
+        assert!(SHELL_FUNCTION.contains("target=$(cat \"$output_file\")"));
+        assert!(SHELL_FUNCTION.contains("[ -n \"$target\" ] && [ -d \"$target\" ]"));
+        assert!(SHELL_FUNCTION.contains("cd \"$target\""));
+        assert!(SHELL_FUNCTION.contains("return $exit_code"));
+    }
+
+    #[test]
+    fn open_shell_output_file_accepts_private_regular_file_and_truncates() {
+        let base = temp_dir("output_file_regular");
+        let path = base.join("owt-output");
+        fs::write(&path, "stale target").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+
+        let mut file = open_shell_output_file(path.to_str().unwrap()).unwrap();
+        writeln!(file, "/tmp/new-target").unwrap();
+        drop(file);
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "/tmp/new-target\n");
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn open_shell_output_file_rejects_non_file() {
+        let base = temp_dir("output_file_directory");
+
+        assert!(open_shell_output_file(base.to_str().unwrap()).is_err());
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_shell_output_file_rejects_symlink_and_group_accessible_file() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let base = temp_dir("output_file_security");
+        let target = base.join("target");
+        let link = base.join("link");
+        fs::write(&target, "").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        symlink(&target, &link).unwrap();
+
+        assert!(open_shell_output_file(link.to_str().unwrap()).is_err());
+
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(open_shell_output_file(target.to_str().unwrap()).is_err());
+
+        let _ = fs::remove_dir_all(base);
+    }
 }

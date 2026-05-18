@@ -83,5 +83,6 @@ post_add_script_policy:
 # 6. 검증 규칙
 
 - `src/config.rs`를 변경하면 config parsing, save, merge test를 갱신한다.
+- Project config safe override는 `editor`, `terminal`, `worktree_root`, `copy_files`, `post_add_script`가 적용되고 `run_post_add_script_in_tmux` enable은 무시되는 test로 고정한다.
 - post-add script 실행 경계를 바꾸면 `docs/reference/configuration.md`, `README.md`, `README.ko.md`, 이 SSOT를 함께 갱신한다.
 - trust boundary 변경은 단순 UX 변경이 아니라 security-sensitive behavior로 취급한다.

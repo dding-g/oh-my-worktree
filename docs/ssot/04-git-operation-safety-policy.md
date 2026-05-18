@@ -96,6 +96,9 @@ ahead_behind_display:
 - URL에서 repo name을 파싱하는 동작은 npm/docs clone UX와 연결된다.
 - nested/worktreeConfig 관련 repair 동작은 bare 오인식 회귀를 막는 중요 invariant다.
 - Git command env sanitization은 hook/shell 환경 회귀를 막는 중요 invariant다.
+- Git helper command는 shell integration stdout/stderr handoff를 오염시키면 안 된다. Remote URL 확인처럼 값을 조회하는 helper는 child stdout/stderr를 capture해야 한다.
+- 새 worktree 생성 직후 list refresh와 selection reconcile은 즉시 `Enter` 했을 때 새 worktree path를 handoff해야 한다.
+- Remote base branch fetch는 새 branch 생성 시 최신 `origin/<base>` commit을 기준으로 worktree를 만들 수 있어야 한다.
 
 # 7. 검증 규칙
 

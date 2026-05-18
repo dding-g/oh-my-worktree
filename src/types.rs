@@ -191,3 +191,60 @@ pub struct ActiveOp {
     pub worktree_path: PathBuf,
     pub display_name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worktree_status_symbols_and_labels_match_contract() {
+        let cases = [
+            (WorktreeStatus::Clean, "✓", "clean"),
+            (WorktreeStatus::Staged, "+", "staged"),
+            (WorktreeStatus::Unstaged, "~", "unstaged"),
+            (WorktreeStatus::Conflict, "!", "conflict"),
+            (WorktreeStatus::Mixed, "*", "mixed"),
+        ];
+
+        for (status, symbol, label) in cases {
+            assert_eq!(status.symbol(), symbol);
+            assert_eq!(status.label(), label);
+        }
+    }
+
+    #[test]
+    fn ahead_behind_display_matches_contract() {
+        assert_eq!(
+            AheadBehind {
+                ahead: 0,
+                behind: 0
+            }
+            .display(),
+            None
+        );
+        assert_eq!(
+            AheadBehind {
+                ahead: 2,
+                behind: 0
+            }
+            .display(),
+            Some("↑2".to_string())
+        );
+        assert_eq!(
+            AheadBehind {
+                ahead: 0,
+                behind: 3
+            }
+            .display(),
+            Some("↓3".to_string())
+        );
+        assert_eq!(
+            AheadBehind {
+                ahead: 2,
+                behind: 3
+            }
+            .display(),
+            Some("↑2↓3".to_string())
+        );
+    }
+}

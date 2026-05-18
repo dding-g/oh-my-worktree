@@ -116,3 +116,8 @@ user_cases:
 - keybinding이 바뀌면 `docs/reference/keybindings.md`, README keybinding table, help modal, 이 SSOT를 함께 갱신한다.
 - TUI state가 추가되면 `src/types.rs::AppState`, rendering, input handler, docs를 함께 확인한다.
 - user-facing flow가 바뀌면 `docs/usage/`와 이 SSOT를 함께 갱신한다.
+- CLI parsing은 default TUI path, `--path`/`-p`, positional path, `clone`, `init`, `setup`, `test-cd`, help/version command를 test로 고정한다.
+- `owt clone <URL> [PATH]`는 `.bare` repository와 default branch 첫 worktree를 만드는 integration test로 고정한다.
+- `Enter` key는 정상 선택, filter 선택, background operation 중 block, bare repository 선택 거부를 app-level test로 고정한다.
+- Dirty worktree delete guard는 force가 없을 때 delete operation을 시작하지 않는 test로 고정한다.
+- Worktree status symbol/label과 ahead/behind display는 `types` unit test로 고정한다.

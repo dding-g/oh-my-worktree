@@ -62,7 +62,7 @@ tty_policy:
 |---|---|---|
 | zsh | `~/.zshrc` | function snippet 추가 안내/확인 |
 | bash | `~/.bashrc` | function snippet 추가 안내/확인 |
-| fish | `~/.config/fish/functions/owt.fish` 또는 안내 문서 | fish function 안내 |
+| fish | manual snippet 또는 별도 문서 | 현재 자동 설치 대상이 아니다 |
 | unknown | manual snippet | 자동 감지 실패 시 수동 안내 |
 
 Symlink-managed config는 자동 수정하지 않고 수동 추가 안내를 우선한다.
@@ -71,7 +71,15 @@ Symlink-managed config는 자동 수정하지 않고 수동 추가 안내를 우
 
 `owt test-cd`는 TUI 없이 `OWT_OUTPUT_FILE` handoff를 확인하는 debug command다. 일반 사용 흐름의 필수 단계가 아니며, docs에서는 troubleshooting context로만 다룬다.
 
-# 7. 검증 규칙
+# 7. Test-backed Invariant
+
+- Shell function snippet은 `OWT_OUTPUT_FILE`을 임시 파일로 만들고 `command owt "$@"`에 전달한 뒤, 파일 내용이 존재하는 directory일 때만 `cd`한다.
+- `owt --help`는 stdout capture 방식의 오래된 wrapper를 안내하지 않고 `owt setup` 기반 `OWT_OUTPUT_FILE` 계약을 안내한다.
+- `OWT_OUTPUT_FILE` writer는 기존 regular file만 열 수 있고, symlink/directory/non-file을 거부한다.
+- Unix에서는 `OWT_OUTPUT_FILE`이 group/world accessible이면 거부한다.
+- `OWT_OUTPUT_FILE` writer는 stale content를 남기지 않도록 truncate 후 선택 worktree path를 기록한다.
+
+# 8. 검증 규칙
 
 - shell integration 변경은 `src/main.rs`, `docs/getting-started/shell-integration.md`, 이 SSOT를 함께 갱신한다.
 - output file security check를 완화하지 않는다.

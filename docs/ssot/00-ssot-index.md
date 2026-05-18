@@ -73,7 +73,10 @@ update_rules:
       - inspect_target_diff
     rust_behavior:
       - cargo test
+      - contract_tests_for_relevant_ssot
 ```
+
+SSOT 계약이 Rust behavior를 정의하는 경우 해당 계약은 unit/integration test 또는 명시적 수동 검증 항목 중 하나로 추적되어야 한다. 반대로 테스트가 user-visible behavior나 safety invariant를 고정하면 관련 SSOT에 그 계약을 반영한다.
 
 # 4. SSOT와 Compound 문서의 경계
 

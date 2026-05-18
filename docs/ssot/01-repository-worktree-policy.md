@@ -164,7 +164,14 @@ verification_policy:
     required:
       - "cargo test"
       - "regression tests for worktree edge cases"
+      - "layout별 worktree 생성 위치 test"
   forbidden:
     - "문서 변경을 이유로 Rust source 변경을 함께 섞는다."
     - "regular repository 지원을 `.bare`의 부가 기능처럼 축소해서 설명한다."
 ```
+
+Test-backed layout invariant는 다음을 포함한다.
+
+- regular repository의 새 worktree path는 `worktree_root/<repo-name>/<branch>`를 따른다.
+- `.bare` layout은 `worktree_root` 설정과 무관하게 sibling worktree path를 유지한다.
+- `owt clone`은 project-local `.bare` repository와 default branch 첫 worktree를 만든다.

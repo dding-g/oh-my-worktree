@@ -511,6 +511,11 @@ impl App {
             }
             KeyCode::Enter => {
                 // Exit filter mode and enter the selected worktree
+                self.poll_background_op();
+                if self.active_op.is_some() {
+                    self.message = Some(AppMessage::info("Operation still in progress"));
+                    return;
+                }
                 self.is_filtering = false;
                 self.enter_worktree();
             }
@@ -2084,5 +2089,160 @@ mod tests {
         assert!(app.should_quit);
 
         let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn enter_is_blocked_while_background_operation_is_running() {
+        let (_tx, rx) = mpsc::channel();
+        let mut app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/repo/main"),
+                branch: Some("main".to_string()),
+                is_bare: false,
+                status: WorktreeStatus::Clean,
+                last_commit_time: None,
+                ahead_behind: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+        app.active_op = Some((OpKind::Add, rx));
+
+        app.handle_list_input(KeyCode::Enter, KeyModifiers::empty());
+
+        assert!(matches!(app.exit_action, ExitAction::Quit));
+        assert!(!app.should_quit);
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Operation still in progress")
+        );
+    }
+
+    #[test]
+    fn enter_rejects_bare_repository_selection() {
+        let mut app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/repo/.bare"),
+                branch: None,
+                is_bare: true,
+                status: WorktreeStatus::Clean,
+                last_commit_time: None,
+                ahead_behind: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+
+        app.enter_worktree();
+
+        assert!(matches!(app.exit_action, ExitAction::Quit));
+        assert!(!app.should_quit);
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Cannot enter bare repository")
+        );
+    }
+
+    #[test]
+    fn delete_confirmation_blocks_dirty_worktree_without_force() {
+        let mut app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/repo/dirty"),
+                branch: Some("dirty".to_string()),
+                is_bare: false,
+                status: WorktreeStatus::Unstaged,
+                last_commit_time: None,
+                ahead_behind: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+        app.state = AppState::ConfirmDelete {
+            delete_branch: false,
+            force: false,
+        };
+
+        app.handle_confirm_delete_input(KeyCode::Enter, false, false);
+
+        assert!(app.active_op.is_none());
+        assert!(matches!(
+            app.state,
+            AppState::ConfirmDelete {
+                delete_branch: false,
+                force: false
+            }
+        ));
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Worktree has uncommitted changes. Press 'f' to enable force delete.")
+        );
+    }
+
+    #[test]
+    fn filter_enter_changes_to_first_matching_worktree() {
+        let mut app = test_app(
+            vec![
+                Worktree {
+                    path: PathBuf::from("/repo/main"),
+                    branch: Some("main".to_string()),
+                    is_bare: false,
+                    status: WorktreeStatus::Clean,
+                    last_commit_time: None,
+                    ahead_behind: None,
+                },
+                Worktree {
+                    path: PathBuf::from("/repo/feature-search"),
+                    branch: Some("feature/search".to_string()),
+                    is_bare: false,
+                    status: WorktreeStatus::Clean,
+                    last_commit_time: None,
+                    ahead_behind: None,
+                },
+            ],
+            0,
+            "/repo/.bare",
+        );
+        app.is_filtering = true;
+
+        app.handle_filter_input(KeyCode::Char('s'));
+        app.handle_filter_input(KeyCode::Enter);
+
+        match app.exit_action {
+            ExitAction::ChangeDirectory(path) => {
+                assert_eq!(path, PathBuf::from("/repo/feature-search"));
+            }
+            ExitAction::Quit => panic!("filter enter should request directory change"),
+        }
+        assert!(!app.is_filtering);
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn filter_enter_is_blocked_while_background_operation_is_running() {
+        let (_tx, rx) = mpsc::channel();
+        let mut app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/repo/main"),
+                branch: Some("main".to_string()),
+                is_bare: false,
+                status: WorktreeStatus::Clean,
+                last_commit_time: None,
+                ahead_behind: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+        app.is_filtering = true;
+        app.active_op = Some((OpKind::Fetch, rx));
+
+        app.handle_filter_input(KeyCode::Enter);
+
+        assert!(matches!(app.exit_action, ExitAction::Quit));
+        assert!(!app.should_quit);
+        assert!(app.is_filtering);
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Operation still in progress")
+        );
     }
 }
