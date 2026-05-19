@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>owt — Git Worktree Manager</title>
-  <meta name="description" content="A blazingly fast TUI for managing Git worktrees. Work on multiple branches simultaneously.">
+  <meta name="description" content="A fast terminal UI for developers who use Git branches as working contexts, not bookmarks.">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -12,7 +12,7 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#0b1019">
   <meta property="og:title" content="owt — Git Worktree Manager">
-  <meta property="og:description" content="A blazingly fast TUI for managing Git worktrees in bare and regular repositories.">
+  <meta property="og:description" content="Make Git worktrees daily-usable from regular repositories or an optional .bare layout.">
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1233,20 +1233,19 @@
         <div class="hero-content">
           <div class="badge animate-in delay-1">
             <span class="badge-dot"></span>
-            v0.10.0 · Regular repos supported
+            v0.10.3 · regular repos first-class
           </div>
 
-          <h1 class="animate-in delay-2">Git worktrees,<br>without context switching.</h1>
+          <h1 class="animate-in delay-2">Branches are working contexts.</h1>
 
           <p class="hero-description animate-in delay-3">
-            A focused terminal UI for managing Git worktrees in both bare and regular repositories.
-            Run it where your repo already lives, then jump between branches without stashing or rebuilding.
+            owt makes Git worktrees practical for daily development. Run it in the repo you already have, create isolated branch directories, and move between them without stashing, rebuilding, or losing editor state.
           </p>
 
           <div class="hero-points animate-in delay-3">
-            <span class="hero-point">bare + regular repos</span>
-            <span class="hero-point">~/.owt/worktree defaults</span>
-            <span class="hero-point">keyboard-first TUI</span>
+            <span class="hero-point">regular repos supported</span>
+            <span class="hero-point">optional .bare layout</span>
+            <span class="hero-point">PR + git status visible</span>
           </div>
 
           <div class="hero-cta animate-in delay-4">
@@ -1277,7 +1276,7 @@
             </div>
             <div class="screenshot-caption">
               <span>real TUI screenshot</span>
-              <span>status, branches, actions, and details in one view</span>
+              <span>working contexts, Git status, PR state, and actions in one view</span>
             </div>
           </div>
         </div>
@@ -1288,34 +1287,33 @@
       <div class="container">
         <div class="why-grid">
           <div class="why-content">
-            <h2>Why worktrees?</h2>
+            <h2>Stop treating branches like bookmarks.</h2>
             <p>
-              Stop stashing, stop waiting for checkouts, stop rebuilding.
-              With worktrees, each branch lives in its own directory—switch instantly by just changing folders.
+              Reviewing a PR, testing a hotfix, keeping a feature open, and checking main before release should not all compete for one checkout. With worktrees, each branch gets its own directory. owt gives that model a daily driver.
             </p>
             <table class="comparison-table">
               <thead>
                 <tr>
-                  <th>Without owt</th>
-                  <th>With owt</th>
+                  <th>Plain Git flow</th>
+                  <th>owt flow</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>git worktree list</td>
-                  <td>Visual TUI with status</td>
+                  <td>Visual list with status and PR state</td>
                 </tr>
                 <tr>
                   <td>git worktree add ../feat -b feat</td>
-                  <td>Press <kbd>a</kbd>, type name</td>
+                  <td>Press <kbd>a</kbd>, pick the branch context</td>
                 </tr>
                 <tr>
                   <td>cd ../feature && git status</td>
-                  <td>Press <kbd>Enter</kbd> to switch</td>
+                  <td>Press <kbd>Enter</kbd> to move your shell</td>
                 </tr>
                 <tr>
                   <td>git fetch && git pull</td>
-                  <td>Press <kbd>f</kbd> then <kbd>p</kbd></td>
+                  <td>Press <kbd>f</kbd>, <kbd>p</kbd>, or <kbd>P</kbd></td>
                 </tr>
               </tbody>
             </table>
@@ -1326,14 +1324,19 @@
                 <span class="terminal-btn close"></span>
                 <span class="terminal-btn minimize"></span>
                 <span class="terminal-btn maximize"></span>
-                <span class="terminal-title">Project structure</span>
+                <span class="terminal-title">Supported layouts</span>
               </div>
               <div class="terminal-body" style="font-size: 0.8125rem;">
-<pre style="color: var(--text-secondary); margin: 0;">project/
-├── <span style="color: var(--text-tertiary);">.bare/</span>              <span style="color: var(--text-tertiary);"># bare repo (hidden)</span>
-├── <span style="color: var(--accent);">main/</span>               <span style="color: var(--text-tertiary);"># stable branch</span>
-├── <span style="color: var(--blue);">feature-auth/</span>       <span style="color: var(--text-tertiary);"># your feature</span>
-└── <span style="color: var(--amber);">hotfix-payment/</span>     <span style="color: var(--text-tertiary);"># urgent fix</span></pre>
+<pre style="color: var(--text-secondary); margin: 0;">regular repo
+├── <span style="color: var(--accent);">my-app/</span>             <span style="color: var(--text-tertiary);"># run owt here</span>
+└── <span style="color: var(--blue);">~/.owt/worktree/my-app/</span>
+    ├── feature-auth/
+    └── hotfix-payment/
+
+.bare workspace
+├── <span style="color: var(--text-tertiary);">.bare/</span>              <span style="color: var(--text-tertiary);"># optional</span>
+├── <span style="color: var(--accent);">main/</span>
+└── <span style="color: var(--amber);">review-pr-42/</span></pre>
               </div>
             </div>
           </div>
@@ -1352,45 +1355,45 @@
             </svg>
             Features
           </div>
-          <h2 class="section-title">Everything you need</h2>
-          <p class="section-desc">Powerful features to make Git worktree management effortless.</p>
+          <h2 class="section-title">Built for practical worktree use</h2>
+          <p class="section-desc">The fast path for creating, reading, switching, and cleaning up branch contexts.</p>
         </div>
 
         <div class="features-grid">
           <div class="feature-card">
             <div class="feature-icon">📊</div>
-            <h3>Dashboard View</h3>
-            <p>See all worktrees at a glance with status indicators, branch info, and ahead/behind counts.</p>
+            <h3>Branches as contexts</h3>
+            <p>Keep a PR review, hotfix, feature, and main checkout open at the same time without stashing.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">⚡</div>
-            <h3>Quick Actions</h3>
-            <p>Create, delete, pull, push, and switch worktrees with single keystrokes from the TUI.</p>
+            <h3>Fast TUI workflows</h3>
+            <p>Create, delete, fetch, pull, push, merge, filter, and sort worktrees with single keystrokes.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">🔍</div>
-            <h3>Smart Detection</h3>
-            <p>Run from a bare worktree layout or a regular Git repository. owt finds the right repo context.</p>
+            <h3>Regular repos first</h3>
+            <p>Run <code>owt</code> inside the repository you already have. New worktrees default under <code>~/.owt/worktree</code>.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">🔄</div>
-            <h3>Git Operations</h3>
-            <p>Fetch, pull, push, and merge without leaving the TUI. See operation status in real-time.</p>
+            <h3>Optional .bare layout</h3>
+            <p>Use <code>owt clone</code> when you want one project folder with sibling worktrees next to a hidden <code>.bare</code> repo.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">🖥️</div>
-            <h3>Editor Integration</h3>
-            <p>Open any worktree directly in VS Code, Vim, or your preferred editor with <code>o</code>.</p>
+            <h3>Status and PR visibility</h3>
+            <p>See dirty state, ahead/behind counts, last commit, and best-effort GitHub PR state before you switch.</p>
           </div>
 
           <div class="feature-card">
             <div class="feature-icon">🐚</div>
-            <h3>Shell Integration</h3>
-            <p>Press <code>Enter</code> to cd into the selected worktree. Works with bash, zsh, and fish.</p>
+            <h3>Shell and app handoff</h3>
+            <p>Press <code>Enter</code> to move your shell, <code>o</code> for editor, <code>t</code> for terminal, or <code>y</code> to copy the path.</p>
           </div>
         </div>
       </div>
@@ -1407,8 +1410,8 @@
             </svg>
             Installation
           </div>
-          <h2 class="section-title">Get started in seconds</h2>
-          <p class="section-desc">Choose your preferred installation method.</p>
+          <h2 class="section-title">Install, then open your current repo</h2>
+          <p class="section-desc">Use npm for the packaged binary, npx for a one-off run, or build from source.</p>
         </div>
 
         <div class="install-grid">
@@ -1479,16 +1482,16 @@
           <div class="shell-content">
             <h2>Shell Integration</h2>
             <p>
-              Enable seamless directory switching. When you press <code>Enter</code> on a worktree, your shell automatically changes to that directory.
+              Install the shell helper once. After that, pressing <code>Enter</code> exits the TUI and moves your current shell into the selected worktree.
             </p>
             <ul class="shell-steps">
               <li>
                 <span class="step-num">1</span>
-                <span class="step-text">Run <code>owt setup</code> to see instructions for your shell</span>
+                <span class="step-text">Run <code>owt setup</code> to print the helper for your shell</span>
               </li>
               <li>
                 <span class="step-num">2</span>
-                <span class="step-text">Add the function to your shell config file</span>
+                <span class="step-text">Add the function to your zsh, bash, or fish config</span>
               </li>
               <li>
                 <span class="step-num">3</span>
@@ -1534,8 +1537,8 @@
             </svg>
             Keybindings
           </div>
-          <h2 class="section-title">Vim-style navigation</h2>
-          <p class="section-desc">Intuitive keyboard shortcuts you already know.</p>
+          <h2 class="section-title">Daily actions stay on the keyboard</h2>
+          <p class="section-desc">The common path is fast: move, add, delete, sync, merge, open, copy, and leave.</p>
         </div>
 
         <div class="keys-categories">
@@ -1608,8 +1611,8 @@
     <section class="cta-section">
       <div class="container">
         <div class="cta-box">
-          <h2>Ready to simplify your workflow?</h2>
-          <p>Start managing Git worktrees the easy way.</p>
+          <h2>Make worktrees your default branch workflow.</h2>
+          <p>Start in your existing repository, or clone into the optional .bare layout when sibling worktrees fit the project.</p>
           <div class="hero-cta">
             <a href="#installation" class="btn btn-primary">Get Started</a>
             <a href="https://github.com/dding-g/oh-my-worktree" class="btn btn-secondary" target="_blank">

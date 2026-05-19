@@ -1,11 +1,11 @@
 title: owt (oh-my-worktree)
-description: A TUI tool for managing Git worktrees in bare and regular repositories
+description: A fast terminal UI for developers who use Git branches as working contexts, not bookmarks.
 theme: just-the-docs
 
 url: https://dding-g.github.io
 
 # Version (update on release)
-owt_version: "0.10.0"
+owt_version: "0.10.3"
 baseurl: /oh-my-worktree
 
 # Enable search
