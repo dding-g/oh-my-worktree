@@ -2,196 +2,180 @@
 
 [한국어](./README.ko.md) | [English](./README.md)
 
-A TUI tool for managing Git worktrees from either regular repositories or bare `.bare` layouts.
-
-**[GitHub](https://github.com/dding-g/oh-my-worktree)**
+A fast terminal UI for developers who use Git branches as working contexts, not bookmarks.
 
 <img width="786" height="580" alt="Image" src="./owt.png" />
 
-## What is Git Worktree?
+## Why owt exists
 
-Git worktree allows you to check out multiple branches simultaneously from a single repository. Work on multiple tasks in parallel without stashing or switching branches.
+Modern development rarely happens on one branch at a time. You might be reviewing a PR, testing a hotfix, keeping a long-running feature open, and checking main before a release. Plain `git switch` makes that workflow expensive because every context switch drags along uncommitted files, dependencies, editor state, and mental state.
 
-Regular repository layout:
+Git worktrees solve the underlying problem. `owt` makes them easy enough to use every day.
 
-```
-repo/                       # existing non-bare repository
-└── .git/
+Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, pull, push, or merge without remembering the exact Git incantation. It works from a normal repository and from the `.bare` layout if you prefer keeping all worktrees side by side.
 
-~/.owt/worktree/repo/
-├── feature-auth/           # new worktree created by owt
-└── hotfix-payment/         # another worktree
-```
+## What you get
 
-Bare `.bare` layout:
+- A keyboard-first TUI for browsing and managing worktrees
+- First-class support for existing regular repositories
+- Optional `.bare` project layout for teams that like sibling worktrees
+- Fast worktree creation from local or remote branches
+- Dirty-state, ahead/behind, last-commit, and GitHub PR status visibility
+- Built-in fetch, pull, push, upstream merge, branch merge, editor open, terminal open, and path copy
+- Shell integration so `Enter` can move your shell into the selected worktree
 
-```
-project/
-├── .bare/                # bare repository (hidden)
-├── main/                 # main branch worktree
-├── feature-auth/         # feature branch worktree
-└── hotfix-payment/       # hotfix branch worktree
-```
-
-**owt** makes this workflow effortless with a simple TUI.
-
-Run `owt` directly inside an existing regular Git repository, or use `owt clone` to create the project-local `.bare` sibling layout. In regular repositories, new worktrees are created under `~/.owt/worktree/<repo-name>/` by default unless you configure another `worktree_root`.
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `owt` | Launch TUI (default) |
-| `owt clone <URL> [PATH]` | Clone into the `.bare` layout + create the first worktree |
-| `owt init` | Show a guide for converting an existing repo to the `.bare` layout |
-| `owt setup` | Install shell integration |
-
-## Installation
-
-### npm (Recommended)
+## Install
 
 ```bash
 npm install -g oh-my-worktree
 ```
 
-Run without installation using npx:
+Or run it without installing:
 
 ```bash
 npx oh-my-worktree
 ```
 
-### Cargo
-
-```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree
-```
-
-Build from source:
+From source:
 
 ```bash
 git clone https://github.com/dding-g/oh-my-worktree.git
 cd oh-my-worktree
 cargo build --release
-# Binary: ./target/release/owt
 ```
 
-## Getting Started
+## Start from the repo you already have
 
-### Existing Regular Repository
-
-Start where you already work. No conversion is required.
+You do not need to convert your repository.
 
 ```bash
-cd /path/to/regular-git-repo
+cd ~/src/my-app
 owt
 ```
 
-When you create a worktree from a regular repository, `owt` creates it under `~/.owt/worktree/<repo-name>/` by default. Configure `worktree_root` if you want a different location.
+In a regular repository, new worktrees are created under:
 
-### New Project with `.bare`
+```text
+~/.owt/worktree/<repo-name>/
+```
+
+Set `worktree_root` if you want them somewhere else.
+
+## Or start with a `.bare` workspace
+
+If you like all worktrees living inside one project folder, use `owt clone`.
 
 ```bash
-# Clone into the .bare sibling layout + create the first worktree automatically
 owt clone https://github.com/user/repo.git
-
-# Run TUI
 cd repo/main
 owt
 ```
 
-### Optional: Convert Existing Project to `.bare`
+That creates a layout like this:
 
-If you prefer the `.bare` sibling layout, run:
-
-```bash
-owt init
+```text
+repo/
+├── .bare/
+├── main/
+├── feature-login/
+└── hotfix-api/
 ```
 
-Shows a step-by-step guide to convert a regular repository to bare + worktree structure.
+`owt init` prints a conversion guide if you want to move an existing repository into this layout manually.
 
-Manual conversion:
+## Daily workflow
 
 ```bash
-mv .git .bare
-echo "gitdir: ./.bare" > .git
-git config --bool core.bare true
-git worktree add main main
 owt
 ```
 
-## Usage
-
-```bash
-# Run from any worktree
-owt
-
-# Specify path
-owt /path/to/project
-```
-
-### Keybindings
+Then use the TUI:
 
 | Key | Action |
-|-----|--------|
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `Enter` | Enter selected worktree |
-| `a` | Add new worktree |
-| `d` | Delete worktree |
-| `o` | Open in editor |
-| `t` | Open in terminal |
-| `f` | Fetch all remotes |
-| `p` | Pull from remote |
-| `P` | Push to remote |
-| `m` | Merge upstream |
-| `M` | Merge branch (select) |
-| `r` | Refresh list |
+| --- | --- |
+| `j` / `k` | Move selection |
+| `Enter` | Enter the selected worktree |
+| `a` | Add a worktree |
+| `d` | Delete a worktree |
+| `f` | Fetch remotes |
+| `p` / `P` | Pull / push |
+| `m` / `M` | Merge upstream / merge selected branch |
+| `o` / `t` | Open in editor / terminal |
+| `y` | Copy path |
+| `/` | Filter |
+| `s` | Cycle sort mode |
+| `c` | View config |
+| `?` | Help |
 | `q` | Quit |
 
-### Status Icons
+## What the list tells you
 
-| Icon | Meaning |
-|------|---------|
-| `✓` | Clean |
-| `+` | Staged changes |
-| `~` | Unstaged changes |
-| `!` | Conflicts |
-| `*` | Staged + Unstaged |
+| Signal | Meaning |
+| --- | --- |
+| `✓ clean` | No local changes |
+| `+ staged` | Staged changes |
+| `~ unstaged` | Unstaged changes |
+| `! conflict` | Merge conflict |
+| `* mixed` | Staged and unstaged changes |
+| `↑N` / `↓N` | Ahead / behind upstream |
+| `PR` | GitHub PR state: `open`, `closed`, `merged`, `draft`, or `-` |
 
-The worktree list also includes a `PR` column for GitHub pull request state. It shows only `open`, `closed`, `merged`, or `draft`; branches without a GitHub PR, non-GitHub remotes, lookup failures, and unknown states show `-`.
+The `PR` column is GitHub-only and best-effort. No PR, non-GitHub remotes, missing auth, network failures, and unknown states all show `-` so the worktree list stays fast and reliable.
+
+## Shell integration
+
+Install the shell helper:
+
+```bash
+owt setup
+```
+
+Reload your shell. After that, pressing `Enter` in the TUI exits `owt` and moves the current shell into the selected worktree. Without shell integration, `owt` still prints the selected path for wrapper scripts and manual use.
 
 ## Configuration
 
-Config file: `~/.config/owt/config.toml`
+Config file:
+
+```text
+~/.config/owt/config.toml
+```
+
+Example:
 
 ```toml
 editor = "code"
 terminal = "Ghostty"
 worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
-
-# Disabled by default. When enabled, .owt/post-add.sh is launched in a
-# detached tmux session after worktree creation and the session exits when
-# the script completes. There is no direct-shell fallback.
 run_post_add_script_in_tmux = false
 ```
 
-### Environment Variables
+Useful options:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `EDITOR` | Editor to open worktrees | `vim` |
-| `TERMINAL` | Terminal app (macOS) | `Terminal` |
+| Option | Purpose |
+| --- | --- |
+| `editor` | Command used by `o` |
+| `terminal` | Terminal app used by `t` |
+| `worktree_root` | Root for new worktrees in regular repositories |
+| `copy_files` | Files copied into new worktrees |
+| `run_post_add_script_in_tmux` | Run `.owt/post-add.sh` in detached tmux after creating a worktree |
 
-```bash
-export EDITOR=code
-export TERMINAL=Ghostty
-```
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `owt [PATH]` | Open the TUI for a repository or worktree |
+| `owt clone <URL> [PATH]` | Clone into the `.bare` layout and create the first worktree |
+| `owt init` | Print a manual conversion guide for `.bare` layout |
+| `owt setup` | Install shell integration |
+| `owt --version` | Print version |
 
 ## Requirements
 
-- Git 2.5+ (worktree support)
-- A regular Git repository or a bare repository layout
+- Git 2.5+
+- A regular Git repository or a `.bare` worktree layout
+- Optional: GitHub CLI `gh` for PR status
+- Optional: tmux for post-add setup scripts
 
 ## License
 
