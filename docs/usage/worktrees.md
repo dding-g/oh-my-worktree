@@ -84,3 +84,6 @@ Press `r` to refresh the worktree list. This updates:
 - Status indicators
 - Ahead/behind counts
 - Last commit times
+- GitHub PR state in the `PR` column
+
+The `PR` column shows only `open`, `closed`, `merged`, or `draft` for GitHub pull requests. Branches without a GitHub PR, non-GitHub remotes, lookup failures, and unknown states show `-`; PR lookup is optional and does not block the worktree list.

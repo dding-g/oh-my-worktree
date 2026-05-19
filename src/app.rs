@@ -11,8 +11,8 @@ use std::time::Duration;
 use crate::config::Config;
 use crate::git;
 use crate::types::{
-    ActiveOp, AppMessage, AppState, ExitAction, OpKind, OpResult, ScriptStatus, SortMode, Worktree,
-    WorktreeDetails, WorktreeStatus,
+    ActiveOp, AppMessage, AppState, ExitAction, GithubPrStatus, OpKind, OpResult, ScriptStatus,
+    SortMode, Worktree, WorktreeDetails, WorktreeStatus,
 };
 use crate::ui::theme::Theme;
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
@@ -49,6 +49,7 @@ pub struct App {
     pub help_scroll_offset: u16,                // Scroll offset for help modal
     pub script_status: ScriptStatus,            // Background script status
     pub script_receiver: Option<mpsc::Receiver<ScriptResult>>, // Channel for script completion
+    pub pr_status_receiver: Option<mpsc::Receiver<Vec<(PathBuf, Option<GithubPrStatus>)>>>,
     pub active_op: Option<(OpKind, mpsc::Receiver<OpResult>)>,
     pub active_op_info: Option<ActiveOp>,
     pub selected_details: Option<WorktreeDetails>,
@@ -130,12 +131,14 @@ impl App {
             help_scroll_offset: 0,
             script_status: ScriptStatus::Idle,
             script_receiver: None,
+            pr_status_receiver: None,
             active_op: None,
             active_op_info: None,
             selected_details: None,
             add_base_branch: "main".to_string(),
         };
         app.update_selected_details();
+        app.start_pr_status_refresh();
         Ok(app)
     }
 
@@ -143,11 +146,67 @@ impl App {
         while !self.should_quit {
             terminal.draw(|frame| self.draw(frame))?;
             self.poll_script_status();
+            self.poll_pr_status();
             self.poll_background_op();
 
             self.handle_events(terminal)?;
         }
         Ok(())
+    }
+
+    fn start_pr_status_refresh(&mut self) {
+        let bare_repo_path = self.bare_repo_path.clone();
+        let worktrees: Vec<(PathBuf, String)> = self
+            .worktrees
+            .iter()
+            .filter_map(|wt| {
+                if wt.is_bare {
+                    return None;
+                }
+                wt.branch
+                    .as_ref()
+                    .map(|branch| (wt.path.clone(), branch.clone()))
+            })
+            .collect();
+
+        if worktrees.is_empty() {
+            self.pr_status_receiver = None;
+            return;
+        }
+
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let statuses = git::github_pr_statuses_for_worktrees(&bare_repo_path, &worktrees);
+            let _ = tx.send(statuses);
+        });
+        self.pr_status_receiver = Some(rx);
+    }
+
+    fn poll_pr_status(&mut self) {
+        let result = if let Some(rx) = self.pr_status_receiver.as_ref() {
+            match rx.try_recv() {
+                Ok(statuses) => Some(Ok(statuses)),
+                Err(mpsc::TryRecvError::Empty) => None,
+                Err(mpsc::TryRecvError::Disconnected) => Some(Err(())),
+            }
+        } else {
+            None
+        };
+
+        match result {
+            Some(Ok(statuses)) => {
+                for (path, status) in statuses {
+                    if let Some(wt) = self.worktrees.iter_mut().find(|wt| wt.path == path) {
+                        wt.github_pr_status = status;
+                    }
+                }
+                self.pr_status_receiver = None;
+            }
+            Some(Err(())) => {
+                self.pr_status_receiver = None;
+            }
+            Option::None => {}
+        }
     }
 
     fn poll_script_status(&mut self) {
@@ -206,7 +265,7 @@ impl App {
                 self.active_op_info = None;
                 self.state = AppState::List;
             }
-            None => {}
+            Option::None => {}
         }
     }
 
@@ -918,6 +977,7 @@ impl App {
                     self.selected_index = self.worktrees.len().saturating_sub(1);
                 }
                 self.update_selected_details();
+                self.start_pr_status_refresh();
                 self.message = Some(AppMessage::info("Refreshed"));
             }
             Err(e) => {
@@ -1202,7 +1262,7 @@ impl App {
 
         let wt = match self.selected_worktree().cloned() {
             Some(wt) => wt,
-            None => return,
+            Option::None => return,
         };
 
         if wt.is_bare {
@@ -1400,7 +1460,7 @@ impl App {
                 self.message = Some(AppMessage::error("Cannot fetch bare repository"));
                 return;
             }
-            None => return,
+            Option::None => return,
         };
 
         let display_name = wt.display_name();
@@ -1520,7 +1580,7 @@ impl App {
 
         let wt = match self.selected_worktree().cloned() {
             Some(wt) => wt,
-            None => return,
+            Option::None => return,
         };
 
         if wt.is_bare {
@@ -1586,7 +1646,7 @@ impl App {
 
         let wt = match self.selected_worktree().cloned() {
             Some(wt) => wt,
-            None => return,
+            Option::None => return,
         };
 
         if wt.is_bare {
@@ -1729,7 +1789,7 @@ impl App {
 
         let wt = match self.selected_worktree().cloned() {
             Some(wt) => wt,
-            None => {
+            Option::None => {
                 self.state = AppState::List;
                 return;
             }
@@ -1758,7 +1818,7 @@ impl App {
 
         let cmd_detail = match source_branch.as_deref() {
             Some(branch) => format!("git -C {} merge {}", worktree_path.display(), branch),
-            None => format!("git -C {} merge @{{upstream}}", worktree_path.display()),
+            Option::None => format!("git -C {} merge @{{upstream}}", worktree_path.display()),
         };
         let cmd_detail_for_thread = cmd_detail.clone();
 
@@ -1766,7 +1826,7 @@ impl App {
         self.state = AppState::List;
         self.message = Some(AppMessage::info(match source_branch.as_deref() {
             Some(branch) => format!("Merging {}...", branch),
-            None => format!("Merging upstream into {}...", display_name),
+            Option::None => format!("Merging upstream into {}...", display_name),
         }));
 
         let (tx, rx) = mpsc::channel();
@@ -1962,6 +2022,7 @@ mod tests {
             help_scroll_offset: 0,
             script_status: ScriptStatus::Idle,
             script_receiver: None,
+            pr_status_receiver: None,
             active_op: None,
             active_op_info: None,
             selected_details: None,
@@ -1979,6 +2040,7 @@ mod tests {
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
                 ahead_behind: None,
+                github_pr_status: None,
             }],
             0,
             "/repo/.bare",
@@ -2003,6 +2065,7 @@ mod tests {
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
                 ahead_behind: None,
+                github_pr_status: None,
             }],
             0,
             "/repo/.bare",
@@ -2102,6 +2165,7 @@ mod tests {
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
                 ahead_behind: None,
+                github_pr_status: None,
             }],
             0,
             "/repo/.bare",
@@ -2128,6 +2192,7 @@ mod tests {
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
                 ahead_behind: None,
+                github_pr_status: None,
             }],
             0,
             "/repo/.bare",
@@ -2153,6 +2218,7 @@ mod tests {
                 status: WorktreeStatus::Unstaged,
                 last_commit_time: None,
                 ahead_behind: None,
+                github_pr_status: None,
             }],
             0,
             "/repo/.bare",
@@ -2189,6 +2255,7 @@ mod tests {
                     status: WorktreeStatus::Clean,
                     last_commit_time: None,
                     ahead_behind: None,
+                    github_pr_status: None,
                 },
                 Worktree {
                     path: PathBuf::from("/repo/feature-search"),
@@ -2197,6 +2264,7 @@ mod tests {
                     status: WorktreeStatus::Clean,
                     last_commit_time: None,
                     ahead_behind: None,
+                    github_pr_status: None,
                 },
             ],
             0,
@@ -2228,6 +2296,7 @@ mod tests {
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
                 ahead_behind: None,
+                github_pr_status: None,
             }],
             0,
             "/repo/.bare",
@@ -2244,5 +2313,40 @@ mod tests {
             app.message.as_ref().map(|message| message.text.as_str()),
             Some("Operation still in progress")
         );
+    }
+
+    #[test]
+    fn poll_pr_status_updates_matching_worktree_without_active_op() {
+        let (tx, rx) = mpsc::channel();
+        let mut app = test_app(
+            vec![Worktree {
+                path: PathBuf::from("/repo/feature"),
+                branch: Some("feature".to_string()),
+                is_bare: false,
+                status: WorktreeStatus::Clean,
+                last_commit_time: None,
+                ahead_behind: None,
+                github_pr_status: None,
+            }],
+            0,
+            "/repo/.bare",
+        );
+        let (_op_tx, op_rx) = mpsc::channel();
+        app.active_op = Some((OpKind::Fetch, op_rx));
+        app.pr_status_receiver = Some(rx);
+
+        tx.send(vec![(
+            PathBuf::from("/repo/feature"),
+            Some(GithubPrStatus::Open),
+        )])
+        .unwrap();
+        app.poll_pr_status();
+
+        assert_eq!(
+            app.worktrees[0].github_pr_status,
+            Some(GithubPrStatus::Open)
+        );
+        assert!(app.pr_status_receiver.is_none());
+        assert!(app.active_op.is_some());
     }
 }

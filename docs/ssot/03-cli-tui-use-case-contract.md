@@ -54,12 +54,14 @@ document_contract:
 
 | State | 진입 | 주요 key | 종료/전이 |
 |---|---|---|---|
-| `List` | TUI 기본 상태 | navigation, add/delete/git/open/config/help/search | modal state 또는 quit |
+| `List` | TUI 기본 상태 | navigation, add/delete/git/open/config/help/search, PR metadata 표시 | modal state 또는 quit |
 | `AddModal` | `a` | branch type, branch name, `Tab`, `Enter`, `Esc` | create worktree 또는 cancel |
 | `ConfirmDelete` | `d` | `y`/`Enter`, `n`/`Esc`, `b` | delete/cancel |
 | `ConfigModal` | `c` | `j`/`k`, `Enter`, `s`, `Esc`/`q` | edit/save/close |
 | `HelpModal` | `?` | scroll, close | return to list |
 | `MergeBranchSelect` | `M` | `j`/`k`, `Enter`, `Esc` | merge/cancel |
+
+`List`는 worktree row 또는 list metadata에 PR column을 둘 수 있다. 이 column은 GitHub remote에서 확인한 PR 상태만 표시하며, 허용 값은 `open`, `closed`, `merged`, `draft`뿐이다. PR이 없거나, remote가 GitHub가 아니거나, auth/network/lookup 실패가 있거나, provider가 지원되지 않거나, 알 수 없는 값 또는 그 밖의 값이면 `-`를 표시한다. PR 조회는 보조 metadata이며 worktree 목록 표시를 실패시키거나 block하면 안 된다.
 
 # 5. Keybinding 계약
 
@@ -108,8 +110,10 @@ user_cases:
   - id: UC_PR_REVIEW
     actor: reviewer
     trigger: "fetches remote and creates review worktree"
-    success: "review worktree can be tested and deleted"
+    success: "review worktree can be tested and deleted; GitHub PR state, when available, is visible as open/closed/merged/draft metadata"
 ```
+
+사용자가 수락한 구현 범위는 GitHub-only PR 상태 표시까지다. `UC_PR_REVIEW`는 GitHub PR 상태를 빠르게 확인하는 보조 경험을 포함하지만, non-GitHub provider 지원이나 repository layout 변경을 포함하지 않는다.
 
 # 7. 검증 규칙
 
@@ -121,3 +125,5 @@ user_cases:
 - `Enter` key는 정상 선택, filter 선택, background operation 중 block, bare repository 선택 거부를 app-level test로 고정한다.
 - Dirty worktree delete guard는 force가 없을 때 delete operation을 시작하지 않는 test로 고정한다.
 - Worktree status symbol/label과 ahead/behind display는 `types` unit test로 고정한다.
+- PR column/list metadata는 GitHub remote에서 `open`, `closed`, `merged`, `draft`만 표시하고, PR 없음, non-GitHub remote, auth/network/lookup 실패, unsupported provider, unknown/other 값은 `-`로 표시하는 검증으로 고정한다.
+- PR 조회 실패는 core worktree listing을 실패시키거나 block하지 않는 검증으로 고정한다.

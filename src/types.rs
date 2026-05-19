@@ -9,6 +9,25 @@ pub enum WorktreeStatus {
     Mixed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GithubPrStatus {
+    Open,
+    Closed,
+    Merged,
+    Draft,
+}
+
+impl GithubPrStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            GithubPrStatus::Open => "open",
+            GithubPrStatus::Closed => "closed",
+            GithubPrStatus::Merged => "merged",
+            GithubPrStatus::Draft => "draft",
+        }
+    }
+}
+
 impl WorktreeStatus {
     pub fn symbol(&self) -> &'static str {
         match self {
@@ -59,6 +78,7 @@ pub struct Worktree {
     pub status: WorktreeStatus,
     pub last_commit_time: Option<String>,
     pub ahead_behind: Option<AheadBehind>,
+    pub github_pr_status: Option<GithubPrStatus>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +101,12 @@ impl Worktree {
 
     pub fn branch_display(&self) -> String {
         self.branch.clone().unwrap_or_else(|| "-".to_string())
+    }
+
+    pub fn github_pr_display(&self) -> &'static str {
+        self.github_pr_status
+            .map(GithubPrStatus::label)
+            .unwrap_or("-")
     }
 }
 
@@ -246,5 +272,33 @@ mod tests {
             .display(),
             Some("↑2↓3".to_string())
         );
+    }
+
+    #[test]
+    fn github_pr_display_matches_contract() {
+        let mut worktree = Worktree {
+            path: PathBuf::from("/repo/feature"),
+            branch: Some("feature".to_string()),
+            is_bare: false,
+            status: WorktreeStatus::Clean,
+            last_commit_time: None,
+            ahead_behind: None,
+            github_pr_status: None,
+        };
+
+        assert_eq!(worktree.github_pr_display(), "-");
+
+        let cases = [
+            (GithubPrStatus::Open, "open"),
+            (GithubPrStatus::Closed, "closed"),
+            (GithubPrStatus::Merged, "merged"),
+            (GithubPrStatus::Draft, "draft"),
+        ];
+
+        for (status, label) in cases {
+            worktree.github_pr_status = Some(status);
+            assert_eq!(status.label(), label);
+            assert_eq!(worktree.github_pr_display(), label);
+        }
     }
 }

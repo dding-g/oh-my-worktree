@@ -45,7 +45,7 @@ git_command_policy:
 
 | Operation | Trigger | 구현 경계 | 성공 계약 | Safety rule |
 |---|---|---|---|---|
-| list | TUI load/refresh | `git worktree list --porcelain` | bare entry와 non-bare worktree를 구분한다 | bare entry는 status/ahead/behind 계산 대상이 아니다 |
+| list | TUI load/refresh | `git worktree list --porcelain` + optional GitHub/gh-style PR lookup | bare entry와 non-bare worktree를 구분하고, GitHub PR 상태가 확인되면 list metadata로 표시한다 | bare entry는 status/ahead/behind 계산 대상이 아니며 PR lookup 실패는 list를 실패시키거나 block하지 않는다 |
 | add | `a` modal confirm | `git worktree add` | branch/base 정책에 맞는 worktree 생성 | 생성 후 usable worktree인지 확인/repair한다 |
 | delete | `d` confirm | `git worktree remove` + optional branch delete | 선택 worktree 제거 | dirty worktree는 기본적으로 삭제하지 않는다 |
 | fetch | `f` | selected worktree/repo remote fetch | remote refs와 ahead/behind 갱신 | long operation은 background op로 처리한다 |
@@ -90,6 +90,29 @@ ahead_behind_display:
   no_difference: null
 ```
 
+```yaml
+pr_status_display:
+  supported_provider: GitHub
+  shown_values:
+    - open
+    - closed
+    - merged
+    - draft
+  fallback: "-"
+  fallback_when:
+    - no_pr
+    - non_github_remote
+    - missing_auth
+    - failed_auth
+    - failed_network
+    - failed_lookup
+    - unsupported_provider
+    - unknown_or_other_value
+  blocking_policy: auxiliary_only
+```
+
+PR status는 worktree row의 보조 표시다. GitHub remote에서 확인된 `open`, `closed`, `merged`, `draft`만 사용자에게 노출한다. 그 밖의 모든 경우는 `-`로 표시하며, PR lookup은 core worktree listing, status, ahead/behind 계산보다 우선하지 않는다.
+
 # 6. Test-backed Invariant
 
 - Worktree edge case는 isolated temporary Git repository에서 테스트한다.
@@ -99,9 +122,12 @@ ahead_behind_display:
 - Git helper command는 shell integration stdout/stderr handoff를 오염시키면 안 된다. Remote URL 확인처럼 값을 조회하는 helper는 child stdout/stderr를 capture해야 한다.
 - 새 worktree 생성 직후 list refresh와 selection reconcile은 즉시 `Enter` 했을 때 새 worktree path를 handoff해야 한다.
 - Remote base branch fetch는 새 branch 생성 시 최신 `origin/<base>` commit을 기준으로 worktree를 만들 수 있어야 한다.
+- PR status lookup은 GitHub-only 보조 조회다. 실패, 누락, non-GitHub remote, unsupported provider는 모두 `-` 표시로 수렴해야 하며 list operation의 성공 여부를 바꾸면 안 된다.
 
 # 7. 검증 규칙
 
 - `src/git.rs` 또는 Git operation을 바꾸면 `cargo test`를 실행한다.
 - worktree edge case는 `tests/git_test.rs` 또는 `src/git.rs` tests에 regression test를 추가한다.
 - user-visible Git operation semantics가 바뀌면 `docs/usage/git-operations.md`, `docs/usage/worktrees.md`, 이 SSOT를 함께 갱신한다.
+- PR status 표시 구현은 GitHub remote의 `open`, `closed`, `merged`, `draft` mapping과 모든 fallback `-` 경로를 검증해야 한다.
+- PR lookup failure path는 worktree list refresh를 실패시키거나 지연시키지 않는다는 기대를 검증해야 한다.

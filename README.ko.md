@@ -156,6 +156,8 @@ owt /path/to/project
 | `!` | 충돌 |
 | `*` | Staged + Unstaged |
 
+Worktree 목록에는 GitHub pull request 상태를 보여주는 `PR` column도 있습니다. `open`, `closed`, `merged`, `draft`만 표시하며, GitHub PR이 없거나 non-GitHub remote, 조회 실패, 알 수 없는 상태는 `-`로 표시합니다.
+
 ## 설정
 
 설정 파일: `~/.config/owt/config.toml`

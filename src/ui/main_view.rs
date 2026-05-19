@@ -82,6 +82,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
         Cell::from("Name").style(Style::default().fg(t.text_muted)),
         Cell::from("Branch").style(Style::default().fg(t.text_muted)),
         Cell::from("Status").style(Style::default().fg(t.text_muted)),
+        Cell::from("PR").style(Style::default().fg(t.text_muted)),
         Cell::from("Commit").style(Style::default().fg(t.text_muted)),
     ])
     .height(1);
@@ -212,6 +213,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 Cell::from(wt.display_name()).style(name_style),
                 Cell::from(wt.branch_display()).style(branch_style),
                 Cell::from(status_text).style(status_style),
+                Cell::from(wt.github_pr_display()).style(Style::default().fg(t.text_muted)),
                 Cell::from(last_commit).style(last_commit_style),
             ])
             .style(row_style)
@@ -220,10 +222,11 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 
     let widths = [
         Constraint::Length(2),
-        Constraint::Percentage(22),
-        Constraint::Percentage(28),
-        Constraint::Percentage(22),
-        Constraint::Percentage(28),
+        Constraint::Percentage(20),
+        Constraint::Percentage(26),
+        Constraint::Percentage(20),
+        Constraint::Length(8),
+        Constraint::Percentage(26),
     ];
 
     let table = Table::new(rows, widths)

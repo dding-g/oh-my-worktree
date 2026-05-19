@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::types::{AheadBehind, Worktree, WorktreeDetails, WorktreeStatus};
+use crate::types::{AheadBehind, GithubPrStatus, Worktree, WorktreeDetails, WorktreeStatus};
 
 fn git_command() -> Command {
     let mut command = Command::new("git");
@@ -140,6 +140,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
                     status,
                     last_commit_time,
                     ahead_behind,
+                    github_pr_status: None,
                 });
             }
             current_path = Some(PathBuf::from(line.strip_prefix("worktree ").unwrap()));
@@ -174,6 +175,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
             status,
             last_commit_time,
             ahead_behind,
+            github_pr_status: None,
         });
     }
 
@@ -717,6 +719,137 @@ fn command_failure_detail(output: &std::process::Output) -> String {
     }
 }
 
+pub fn github_pr_statuses_for_worktrees(
+    bare_repo_path: &Path,
+    worktrees: &[(PathBuf, String)],
+) -> Vec<(PathBuf, Option<GithubPrStatus>)> {
+    let repo = github_repo_slug(bare_repo_path);
+
+    worktrees
+        .iter()
+        .map(|(path, branch)| {
+            let status = repo
+                .as_deref()
+                .and_then(|repo| github_pr_status_for_branch(repo, branch));
+            (path.clone(), status)
+        })
+        .collect()
+}
+
+fn github_repo_slug(repo_path: &Path) -> Option<String> {
+    let output = git_command()
+        .args([
+            "-C",
+            &repo_path.to_string_lossy(),
+            "remote",
+            "get-url",
+            "origin",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    github_repo_slug_from_remote_url(String::from_utf8_lossy(&output.stdout).trim())
+}
+
+fn github_repo_slug_from_remote_url(url: &str) -> Option<String> {
+    let slug = if let Some(rest) = url.strip_prefix("git@github.com:") {
+        rest
+    } else if let Some((_, rest)) = url.split_once("github.com/") {
+        rest
+    } else {
+        return None;
+    };
+
+    let slug = slug.trim().trim_end_matches('/').trim_end_matches(".git");
+    let mut parts = slug.split('/');
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+
+    if owner.is_empty() || repo.is_empty() || parts.next().is_some() {
+        return None;
+    }
+
+    Some(format!("{}/{}", owner, repo))
+}
+
+fn github_pr_status_for_branch(repo: &str, branch: &str) -> Option<GithubPrStatus> {
+    let output = Command::new("gh")
+        .args([
+            "pr",
+            "list",
+            "--repo",
+            repo,
+            "--head",
+            branch,
+            "--state",
+            "all",
+            "--limit",
+            "1",
+            "--json",
+            "state,isDraft,mergedAt",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    github_pr_status_from_gh_json(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn github_pr_status_from_gh_json(json: &str) -> Option<GithubPrStatus> {
+    let item = first_json_object(json)?;
+
+    if json_bool_field(item, "isDraft") == Some(true) {
+        return Some(GithubPrStatus::Draft);
+    }
+
+    if json_string_field(item, "mergedAt").is_some_and(|value| !value.is_empty()) {
+        return Some(GithubPrStatus::Merged);
+    }
+
+    match json_string_field(item, "state")?.as_str() {
+        "OPEN" => Some(GithubPrStatus::Open),
+        "CLOSED" => Some(GithubPrStatus::Closed),
+        _ => None,
+    }
+}
+
+fn first_json_object(json: &str) -> Option<&str> {
+    let start = json.find('{')?;
+    let end = json[start..].find('}')? + start;
+    Some(&json[start..=end])
+}
+
+fn json_bool_field(json: &str, field: &str) -> Option<bool> {
+    let value = json_field_value(json, field)?;
+    if value.starts_with("true") {
+        Some(true)
+    } else if value.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn json_string_field(json: &str, field: &str) -> Option<String> {
+    let value = json_field_value(json, field)?;
+    let value = value.strip_prefix('"')?;
+    let end = value.find('"')?;
+    Some(value[..end].to_string())
+}
+
+fn json_field_value<'a>(json: &'a str, field: &str) -> Option<&'a str> {
+    let needle = format!("\"{}\":", field);
+    let start = json.find(&needle)? + needle.len();
+    Some(json[start..].trim_start())
+}
+
 pub fn get_ahead_behind(path: &Path) -> Option<AheadBehind> {
     // Get the upstream tracking branch
     let output = git_command()
@@ -932,7 +1065,9 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root, list_worktrees,
+        add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root,
+        github_pr_status_from_gh_json, github_pr_statuses_for_worktrees,
+        github_repo_slug_from_remote_url, list_worktrees,
     };
     use std::fs;
     use std::io::Write;
@@ -941,6 +1076,8 @@ mod tests {
     use std::process::{Command, Output};
     use std::sync::{Mutex, OnceLock};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::types::GithubPrStatus;
 
     fn temp_dir(name: &str) -> PathBuf {
         let id = std::process::id();
@@ -1701,6 +1838,85 @@ mod tests {
             latest_staging_head
         );
 
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn github_repo_slug_parses_only_github_remotes() {
+        assert_eq!(
+            github_repo_slug_from_remote_url("https://github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+        assert_eq!(
+            github_repo_slug_from_remote_url("git@github.com:owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+        assert_eq!(
+            github_repo_slug_from_remote_url("ssh://git@github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+        assert_eq!(
+            github_repo_slug_from_remote_url("https://gitlab.com/owner/repo.git"),
+            None
+        );
+        assert_eq!(github_repo_slug_from_remote_url("not-a-url"), None);
+    }
+
+    #[test]
+    fn github_pr_status_parser_accepts_contract_statuses_only() {
+        let cases = [
+            (
+                r#"[{"isDraft":false,"mergedAt":null,"state":"OPEN"}]"#,
+                Some(GithubPrStatus::Open),
+            ),
+            (
+                r#"[{"isDraft":false,"mergedAt":null,"state":"CLOSED"}]"#,
+                Some(GithubPrStatus::Closed),
+            ),
+            (
+                r#"[{"isDraft":false,"mergedAt":"2026-05-18T00:00:00Z","state":"CLOSED"}]"#,
+                Some(GithubPrStatus::Merged),
+            ),
+            (
+                r#"[{"isDraft":true,"mergedAt":null,"state":"OPEN"}]"#,
+                Some(GithubPrStatus::Draft),
+            ),
+            (
+                r#"[{"isDraft":false,"mergedAt":null,"state":"UNKNOWN"}]"#,
+                None,
+            ),
+            (r#"[]"#, None),
+        ];
+
+        for (json, expected) in cases {
+            assert_eq!(github_pr_status_from_gh_json(json), expected);
+        }
+    }
+
+    #[test]
+    fn non_github_repo_returns_none_for_all_pr_statuses() {
+        let base = temp_dir("non_github_pr_statuses");
+        let repo_path = base.join("repo");
+        create_test_regular_repo(&repo_path);
+        assert_git_success(
+            &git_in(
+                &repo_path,
+                &[
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://gitlab.com/owner/repo.git",
+                ],
+            ),
+            "git remote add failed",
+        );
+
+        let statuses = github_pr_statuses_for_worktrees(
+            &repo_path,
+            &[(PathBuf::from("/repo/main"), "main".to_string())],
+        );
+
+        assert_eq!(statuses, vec![(PathBuf::from("/repo/main"), None)]);
         let _ = fs::remove_dir_all(&base);
     }
 }

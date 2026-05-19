@@ -77,6 +77,8 @@ Press `a`, type the new branch name, and press `Enter`. Use `Tab` in the add dia
 | `!` | Conflicts |
 | `*` | Staged + Unstaged |
 
+The worktree list also includes a `PR` column for GitHub pull request state. It shows only `open`, `closed`, `merged`, or `draft`; branches without a GitHub PR, non-GitHub remotes, lookup failures, and unknown states show `-`.
+
 ## Configuration
 
 Config file: `~/.config/owt/config.toml`
