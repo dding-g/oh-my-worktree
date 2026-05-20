@@ -134,9 +134,8 @@ fn run_tui(path: PathBuf) -> Result<()> {
                 // Log for debugging
                 eprintln!("→ {}", worktree_path.display());
             } else {
-                // No shell integration - just print the path
-                // This happens when running the binary directly without the shell function
-                eprintln!("To enable directory changing, run: owt setup");
+                // No shell integration - print only the path to keep stdout
+                // machine-readable for shell wrappers and scripts.
                 println!("{}", worktree_path.display());
             }
         }
@@ -701,6 +700,22 @@ mod tests {
         assert!(SHELL_FUNCTION.contains("[ -n \"$target\" ] && [ -d \"$target\" ]"));
         assert!(SHELL_FUNCTION.contains("cd \"$target\""));
         assert!(SHELL_FUNCTION.contains("return $exit_code"));
+    }
+
+    #[test]
+    fn stdout_path_fallback_stays_machine_readable() {
+        let source = include_str!("main.rs");
+        let fallback_start = source
+            .find("No shell integration - print only the path")
+            .expect("path-only fallback comment should exist");
+        let fallback_end = source[fallback_start..]
+            .find("types::ExitAction::Quit")
+            .expect("quit match arm should follow fallback")
+            + fallback_start;
+        let fallback_block = &source[fallback_start..fallback_end];
+
+        assert!(fallback_block.contains("println!(\"{}\", worktree_path.display())"));
+        assert!(!fallback_block.contains("eprintln!"));
     }
 
     #[test]

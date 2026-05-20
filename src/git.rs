@@ -1786,6 +1786,37 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn missing_remote_branch_inspection_does_not_leak_remote_url_to_stdio() {
+        let base = temp_dir("missing_remote_branch_stdio");
+        let (source_path, bare_path) = create_source_and_bare_repo(&base);
+        let origin_url = source_path.to_string_lossy();
+
+        let (stdout, stderr) = capture_stdio("missing_remote_branch_stdio_capture", || {
+            let result = fetch_remote_branch(&bare_path, "feature/missing");
+            assert!(
+                result.is_ok(),
+                "missing remote branch should be a non-fatal lookup result: {:?}",
+                result
+            );
+            assert_eq!(result.unwrap(), false);
+        });
+
+        assert!(
+            !stdout.contains(origin_url.as_ref()),
+            "missing branch lookup must not pollute owt stdout with origin URL: {}",
+            stdout
+        );
+        assert!(
+            !stderr.contains(origin_url.as_ref()),
+            "missing branch lookup must not pollute owt stderr with origin URL: {}",
+            stderr
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
     #[test]
     fn add_worktree_uses_latest_origin_base_branch_when_creating_new_branch() {
         let base = temp_dir("selected_origin_base");
