@@ -28,7 +28,10 @@ worktree_root = "~/.owt/worktree"
 # Files to copy when creating a new worktree
 copy_files = [".env", ".env.local"]
 
-# Launch .owt/post-add.sh in a detached tmux session after worktree creation
+# Script to run after creating a new worktree
+post_add_script = ".owt/post-add.sh"
+
+# Launch the post-add script in a detached tmux session after worktree creation
 run_post_add_script_in_tmux = false
 
 ```
@@ -40,8 +43,9 @@ run_post_add_script_in_tmux = false
 | `editor` | string | Editor command to open worktrees |
 | `terminal` | string | Terminal app name (macOS) or command (Linux) |
 | `worktree_root` | string | Root directory for new worktrees from regular non-bare repositories. Defaults to `~/.owt/worktree` |
-| `copy_files` | array | Files to copy to new worktrees |
-| `run_post_add_script_in_tmux` | boolean | Run `.owt/post-add.sh` in tmux after creating a worktree. This must be enabled from global config; project config cannot enable script auto-run. |
+| `copy_files` | array | Files to copy to new worktrees. Only files are copied. Missing files, directories, and copy errors become warnings after the worktree is created. |
+| `post_add_script` | string | Script to run after creating a worktree. Relative paths resolve from the current effective project root. Absolute paths are used as-is after path expansion. |
+| `run_post_add_script_in_tmux` | boolean | Run the post-add script in tmux after creating a worktree. This must be enabled from global config; project config cannot enable script auto-run. |
 
 ## Environment Variables
 
@@ -74,11 +78,11 @@ project/
 └── main/
 ```
 
-Project config overrides global config.
+Project config can override safe values including `post_add_script`, but it cannot enable `run_post_add_script_in_tmux`. A regular linked worktree only discovers its own `.owt/config.toml`; owt does not search ancestor directories for another project config.
 
 ## Post-Add Script
 
-Create `.owt/post-add.sh` to run commands after creating a worktree, then enable tmux execution in config:
+Create `.owt/post-add.sh` to run commands after creating a worktree, or set `post_add_script` to another path. Relative paths resolve from the current effective project root.
 
 ```bash
 #!/bin/bash
@@ -118,5 +122,6 @@ editor = "$EDITOR or vim"
 terminal = "$TERMINAL or Terminal"
 worktree_root = "~/.owt/worktree"
 copy_files = []
+post_add_script = ".owt/post-add.sh"
 run_post_add_script_in_tmux = false
 ```

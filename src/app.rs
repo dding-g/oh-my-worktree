@@ -717,10 +717,8 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if selected == 4 {
-                        self.config.run_post_add_script_in_tmux =
-                            !self.config.run_post_add_script_in_tmux;
                         self.message = Some(AppMessage::info(
-                            "Setting updated (press 's' to save to file)",
+                            "Post-add auto-run can only be changed in global config",
                         ));
                     } else if selected == 5 {
                         // post_add_script - open with $EDITOR
@@ -795,7 +793,9 @@ impl App {
     }
 
     fn open_post_add_script_editor(&mut self) {
-        let script_path = Config::post_add_script_path(&self.project_root_path);
+        let script_path = self
+            .config
+            .resolved_post_add_script_path(&self.project_root_path);
         let editor = self.config.get_editor();
 
         // Create .owt directory and script file if they don't exist
@@ -1146,24 +1146,22 @@ impl App {
                 base_branch_for_add,
             );
 
-            if result.is_ok() {
-                if let Some(source) = source_path {
-                    for file in copy_files {
-                        let src = source.join(&file);
-                        let dst = worktree_path_for_thread.join(&file);
-
-                        if src.exists() {
-                            if let Some(parent) = dst.parent() {
-                                let _ = fs::create_dir_all(parent);
-                            }
-                            let _ = fs::copy(&src, &dst);
-                        }
-                    }
-                }
-            }
+            let copy_outcomes = if result.is_ok() {
+                source_path
+                    .as_ref()
+                    .map(|source| {
+                        copy_configured_files(source, &worktree_path_for_thread, &copy_files)
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
 
             let message = match &result {
-                Ok(()) => format!("Created worktree: {}", display_name_for_thread),
+                Ok(()) => append_copy_warnings(
+                    format!("Created worktree: {}", display_name_for_thread),
+                    &copy_outcomes,
+                ),
                 Err(e) => format!("Failed to create: {}", e),
             };
 
@@ -1193,7 +1191,9 @@ impl App {
     }
 
     fn run_post_add_script(&mut self, worktree_path: &PathBuf) {
-        let script_path = Config::post_add_script_path(&self.project_root_path);
+        let script_path = self
+            .config
+            .resolved_post_add_script_path(&self.project_root_path);
 
         if !script_path.exists() {
             return;
@@ -1866,6 +1866,82 @@ impl App {
         });
     }
 }
+
+#[derive(Debug, PartialEq, Eq)]
+enum CopyFileOutcome {
+    Copied { file: String },
+    Warning { file: String, reason: String },
+}
+
+fn copy_configured_files(
+    source: &Path,
+    destination: &Path,
+    files: &[String],
+) -> Vec<CopyFileOutcome> {
+    files
+        .iter()
+        .map(|file| copy_configured_file(source, destination, file))
+        .collect()
+}
+
+fn copy_configured_file(source: &Path, destination: &Path, file: &str) -> CopyFileOutcome {
+    let src = source.join(file);
+    let dst = destination.join(file);
+
+    if !src.exists() {
+        return CopyFileOutcome::Warning {
+            file: file.to_string(),
+            reason: format!("source file missing at {}", src.display()),
+        };
+    }
+
+    if !src.is_file() {
+        return CopyFileOutcome::Warning {
+            file: file.to_string(),
+            reason: format!("source is not a file at {}", src.display()),
+        };
+    }
+
+    if let Some(parent) = dst.parent() {
+        if let Err(error) = fs::create_dir_all(parent) {
+            return CopyFileOutcome::Warning {
+                file: file.to_string(),
+                reason: format!(
+                    "could not create destination parent {}: {}",
+                    parent.display(),
+                    error
+                ),
+            };
+        }
+    }
+
+    match fs::copy(&src, &dst) {
+        Ok(_) => CopyFileOutcome::Copied {
+            file: file.to_string(),
+        },
+        Err(error) => CopyFileOutcome::Warning {
+            file: file.to_string(),
+            reason: format!("could not copy to {}: {}", dst.display(), error),
+        },
+    }
+}
+
+fn append_copy_warnings(message: String, outcomes: &[CopyFileOutcome]) -> String {
+    let warnings: Vec<String> = outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            CopyFileOutcome::Warning { file, reason } => Some(format!("{} ({})", file, reason)),
+            CopyFileOutcome::Copied { .. } => None,
+        })
+        .collect();
+
+    if warnings.is_empty() {
+        message
+    } else {
+        format!("{}\nCopy warnings:\n- {}", message, warnings.join("\n- "))
+    }
+}
+
 fn shell_quote(path: &std::path::Path) -> String {
     format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }
@@ -1884,7 +1960,10 @@ fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration as StdDuration, Instant, SystemTime, UNIX_EPOCH};
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     fn temp_dir(name: &str) -> PathBuf {
         let id = std::process::id();
@@ -1897,6 +1976,22 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
         path
     }
+
+    fn env_lock() -> &'static Mutex<()> {
+        ENV_LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[cfg(unix)]
+    fn make_executable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[cfg(not(unix))]
+    fn make_executable(_path: &Path) {}
 
     fn git_cmd() -> Command {
         let mut cmd = Command::new("git");
@@ -1994,6 +2089,18 @@ mod tests {
         (bare_path, main_path)
     }
 
+    fn wait_for_background_op(app: &mut App) {
+        let deadline = Instant::now() + StdDuration::from_secs(5);
+        while app.active_op.is_some() {
+            app.poll_background_op();
+            if app.active_op.is_none() {
+                break;
+            }
+            assert!(Instant::now() < deadline, "background operation timed out");
+            std::thread::sleep(StdDuration::from_millis(20));
+        }
+    }
+
     fn test_app(worktrees: Vec<Worktree>, selected_index: usize, bare_repo_path: &str) -> App {
         App {
             worktrees,
@@ -2028,6 +2135,140 @@ mod tests {
             selected_details: None,
             add_base_branch: "main".to_string(),
         }
+    }
+
+    #[test]
+    fn config_modal_tmux_auto_run_is_read_only_project_modal() {
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+
+        app.handle_config_modal_input(KeyCode::Enter, 4, false);
+
+        assert!(!app.config.run_post_add_script_in_tmux);
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Post-add auto-run can only be changed in global config")
+        );
+
+        app.config.run_post_add_script_in_tmux = true;
+        app.handle_config_modal_input(KeyCode::Enter, 4, false);
+
+        assert!(app.config.run_post_add_script_in_tmux);
+    }
+
+    #[test]
+    fn post_add_script_configured_path_editor_targets_configured_script() {
+        let base = temp_dir("post_add_script_configured_path_editor");
+        let project_root = base.join("project");
+        fs::create_dir_all(project_root.join(".owt")).unwrap();
+
+        let editor_log = base.join("editor-arg.txt");
+        let editor_path = base.join("fake-editor.sh");
+        fs::write(
+            &editor_path,
+            format!(
+                "#!/bin/sh\nprintf '%s' \"$1\" > '{}'\n",
+                editor_log.to_string_lossy().replace('\'', "'\\''")
+            ),
+        )
+        .unwrap();
+        make_executable(&editor_path);
+
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.project_root_path = project_root.clone();
+        app.config.editor = Some(editor_path.to_string_lossy().to_string());
+        app.config.post_add_script = Some("setup.sh".to_string());
+
+        app.open_post_add_script_editor();
+
+        let configured_script = project_root.join("setup.sh");
+        assert!(configured_script.exists());
+        assert!(!Config::post_add_script_path(&project_root).exists());
+        assert_eq!(
+            fs::read_to_string(editor_log).unwrap(),
+            configured_script.to_string_lossy()
+        );
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn post_add_script_configured_path_execution_ignores_default_script() {
+        let base = temp_dir("post_add_script_configured_path_default_ignored");
+        let project_root = base.join("project");
+        let worktree_path = base.join("worktree");
+        fs::create_dir_all(project_root.join(".owt")).unwrap();
+        fs::create_dir_all(&worktree_path).unwrap();
+        fs::write(Config::post_add_script_path(&project_root), "#!/bin/sh\n").unwrap();
+
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.project_root_path = project_root;
+        app.config.post_add_script = Some("setup.sh".to_string());
+        app.config.run_post_add_script_in_tmux = true;
+
+        app.run_post_add_script(&worktree_path);
+
+        assert!(app.script_receiver.is_none());
+        assert!(matches!(app.script_status, ScriptStatus::Idle));
+        assert!(app.message.is_none());
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn post_add_script_configured_path_execution_launches_configured_script_in_tmux() {
+        let _guard = env_lock().lock().unwrap();
+        let base = temp_dir("post_add_script_configured_path_tmux");
+        let project_root = base.join("project");
+        let worktree_path = base.join("worktree");
+        let fake_bin = base.join("bin");
+        fs::create_dir_all(&project_root).unwrap();
+        fs::create_dir_all(&worktree_path).unwrap();
+        fs::create_dir_all(&fake_bin).unwrap();
+
+        let configured_script = project_root.join("setup.sh");
+        fs::write(&configured_script, "#!/bin/sh\n").unwrap();
+        let tmux_log = base.join("tmux-args.txt");
+        let fake_tmux = fake_bin.join("tmux");
+        fs::write(
+            &fake_tmux,
+            format!(
+                "#!/bin/sh\nprintf '%s' \"$*\" > '{}'\nexit 0\n",
+                tmux_log.to_string_lossy().replace('\'', "'\\''")
+            ),
+        )
+        .unwrap();
+        make_executable(&fake_tmux);
+
+        let original_path = std::env::var_os("PATH");
+        let path = if let Some(existing) = original_path.as_ref() {
+            let mut paths = vec![fake_bin.clone()];
+            paths.extend(std::env::split_paths(existing));
+            std::env::join_paths(paths).unwrap()
+        } else {
+            fake_bin.clone().into_os_string()
+        };
+        std::env::set_var("PATH", path);
+
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.project_root_path = project_root.clone();
+        app.config.post_add_script = Some("setup.sh".to_string());
+        app.config.run_post_add_script_in_tmux = true;
+
+        app.run_post_add_script(&worktree_path);
+
+        if let Some(path) = original_path {
+            std::env::set_var("PATH", path);
+        } else {
+            std::env::remove_var("PATH");
+        }
+
+        let tmux_args = fs::read_to_string(tmux_log).unwrap();
+        assert!(tmux_args.contains("new-session -d -s owt-post-add-"));
+        assert!(tmux_args.contains(&format!("cd {}", shell_quote(&worktree_path))));
+        assert!(tmux_args.contains(&format!("sh {}", shell_quote(&configured_script))));
+        assert!(app.script_receiver.is_some());
+
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
@@ -2150,6 +2391,82 @@ mod tests {
             ExitAction::Quit => panic!("enter should request directory change"),
         }
         assert!(app.should_quit);
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn copy_files_nested_branch() {
+        let base = temp_dir("copy_files_nested_branch");
+        let (bare_path, main_path) = create_test_project(&base);
+        let project_root = bare_path.parent().unwrap().to_path_buf();
+        let branch = "feature/copy-files-nested";
+        let worktree_path = project_root.join("feature").join("copy-files-nested");
+
+        fs::create_dir_all(main_path.join("config")).unwrap();
+        fs::write(main_path.join("config/local.env"), "TOKEN=secret\n").unwrap();
+
+        let mut app = App::new(
+            bare_path.clone(),
+            project_root.clone(),
+            true,
+            Some(main_path.clone()),
+            true,
+        )
+        .unwrap();
+        app.config.copy_files = vec!["config/local.env".to_string()];
+        app.input_buffer = branch.to_string();
+
+        app.add_worktree();
+        wait_for_background_op(&mut app);
+
+        assert!(worktree_path.exists());
+        assert_eq!(
+            fs::read_to_string(worktree_path.join("config/local.env")).unwrap(),
+            "TOKEN=secret\n"
+        );
+        let message = app.message.as_ref().unwrap();
+        assert!(!message.is_error);
+        assert!(message
+            .text
+            .contains("Created worktree: feature/copy-files-nested"));
+        assert!(!message.text.contains("Copy warnings:"));
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn copy_files_missing() {
+        let base = temp_dir("copy_files_missing");
+        let (bare_path, main_path) = create_test_project(&base);
+        let project_root = bare_path.parent().unwrap().to_path_buf();
+        let branch = "feature/copy-files-missing";
+        let worktree_path = project_root.join("feature").join("copy-files-missing");
+
+        let mut app = App::new(
+            bare_path.clone(),
+            project_root.clone(),
+            true,
+            Some(main_path),
+            true,
+        )
+        .unwrap();
+        app.config.copy_files = vec![".env.missing".to_string()];
+        app.input_buffer = branch.to_string();
+
+        app.add_worktree();
+        wait_for_background_op(&mut app);
+
+        assert!(worktree_path.exists());
+        assert!(!worktree_path.join(".env.missing").exists());
+        let message = app.message.as_ref().unwrap();
+        assert!(!message.is_error);
+        assert!(message
+            .text
+            .contains("Created worktree: feature/copy-files-missing"));
+        assert!(message.text.contains("Copy warnings:"));
+        assert!(message.text.contains(".env.missing"));
+        assert!(message.text.contains("source file missing"));
 
         let _ = fs::remove_dir_all(base);
     }

@@ -147,6 +147,7 @@ editor = "code"
 terminal = "Ghostty"
 worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
+post_add_script = ".owt/post-add.sh"
 run_post_add_script_in_tmux = false
 ```
 
@@ -157,8 +158,11 @@ Useful options:
 | `editor` | Command used by `o` |
 | `terminal` | Terminal app used by `t` |
 | `worktree_root` | Root for new worktrees in regular repositories |
-| `copy_files` | Files copied into new worktrees |
-| `run_post_add_script_in_tmux` | Run `.owt/post-add.sh` in detached tmux after creating a worktree |
+| `copy_files` | Files copied into new worktrees. Only files are copied; copy problems are shown as warnings after creation. |
+| `post_add_script` | Script path for post-add setup. Relative paths use the current effective project root. |
+| `run_post_add_script_in_tmux` | Run the post-add script in detached tmux after creating a worktree. Only global config can enable this. |
+
+Project config in `.owt/config.toml` can override safe values, including `post_add_script`, but it cannot enable automatic post-add execution. A regular linked worktree only reads its own project config; it does not inherit an ancestor `.owt/config.toml`.
 
 ## Commands
 

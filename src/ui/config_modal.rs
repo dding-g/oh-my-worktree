@@ -10,6 +10,7 @@ use crate::app::App;
 use crate::config::Config;
 use crate::types::AppState;
 use crate::ui::theme::{centered_rect, Theme};
+use std::path::Path;
 
 pub const CONFIG_ITEM_COUNT: usize = 6;
 
@@ -190,16 +191,12 @@ fn render_config_item(
             Span::styled(format!("{}: ", label), label_style),
             Span::styled(display_value, Style::default().fg(t.amber)),
         ]
-    } else if label == "post_add_script" && is_selected {
-        // Special hint for post_add_script
+    } else if let Some(hint) = selected_config_hint(label).filter(|_| is_selected) {
         vec![
             Span::styled(cursor, label_style),
             Span::styled(format!("{}: ", label), label_style),
             Span::styled(value, Style::default().fg(t.text_primary)),
-            Span::styled(
-                " (Enter to edit with $EDITOR)",
-                Style::default().fg(t.text_muted),
-            ),
+            Span::styled(format!(" {}", hint), Style::default().fg(t.text_muted)),
         ]
     } else {
         let value_style = if is_selected {
@@ -256,19 +253,35 @@ fn get_worktree_root_display(app: &App) -> String {
 }
 
 fn get_script_display(app: &App) -> String {
-    let script_path = Config::post_add_script_path(&app.project_root_path);
+    script_display(&app.config, &app.project_root_path)
+}
+
+fn script_display(config: &Config, project_root_path: &Path) -> String {
+    let script_path = config.resolved_post_add_script_path(project_root_path);
     if script_path.exists() {
-        format!("{}", script_path.display())
+        script_path.display().to_string()
     } else {
-        "(not found)".to_string()
+        format!("{} (not found)", script_path.display())
     }
 }
 
 fn get_tmux_script_display(app: &App) -> String {
-    if app.config.run_post_add_script_in_tmux {
-        "enabled".to_string()
+    tmux_script_display(app.config.run_post_add_script_in_tmux)
+}
+
+fn tmux_script_display(run_in_tmux: bool) -> String {
+    if run_in_tmux {
+        "on global-only".to_string()
     } else {
-        "disabled".to_string()
+        "off global-only".to_string()
+    }
+}
+
+fn selected_config_hint(label: &str) -> Option<&'static str> {
+    match label {
+        "post_add_script" => Some("(Enter to edit with $EDITOR)"),
+        "run_post_add_script_in_tmux" => Some("(global config only)"),
+        _ => None,
     }
 }
 
@@ -276,4 +289,70 @@ fn get_config_path(app: &App) -> String {
     Config::project_config_path(&app.project_root_path)
         .display()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn config_modal_configured_post_add_script_displays_effective_project_path() {
+        let project_root = std::env::temp_dir().join(format!(
+            "owt_config_modal_script_display_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut config = Config::default();
+        config.post_add_script = Some("setup.sh".to_string());
+
+        let display = script_display(&config, &project_root);
+        let expected_path = project_root.join("setup.sh").display().to_string();
+
+        assert!(
+            display.contains(&expected_path),
+            "configured script path should display as effective project-root path: {display}"
+        );
+        assert!(
+            display.contains("(not found)"),
+            "missing configured script should still show the effective path: {display}"
+        );
+        assert!(
+            !display.contains(".owt/post-add.sh"),
+            "configured script display must not fall back to fixed default path: {display}"
+        );
+    }
+
+    #[test]
+    fn config_modal_tmux_text_communicates_global_only_trust_boundary() {
+        let enabled_display = tmux_script_display(true);
+        let disabled_display = tmux_script_display(false);
+        let selected_hint = selected_config_hint("run_post_add_script_in_tmux").unwrap();
+        let selected_text = format!("{disabled_display} {selected_hint}");
+
+        assert_eq!(enabled_display, "on global-only");
+        assert_eq!(disabled_display, "off global-only");
+        assert_eq!(selected_hint, "(global config only)");
+        assert!(selected_text.contains("global"));
+        assert!(
+            !selected_text.to_ascii_lowercase().contains("project"),
+            "tmux row/hint must not imply project config can enable auto-run: {selected_text}"
+        );
+    }
+
+    #[test]
+    fn config_modal_default_post_add_script_display_uses_default_helper_path() {
+        let project_root = PathBuf::from("/tmp/owt-config-modal-default-display");
+        let config = Config::default();
+
+        let display = script_display(&config, &project_root);
+        let expected_path = Config::post_add_script_path(&project_root)
+            .display()
+            .to_string();
+
+        assert!(display.contains(&expected_path));
+    }
 }

@@ -147,6 +147,7 @@ editor = "code"
 terminal = "Ghostty"
 worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
+post_add_script = ".owt/post-add.sh"
 run_post_add_script_in_tmux = false
 ```
 
@@ -157,8 +158,11 @@ run_post_add_script_in_tmux = false
 | `editor` | `o` 키에서 사용할 command |
 | `terminal` | `t` 키에서 사용할 terminal app |
 | `worktree_root` | regular repository에서 새 worktree를 만들 root |
-| `copy_files` | 새 worktree로 복사할 파일 |
-| `run_post_add_script_in_tmux` | worktree 생성 후 `.owt/post-add.sh`를 detached tmux에서 실행 |
+| `copy_files` | 새 worktree로 복사할 파일. 파일만 복사하며 복사 문제는 생성 후 warning으로 표시됩니다. |
+| `post_add_script` | post-add setup script path. 상대 path는 현재 effective project root 기준입니다. |
+| `run_post_add_script_in_tmux` | worktree 생성 후 post-add script를 detached tmux에서 실행. 이 값은 global config에서만 켤 수 있습니다. |
+
+`.owt/config.toml`의 project config는 `post_add_script` 같은 safe value를 override할 수 있지만 자동 post-add 실행은 켤 수 없습니다. Regular linked worktree는 자기 자신의 project config만 읽고, 부모 directory의 `.owt/config.toml`을 상속하지 않습니다.
 
 ## Commands
 

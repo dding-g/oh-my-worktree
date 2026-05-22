@@ -255,6 +255,20 @@ impl Config {
     pub fn post_add_script_path(project_root_path: &std::path::Path) -> PathBuf {
         Self::owt_dir(project_root_path).join("post-add.sh")
     }
+
+    pub fn resolved_post_add_script_path(&self, project_root_path: &std::path::Path) -> PathBuf {
+        self.post_add_script
+            .as_deref()
+            .map(expand_home_path)
+            .map(|path| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    project_root_path.join(path)
+                }
+            })
+            .unwrap_or_else(|| Self::post_add_script_path(project_root_path))
+    }
 }
 
 fn expand_home_path(path: &str) -> PathBuf {
@@ -291,6 +305,47 @@ fn dirs_config_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn test_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn acquire_test_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        test_env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+            let original = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+
+        fn unset(key: &'static str) -> Self {
+            let original = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(ref value) = self.original {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
 
     #[test]
     fn test_parse_empty() {
@@ -366,6 +421,7 @@ copy_files = [".env", ".envrc", "config.json"]
 
     #[test]
     fn test_project_config_does_not_enable_tmux_post_add() {
+        let _env_lock = acquire_test_env_lock();
         let dir = std::env::temp_dir().join(format!(
             "owt_project_config_test_{}_{}",
             std::process::id(),
@@ -374,13 +430,20 @@ copy_files = [".env", ".envrc", "config.json"]
                 .unwrap()
                 .as_nanos()
         ));
+        let home_dir = dir.join("home");
+        let xdg_config_home = dir.join("xdg-config");
         let project_dir = dir.join("project");
+        fs::create_dir_all(&home_dir).unwrap();
+        fs::create_dir_all(&xdg_config_home).unwrap();
         fs::create_dir_all(project_dir.join(".owt")).unwrap();
         fs::write(
             project_dir.join(".owt").join("config.toml"),
             "run_post_add_script_in_tmux = true\n",
         )
         .unwrap();
+
+        let _home_guard = EnvVarGuard::set("HOME", &home_dir);
+        let _xdg_guard = EnvVarGuard::unset("XDG_CONFIG_HOME");
 
         let config = Config::load_with_project(Some(&project_dir)).unwrap();
 
@@ -390,7 +453,41 @@ copy_files = [".env", ".envrc", "config.json"]
     }
 
     #[test]
+    fn test_global_config_post_add_script_keeps_tmux_enabled() {
+        let _env_lock = acquire_test_env_lock();
+        let dir = std::env::temp_dir().join(format!(
+            "owt_global_config_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home_dir = dir.join("home");
+        let xdg_config_home = dir.join("xdg-config");
+        fs::create_dir_all(&home_dir).unwrap();
+        fs::create_dir_all(xdg_config_home.join("owt")).unwrap();
+        let project_dir = dir.join("project");
+        fs::create_dir_all(project_dir.join(".owt")).unwrap();
+        fs::write(
+            xdg_config_home.join("owt").join("config.toml"),
+            "run_post_add_script_in_tmux = true\n",
+        )
+        .unwrap();
+
+        let _home_guard = EnvVarGuard::set("HOME", &home_dir);
+        let _xdg_guard = EnvVarGuard::set("XDG_CONFIG_HOME", &xdg_config_home);
+
+        let config = Config::load_with_project(Some(&project_dir)).unwrap();
+
+        assert!(config.run_post_add_script_in_tmux);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn test_project_config_applies_safe_overrides() {
+        let _env_lock = acquire_test_env_lock();
         let dir = std::env::temp_dir().join(format!(
             "owt_project_safe_override_test_{}_{}",
             std::process::id(),
@@ -399,6 +496,10 @@ copy_files = [".env", ".envrc", "config.json"]
                 .unwrap()
                 .as_nanos()
         ));
+        let home_dir = dir.join("home");
+        let xdg_config_home = dir.join("xdg-config");
+        fs::create_dir_all(&home_dir).unwrap();
+        fs::create_dir_all(&xdg_config_home).unwrap();
         let project_dir = dir.join("project");
         fs::create_dir_all(project_dir.join(".owt")).unwrap();
         fs::write(
@@ -414,6 +515,9 @@ run_post_add_script_in_tmux = true
         )
         .unwrap();
 
+        let _home_guard = EnvVarGuard::set("HOME", &home_dir);
+        let _xdg_guard = EnvVarGuard::unset("XDG_CONFIG_HOME");
+
         let config = Config::load_with_project(Some(&project_dir)).unwrap();
 
         assert_eq!(config.editor, Some("code".to_string()));
@@ -422,6 +526,52 @@ run_post_add_script_in_tmux = true
         assert_eq!(config.copy_files, vec![".env", ".envrc"]);
         assert_eq!(config.post_add_script, Some("setup.sh".to_string()));
         assert!(!config.run_post_add_script_in_tmux);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_project_post_add_script_overrides_global() {
+        let _env_lock = acquire_test_env_lock();
+        let dir = std::env::temp_dir().join(format!(
+            "owt_project_post_add_override_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home_dir = dir.join("home");
+        let xdg_config_home = dir.join("xdg-config");
+        let project_dir = dir.join("project");
+        fs::create_dir_all(&home_dir).unwrap();
+        fs::create_dir_all(&xdg_config_home.join("owt")).unwrap();
+        fs::create_dir_all(project_dir.join(".owt")).unwrap();
+        fs::write(
+            xdg_config_home.join("owt").join("config.toml"),
+            r#"
+post_add_script = "/global/post-add.sh"
+run_post_add_script_in_tmux = true
+"#,
+        )
+        .unwrap();
+        fs::write(
+            project_dir.join(".owt").join("config.toml"),
+            r#"
+post_add_script = "scripts/project-post-add.sh"
+"#,
+        )
+        .unwrap();
+
+        let _home_guard = EnvVarGuard::set("HOME", &home_dir);
+        let _xdg_guard = EnvVarGuard::set("XDG_CONFIG_HOME", &xdg_config_home);
+
+        let config = Config::load_with_project(Some(&project_dir)).unwrap();
+
+        assert_eq!(
+            config.post_add_script,
+            Some("scripts/project-post-add.sh".to_string())
+        );
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -482,6 +632,19 @@ shortcut = "f"
 
     #[test]
     fn test_resolved_worktree_root_expands_home_path() {
+        let _env_lock = acquire_test_env_lock();
+        let dir = std::env::temp_dir().join(format!(
+            "owt_worktree_home_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home_dir = dir.join("home");
+        fs::create_dir_all(&home_dir).unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", &home_dir);
+        let _xdg_guard = EnvVarGuard::unset("XDG_CONFIG_HOME");
         let config = Config {
             worktree_root: Some("~/custom-worktrees".to_string()),
             ..Default::default()
@@ -489,30 +652,78 @@ shortcut = "f"
 
         assert_eq!(
             config.resolved_worktree_root(),
-            home_dir().unwrap().join("custom-worktrees")
+            home_dir.join("custom-worktrees")
+        );
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_post_add_script_relative_path_resolves_against_project_root() {
+        let config = Config {
+            post_add_script: Some("scripts/post-add.sh".to_string()),
+            ..Default::default()
+        };
+        let project_root = PathBuf::from("/tmp/project-root");
+
+        assert_eq!(
+            config.resolved_post_add_script_path(&project_root),
+            project_root.join("scripts/post-add.sh")
+        );
+    }
+
+    #[test]
+    fn test_post_add_script_absolute_path_uses_as_is() {
+        let config = Config {
+            post_add_script: Some("/opt/setup/post-add.sh".to_string()),
+            ..Default::default()
+        };
+        let project_root = PathBuf::from("/tmp/project-root");
+
+        assert_eq!(
+            config.resolved_post_add_script_path(&project_root),
+            PathBuf::from("/opt/setup/post-add.sh")
+        );
+    }
+
+    #[test]
+    fn test_post_add_script_defaults_to_project_helper_when_unset() {
+        let config = Config::default();
+        let project_root = PathBuf::from("/tmp/project-root");
+
+        assert_eq!(
+            config.resolved_post_add_script_path(&project_root),
+            Config::post_add_script_path(&project_root)
         );
     }
 
     #[test]
     fn test_editor_and_terminal_precedence() {
-        std::env::set_var("EDITOR", "nano");
-        std::env::set_var("TERMINAL", "Ghostty");
+        let _env_lock = acquire_test_env_lock();
 
-        let default_config = Config::default();
-        assert_eq!(default_config.get_editor(), "nano");
-        assert_eq!(default_config.get_terminal(), Some("Ghostty".to_string()));
+        {
+            let _editor_guard = EnvVarGuard::set("EDITOR", "nano");
+            let _terminal_guard = EnvVarGuard::set("TERMINAL", "Ghostty");
 
-        let configured = Config {
-            editor: Some("code".to_string()),
-            terminal: Some("WezTerm".to_string()),
-            ..Default::default()
-        };
-        assert_eq!(configured.get_editor(), "code");
-        assert_eq!(configured.get_terminal(), Some("WezTerm".to_string()));
+            let default_config = Config::default();
+            assert_eq!(default_config.get_editor(), "nano");
+            assert_eq!(default_config.get_terminal(), Some("Ghostty".to_string()));
 
-        std::env::remove_var("EDITOR");
-        std::env::remove_var("TERMINAL");
-        assert_eq!(Config::default().get_editor(), "vim");
-        assert_eq!(Config::default().get_terminal(), None);
+            let configured = Config {
+                editor: Some("code".to_string()),
+                terminal: Some("WezTerm".to_string()),
+                ..Default::default()
+            };
+            assert_eq!(configured.get_editor(), "code");
+            assert_eq!(configured.get_terminal(), Some("WezTerm".to_string()));
+        }
+
+        {
+            let _editor_guard = EnvVarGuard::unset("EDITOR");
+            let _terminal_guard = EnvVarGuard::unset("TERMINAL");
+
+            assert_eq!(Config::default().get_editor(), "vim");
+            assert_eq!(Config::default().get_terminal(), None);
+        }
     }
 }
