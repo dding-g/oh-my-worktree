@@ -65,6 +65,11 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
             format!("{} total", worktree_count),
             Style::default().fg(t.text_muted),
         ),
+        Span::raw("  "),
+        Span::styled(
+            format!("{} selected", app.selected_worktree_count()),
+            Style::default().fg(t.amber),
+        ),
     ])];
 
     let header = Paragraph::new(header_text);
@@ -105,6 +110,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 .as_ref()
                 .map(|cp| cp == &wt.path)
                 .unwrap_or(false);
+            let is_marked = app.is_worktree_marked(&wt.path);
 
             // Check if this row matches filter
             let matches_filter = if has_filter {
@@ -115,7 +121,9 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             // Modern indicator: dot for selection, filled dot for current
-            let cursor = if is_selected && is_current {
+            let cursor = if is_marked {
+                "✓ "
+            } else if is_selected && is_current {
                 "● "
             } else if is_selected {
                 "› "
@@ -125,7 +133,11 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                 "  "
             };
 
-            let cursor_color = if is_selected { t.accent } else { t.text_muted };
+            let cursor_color = if is_marked || is_selected {
+                t.accent
+            } else {
+                t.text_muted
+            };
 
             let status_color = match wt.status {
                 WorktreeStatus::Clean => t.accent,
@@ -158,7 +170,10 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             let is_op_target = app
                 .active_op_info
                 .as_ref()
-                .map(|op| op.worktree_path == wt.path)
+                .map(|op| {
+                    op.worktree_path == wt.path
+                        || op.worktree_paths.iter().any(|path| path == &wt.path)
+                })
                 .unwrap_or(false);
 
             let (last_commit, last_commit_style) = if is_op_target {
@@ -411,6 +426,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
 
     let keybindings = vec![
         ("↵", "enter"),
+        ("Space", "select"),
         ("j/k", "nav"),
         ("a", "add"),
         ("d", "del"),

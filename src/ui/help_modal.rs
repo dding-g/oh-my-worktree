@@ -34,6 +34,7 @@ pub fn render(frame: &mut Frame, app: &App) {
                 ("Ctrl+d/u", "Half page down/up"),
                 ("g", "Jump to current worktree"),
                 ("/", "Search worktrees"),
+                ("Space", "Select/unselect worktree"),
                 ("Enter", "Enter worktree (cd)"),
             ],
         ),
@@ -41,7 +42,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             "Worktree Actions",
             vec![
                 ("a", "Add new worktree"),
-                ("d", "Delete worktree (f: force)"),
+                ("d", "Delete selected worktree(s)"),
                 ("x", "Prune stale worktrees"),
                 ("r", "Refresh list"),
                 ("s", "Sort (name/recent/status)"),
@@ -51,7 +52,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             "Git Operations",
             vec![
                 ("f", "Fetch remotes"),
-                ("p", "Pull from remote"),
+                ("p", "Pull selected worktree(s)"),
                 ("P", "Push to remote"),
                 ("m", "Merge upstream"),
                 ("M", "Merge branch (select)"),

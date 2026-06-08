@@ -72,9 +72,10 @@ document_contract:
 | navigation | `Ctrl+d`, `Ctrl+u` | half-page 이동 |
 | navigation | `g` | launch한 current worktree로 이동 |
 | search | `/`, text, `Backspace`, `Esc`, `Enter` | filter 시작/수정/취소/선택 진입 |
+| selection | `Space` | batch action 대상 worktree 선택/해제 |
 | worktree | `Enter` | 선택 worktree로 cd handoff |
-| worktree | `a`, `d` | add/delete modal |
-| git | `f`, `p`, `P`, `m`, `M` | fetch/pull/push/merge upstream/merge branch |
+| worktree | `a`, `d` | add/delete modal. 체크된 worktree가 있으면 delete는 체크된 대상 전체에 적용 |
+| git | `f`, `p`, `P`, `m`, `M` | fetch/pull/push/merge upstream/merge branch. 체크된 worktree가 있으면 pull은 체크된 대상 전체에 적용 |
 | external | `o`, `t`, `y` | editor/terminal 열기, path copy |
 | config/help | `c`, `?` | config modal/help modal |
 | lifecycle | `q`, `Ctrl+c` | quit |
@@ -101,8 +102,8 @@ user_cases:
     success: "TUI exits and shell integration changes directory when installed"
   - id: UC_DELETE_WORKTREE
     actor: reviewer
-    trigger: "selects worktree, presses `d`, confirms"
-    success: "worktree is removed; optional branch delete follows confirmation state"
+    trigger: "selects one or more worktrees with `Space`, presses `d`, confirms"
+    success: "target worktree(s) are removed; optional branch delete follows confirmation state"
   - id: UC_HOTFIX
     actor: hotfix_operator
     trigger: "creates hotfix worktree while feature work remains untouched"

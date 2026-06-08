@@ -94,11 +94,12 @@ Then use the TUI:
 | Key | Action |
 | --- | --- |
 | `j` / `k` | Move selection |
+| `Space` | Select/unselect a worktree for batch actions |
 | `Enter` | Enter the selected worktree |
 | `a` | Add a worktree |
-| `d` | Delete a worktree |
+| `d` | Delete the selected worktree, or selected worktrees when any are checked |
 | `f` | Fetch remotes |
-| `p` / `P` | Pull / push |
+| `p` / `P` | Pull selected worktree(s) / push current worktree |
 | `m` / `M` | Merge upstream / merge selected branch |
 | `o` / `t` | Open in editor / terminal |
 | `y` | Copy path |

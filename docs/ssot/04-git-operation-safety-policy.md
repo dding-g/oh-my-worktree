@@ -47,9 +47,9 @@ git_command_policy:
 |---|---|---|---|---|
 | list | TUI load/refresh | `git worktree list --porcelain` + optional GitHub/gh-style PR lookup | bare entry와 non-bare worktree를 구분하고, GitHub PR 상태가 확인되면 list metadata로 표시한다 | bare entry는 status/ahead/behind 계산 대상이 아니며 PR lookup 실패는 list를 실패시키거나 block하지 않는다 |
 | add | `a` modal confirm | `git worktree add` | branch/base 정책에 맞는 worktree 생성 | 생성 후 usable worktree인지 확인/repair한다 |
-| delete | `d` confirm | `git worktree remove` + optional branch delete | 선택 worktree 제거 | dirty worktree는 기본적으로 삭제하지 않는다 |
+| delete | `d` confirm | `git worktree remove` + optional branch delete | 선택 worktree 제거. `Space`로 체크한 worktree가 있으면 체크된 대상 전체에 적용 | dirty worktree는 기본적으로 삭제하지 않는다 |
 | fetch | `f` | selected worktree/repo remote fetch | remote refs와 ahead/behind 갱신 | long operation은 background op로 처리한다 |
-| pull | `p` | selected worktree `git pull` | remote 변경 merge | clean worktree expectation을 문서에 노출한다 |
+| pull | `p` | selected worktree `git pull` | remote 변경 merge. `Space`로 체크한 worktree가 있으면 체크된 대상 전체에 적용 | clean worktree expectation을 문서에 노출한다 |
 | push | `P` | selected branch push | remote에 현재 branch push | 실패는 status bar/message로 표시한다 |
 | merge upstream | `m` | upstream branch merge | upstream을 현재 branch에 merge | conflict는 status `!`로 드러난다 |
 | merge branch | `M` | branch select modal 후 merge | 선택 branch merge | cancel 가능해야 한다 |

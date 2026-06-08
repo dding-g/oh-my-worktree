@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{backend::Backend, Frame, Terminal};
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -25,6 +26,7 @@ pub struct ScriptResult {
 pub struct App {
     pub worktrees: Vec<Worktree>,
     pub selected_index: usize,
+    pub selected_worktree_paths: HashSet<PathBuf>,
     pub state: AppState,
     pub message: Option<AppMessage>,
     pub bare_repo_path: PathBuf,
@@ -107,6 +109,7 @@ impl App {
         let mut app = Self {
             worktrees,
             selected_index,
+            selected_worktree_paths: HashSet::new(),
             state: AppState::List,
             message: initial_message,
             bare_repo_path,
@@ -276,6 +279,7 @@ impl App {
             message,
             cmd_detail,
             worktree_path,
+            affected_paths,
             ..
         } = result;
 
@@ -286,7 +290,11 @@ impl App {
         if success {
             match kind {
                 OpKind::Delete => {
-                    self.worktrees.retain(|wt| wt.path != worktree_path);
+                    let removed_paths: HashSet<PathBuf> = affected_paths.into_iter().collect();
+                    self.worktrees
+                        .retain(|wt| !removed_paths.contains(&wt.path));
+                    self.selected_worktree_paths
+                        .retain(|path| !removed_paths.contains(path));
                     self.clamp_selection_to_non_bare();
                     self.update_selected_details();
                 }
@@ -315,6 +323,14 @@ impl App {
             }
             self.message = Some(AppMessage::info(msg));
         } else {
+            if kind == OpKind::Delete {
+                for path in affected_paths {
+                    self.worktrees.retain(|wt| wt.path != path);
+                    self.selected_worktree_paths.remove(&path);
+                }
+                self.clamp_selection_to_non_bare();
+                self.update_selected_details();
+            }
             let mut msg = format!("Failed: {}", message);
             if self.verbose {
                 self.last_command_detail = Some(cmd_detail.clone());
@@ -463,16 +479,21 @@ impl App {
                 self.last_key = None;
             }
             KeyCode::Char('d') => {
-                if let Some(wt) = self.selected_worktree() {
-                    if wt.is_bare {
-                        self.message = Some(AppMessage::error("Cannot delete bare repository"));
-                    } else {
-                        self.state = AppState::ConfirmDelete {
-                            delete_branch: false,
-                            force: false,
-                        };
-                    }
+                let targets = self.action_worktrees();
+                if targets.is_empty() {
+                    self.message = Some(AppMessage::error("No worktree selected"));
+                } else if targets.iter().any(|wt| wt.is_bare) {
+                    self.message = Some(AppMessage::error("Cannot delete bare repository"));
+                } else {
+                    self.state = AppState::ConfirmDelete {
+                        delete_branch: false,
+                        force: false,
+                    };
                 }
+                self.last_key = None;
+            }
+            KeyCode::Char(' ') => {
+                self.toggle_selected_worktree();
                 self.last_key = None;
             }
             KeyCode::Char('o') => {
@@ -634,13 +655,24 @@ impl App {
             }
             KeyCode::Char('y') | KeyCode::Enter => {
                 // Require force for dirty worktrees
-                if let Some(wt) = self.selected_worktree() {
-                    if wt.status != WorktreeStatus::Clean && !force {
-                        self.message = Some(AppMessage::error(
-                            "Worktree has uncommitted changes. Press 'f' to enable force delete.",
-                        ));
-                        return;
-                    }
+                let dirty_targets: Vec<String> = self
+                    .action_worktrees()
+                    .into_iter()
+                    .filter(|wt| wt.status != WorktreeStatus::Clean)
+                    .map(|wt| wt.display_name())
+                    .collect();
+                if !dirty_targets.is_empty() && !force {
+                    let message = if dirty_targets.len() == 1 {
+                        "Worktree has uncommitted changes. Press 'f' to enable force delete."
+                            .to_string()
+                    } else {
+                        format!(
+                            "Worktree has uncommitted changes. Press 'f' to enable force delete: {}",
+                            dirty_targets.join(", ")
+                        )
+                    };
+                    self.message = Some(AppMessage::error(message));
+                    return;
                 }
                 self.delete_selected_worktree(delete_branch, force);
             }
@@ -904,6 +936,46 @@ impl App {
         self.worktrees.get(self.selected_index)
     }
 
+    pub fn is_worktree_marked(&self, path: &Path) -> bool {
+        self.selected_worktree_paths.contains(path)
+    }
+
+    pub fn selected_worktree_count(&self) -> usize {
+        self.selected_worktree_paths.len()
+    }
+
+    fn toggle_selected_worktree(&mut self) {
+        let Some(wt) = self.selected_worktree() else {
+            return;
+        };
+
+        if wt.is_bare {
+            self.message = Some(AppMessage::error("Cannot select bare repository"));
+            return;
+        }
+
+        let path = wt.path.clone();
+        let name = wt.display_name();
+        if self.selected_worktree_paths.remove(&path) {
+            self.message = Some(AppMessage::info(format!("Unselected {}", name)));
+        } else {
+            self.selected_worktree_paths.insert(path);
+            self.message = Some(AppMessage::info(format!("Selected {}", name)));
+        }
+    }
+
+    pub fn action_worktrees(&self) -> Vec<Worktree> {
+        if self.selected_worktree_paths.is_empty() {
+            return self.selected_worktree().cloned().into_iter().collect();
+        }
+
+        self.worktrees
+            .iter()
+            .filter(|wt| self.selected_worktree_paths.contains(&wt.path))
+            .cloned()
+            .collect()
+    }
+
     fn worktree_path_for_branch(&self, branch: &str) -> PathBuf {
         if self.repo_is_bare {
             return self
@@ -972,6 +1044,7 @@ impl App {
         match git::list_worktrees(&self.bare_repo_path) {
             Ok(worktrees) => {
                 self.worktrees = worktrees;
+                self.prune_missing_selected_paths();
                 self.apply_sort();
                 if self.selected_index >= self.worktrees.len() {
                     self.selected_index = self.worktrees.len().saturating_sub(1);
@@ -1056,6 +1129,13 @@ impl App {
             }
         }
         self.update_selected_details();
+    }
+
+    fn prune_missing_selected_paths(&mut self) {
+        let existing_paths: HashSet<PathBuf> =
+            self.worktrees.iter().map(|wt| wt.path.clone()).collect();
+        self.selected_worktree_paths
+            .retain(|path| existing_paths.contains(path));
     }
 
     fn clamp_selection_to_non_bare(&mut self) {
@@ -1170,7 +1250,8 @@ impl App {
                 success: result.is_ok(),
                 message,
                 cmd_detail,
-                worktree_path: worktree_path_for_thread,
+                worktree_path: worktree_path_for_thread.clone(),
+                affected_paths: vec![worktree_path_for_thread.clone()],
                 display_name: display_name_for_thread,
             });
         });
@@ -1185,7 +1266,8 @@ impl App {
         self.active_op = Some((OpKind::Add, rx));
         self.active_op_info = Some(ActiveOp {
             kind: OpKind::Add,
-            worktree_path: worktree_path_for_state,
+            worktree_path: worktree_path_for_state.clone(),
+            worktree_paths: vec![worktree_path_for_state.clone()],
             display_name: display_name_for_state,
         });
     }
@@ -1260,64 +1342,110 @@ impl App {
             return;
         }
 
-        let wt = match self.selected_worktree().cloned() {
-            Some(wt) => wt,
-            Option::None => return,
-        };
+        let worktrees = self.action_worktrees();
+        if worktrees.is_empty() {
+            return;
+        }
 
-        if wt.is_bare {
+        if worktrees.iter().any(|wt| wt.is_bare) {
             self.message = Some(AppMessage::error("Cannot delete bare repository"));
             self.state = AppState::List;
             return;
         }
 
-        let branch_name = wt.branch.clone();
-        let display_name = wt.display_name();
+        let dirty_worktrees: Vec<String> = worktrees
+            .iter()
+            .filter(|wt| wt.status != WorktreeStatus::Clean)
+            .map(Worktree::display_name)
+            .collect();
+        if !dirty_worktrees.is_empty() && !force {
+            let message = if worktrees.len() == 1 {
+                "Worktree has uncommitted changes. Press 'f' to enable force delete.".to_string()
+            } else {
+                format!(
+                    "Worktree has uncommitted changes. Press 'f' to enable force delete: {}",
+                    dirty_worktrees.join(", ")
+                )
+            };
+            self.message = Some(AppMessage::error(message));
+            return;
+        }
+
+        let display_name = batch_display_name(&worktrees, "worktree");
         let display_name_for_thread = display_name.clone();
         let display_name_for_state = display_name.clone();
-        let worktree_path = wt.path.clone();
-        let worktree_path_for_thread = worktree_path.clone();
-        let worktree_path_for_state = worktree_path.clone();
+        let worktree_path_for_state = worktrees[0].path.clone();
+        let worktree_paths_for_state: Vec<PathBuf> =
+            worktrees.iter().map(|wt| wt.path.clone()).collect();
 
         let force_flag = if force { " --force" } else { "" };
-        let cmd_detail = format!(
-            "git -C {} worktree remove{} {}",
-            self.bare_repo_path.display(),
-            force_flag,
-            wt.path.display()
-        );
-        let cmd_detail_for_thread = cmd_detail.clone();
+        let cmd_detail = worktrees
+            .iter()
+            .map(|wt| {
+                format!(
+                    "git -C {} worktree remove{} {}",
+                    self.bare_repo_path.display(),
+                    force_flag,
+                    wt.path.display()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n$ ");
 
         self.state = AppState::List;
-        self.message = Some(AppMessage::info(format!(
-            "Deleting worktree: {}...",
-            display_name
-        )));
+        self.message = Some(AppMessage::info(format!("Deleting: {}...", display_name)));
 
         let bare_repo_path = self.bare_repo_path.clone();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
-            let result = git::remove_worktree(&bare_repo_path, &worktree_path_for_thread, force);
-            let mut message = match &result {
-                Ok(()) => format!("Deleted worktree: {}", display_name_for_thread),
-                Err(e) => e.to_string(),
-            };
+            let mut deleted = Vec::new();
+            let mut failures = Vec::new();
+            let total = worktrees.len();
 
-            if result.is_ok() && delete_branch {
-                if let Some(ref branch) = branch_name {
-                    match git::delete_branch(&bare_repo_path, branch, force) {
-                        Ok(()) => message.push_str(&format!(" (branch '{}' deleted)", branch)),
-                        Err(e) => message.push_str(&format!(" (branch delete failed: {})", e)),
+            for wt in worktrees {
+                let name = wt.display_name();
+                match git::remove_worktree(&bare_repo_path, &wt.path, force) {
+                    Ok(()) => {
+                        deleted.push(wt.path.clone());
+                        if delete_branch {
+                            if let Some(ref branch) = wt.branch {
+                                if let Err(e) = git::delete_branch(&bare_repo_path, branch, force) {
+                                    failures.push(format!("{} branch delete failed: {}", name, e));
+                                }
+                            }
+                        }
                     }
+                    Err(e) => failures.push(format!("{}: {}", name, e)),
                 }
             }
 
+            let message = if failures.is_empty() {
+                if total == 1 {
+                    format!("Deleted worktree: {}", display_name_for_thread)
+                } else {
+                    format!("Deleted {} worktrees", deleted.len())
+                }
+            } else {
+                format!(
+                    "Deleted {}/{} worktrees. Failed: {}",
+                    deleted.len(),
+                    total,
+                    failures.join("; ")
+                )
+            };
+
+            let worktree_path = deleted
+                .first()
+                .cloned()
+                .unwrap_or_else(|| PathBuf::from("."));
+            let success = failures.is_empty();
             let _ = tx.send(OpResult {
                 kind: OpKind::Delete,
-                success: result.is_ok(),
+                success,
                 message,
-                cmd_detail: cmd_detail_for_thread,
-                worktree_path: worktree_path_for_thread,
+                cmd_detail,
+                worktree_path,
+                affected_paths: deleted,
                 display_name: display_name_for_thread,
             });
         });
@@ -1326,6 +1454,7 @@ impl App {
         self.active_op_info = Some(ActiveOp {
             kind: OpKind::Delete,
             worktree_path: worktree_path_for_state,
+            worktree_paths: worktree_paths_for_state,
             display_name: display_name_for_state,
         });
     }
@@ -1486,7 +1615,8 @@ impl App {
                     Err(e) => format!("Fetch failed: {}", e),
                 },
                 cmd_detail: cmd_detail_for_thread,
-                worktree_path: worktree_path_for_thread,
+                worktree_path: worktree_path_for_thread.clone(),
+                affected_paths: vec![worktree_path_for_thread.clone()],
                 display_name: display_name_for_thread,
             });
         });
@@ -1494,7 +1624,8 @@ impl App {
         self.active_op = Some((OpKind::Fetch, rx));
         self.active_op_info = Some(ActiveOp {
             kind: OpKind::Fetch,
-            worktree_path: worktree_path_for_state,
+            worktree_path: worktree_path_for_state.clone(),
+            worktree_paths: vec![worktree_path_for_state.clone()],
             display_name: display_name_for_state,
         });
     }
@@ -1578,54 +1709,83 @@ impl App {
             return;
         }
 
-        let wt = match self.selected_worktree().cloned() {
-            Some(wt) => wt,
-            Option::None => return,
-        };
+        let worktrees = self.action_worktrees();
+        if worktrees.is_empty() {
+            return;
+        }
 
-        if wt.is_bare {
+        if worktrees.iter().any(|wt| wt.is_bare) {
             self.message = Some(AppMessage::error("Cannot pull bare repository"));
             return;
         }
-        if wt.status != WorktreeStatus::Clean {
-            self.message = Some(AppMessage::error(
-                "Cannot pull: worktree has uncommitted changes",
-            ));
+        let dirty_worktrees: Vec<String> = worktrees
+            .iter()
+            .filter(|wt| wt.status != WorktreeStatus::Clean)
+            .map(Worktree::display_name)
+            .collect();
+        if !dirty_worktrees.is_empty() {
+            self.message = Some(AppMessage::error(format!(
+                "Cannot pull: worktree has uncommitted changes: {}",
+                dirty_worktrees.join(", ")
+            )));
             return;
         }
 
-        let display_name = wt.display_name();
+        let display_name = batch_display_name(&worktrees, "worktree");
         let display_name_for_thread = display_name.clone();
         let display_name_for_state = display_name.clone();
-        let worktree_path = wt.path.clone();
-        let worktree_path_for_thread = worktree_path.clone();
-        let worktree_path_for_state = worktree_path.clone();
-        let cmd_detail = format!("git -C {} pull", worktree_path.display());
-        let cmd_detail_for_thread = cmd_detail.clone();
+        let worktree_path_for_state = worktrees[0].path.clone();
+        let worktree_paths_for_state: Vec<PathBuf> =
+            worktrees.iter().map(|wt| wt.path.clone()).collect();
+        let cmd_detail = worktrees
+            .iter()
+            .map(|wt| format!("git -C {} pull", wt.path.display()))
+            .collect::<Vec<_>>()
+            .join("\n$ ");
 
         self.state = AppState::List;
         self.message = Some(AppMessage::info(format!("Pulling: {}...", display_name)));
 
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
-            let result = git::pull_worktree(&worktree_path_for_thread);
-            let message = match &result {
-                Ok(msg) => {
-                    if msg.is_empty() {
-                        format!("Pull completed: {}", display_name_for_thread)
-                    } else {
-                        format!("Pull completed: {}", msg)
-                    }
+            let mut pulled = Vec::new();
+            let mut failures = Vec::new();
+            let total = worktrees.len();
+
+            for wt in worktrees {
+                let name = wt.display_name();
+                match git::pull_worktree(&wt.path) {
+                    Ok(_) => pulled.push(wt.path.clone()),
+                    Err(e) => failures.push(format!("{}: {}", name, e)),
                 }
-                Err(e) => format!("Pull failed: {}", e),
+            }
+
+            let message = if failures.is_empty() {
+                if total == 1 {
+                    format!("Pull completed: {}", display_name_for_thread)
+                } else {
+                    format!("Pull completed: {} worktrees", pulled.len())
+                }
+            } else {
+                format!(
+                    "Pulled {}/{} worktrees. Failed: {}",
+                    pulled.len(),
+                    total,
+                    failures.join("; ")
+                )
             };
 
+            let worktree_path = pulled
+                .first()
+                .cloned()
+                .unwrap_or_else(|| PathBuf::from("."));
             let _ = tx.send(OpResult {
                 kind: OpKind::Pull,
-                success: result.is_ok(),
+                success: failures.is_empty(),
                 message,
-                cmd_detail: cmd_detail_for_thread,
-                worktree_path: worktree_path_for_thread,
+                cmd_detail,
+                worktree_path,
+                affected_paths: pulled,
                 display_name: display_name_for_thread,
             });
         });
@@ -1634,6 +1794,7 @@ impl App {
         self.active_op_info = Some(ActiveOp {
             kind: OpKind::Pull,
             worktree_path: worktree_path_for_state,
+            worktree_paths: worktree_paths_for_state,
             display_name: display_name_for_state,
         });
     }
@@ -1685,7 +1846,8 @@ impl App {
                 success: result.is_ok(),
                 message,
                 cmd_detail: cmd_detail_for_thread,
-                worktree_path: worktree_path_for_thread,
+                worktree_path: worktree_path_for_thread.clone(),
+                affected_paths: vec![worktree_path_for_thread.clone()],
                 display_name: display_name_for_thread,
             });
         });
@@ -1693,7 +1855,8 @@ impl App {
         self.active_op = Some((OpKind::Push, rx));
         self.active_op_info = Some(ActiveOp {
             kind: OpKind::Push,
-            worktree_path: worktree_path_for_state,
+            worktree_path: worktree_path_for_state.clone(),
+            worktree_paths: vec![worktree_path_for_state.clone()],
             display_name: display_name_for_state,
         });
     }
@@ -1853,7 +2016,8 @@ impl App {
                 success: result.is_ok(),
                 message,
                 cmd_detail: cmd_detail_for_thread,
-                worktree_path: worktree_path_for_thread,
+                worktree_path: worktree_path_for_thread.clone(),
+                affected_paths: vec![worktree_path_for_thread.clone()],
                 display_name: display_name_for_thread,
             });
         });
@@ -1861,7 +2025,8 @@ impl App {
         self.active_op = Some((OpKind::Merge, rx));
         self.active_op_info = Some(ActiveOp {
             kind: OpKind::Merge,
-            worktree_path: worktree_path_for_state,
+            worktree_path: worktree_path_for_state.clone(),
+            worktree_paths: vec![worktree_path_for_state.clone()],
             display_name: display_name_for_state,
         });
     }
@@ -1939,6 +2104,14 @@ fn append_copy_warnings(message: String, outcomes: &[CopyFileOutcome]) -> String
         message
     } else {
         format!("{}\nCopy warnings:\n- {}", message, warnings.join("\n- "))
+    }
+}
+
+fn batch_display_name(worktrees: &[Worktree], singular: &str) -> String {
+    match worktrees {
+        [] => format!("0 {}s", singular),
+        [wt] => wt.display_name(),
+        _ => format!("{} {}s", worktrees.len(), singular),
     }
 }
 
@@ -2105,6 +2278,7 @@ mod tests {
         App {
             worktrees,
             selected_index,
+            selected_worktree_paths: HashSet::new(),
             state: AppState::List,
             message: None,
             bare_repo_path: PathBuf::from(bare_repo_path),
@@ -2134,6 +2308,18 @@ mod tests {
             active_op_info: None,
             selected_details: None,
             add_base_branch: "main".to_string(),
+        }
+    }
+
+    fn test_worktree(name: &str, status: WorktreeStatus) -> Worktree {
+        Worktree {
+            path: PathBuf::from(format!("/repo/{}", name)),
+            branch: Some(name.to_string()),
+            is_bare: false,
+            status,
+            last_commit_time: None,
+            ahead_behind: None,
+            github_pr_status: None,
         }
     }
 
@@ -2380,6 +2566,7 @@ mod tests {
             message: "Created worktree: feature/enter-after-create".to_string(),
             cmd_detail: String::new(),
             worktree_path: feature_path.clone(),
+            affected_paths: vec![feature_path.clone()],
             display_name: "feature/enter-after-create".to_string(),
         });
         app.enter_worktree();
@@ -2559,6 +2746,107 @@ mod tests {
             app.message.as_ref().map(|message| message.text.as_str()),
             Some("Worktree has uncommitted changes. Press 'f' to enable force delete.")
         );
+    }
+
+    #[test]
+    fn space_toggles_worktree_selection_without_moving_cursor() {
+        let mut app = test_app(
+            vec![
+                test_worktree("main", WorktreeStatus::Clean),
+                test_worktree("feature", WorktreeStatus::Clean),
+            ],
+            1,
+            "/repo/.bare",
+        );
+
+        app.handle_list_input(KeyCode::Char(' '), KeyModifiers::empty());
+
+        assert_eq!(app.selected_index, 1);
+        assert!(app.is_worktree_marked(Path::new("/repo/feature")));
+        assert_eq!(app.selected_worktree_count(), 1);
+
+        app.handle_list_input(KeyCode::Char(' '), KeyModifiers::empty());
+
+        assert_eq!(app.selected_worktree_count(), 0);
+        assert!(!app.is_worktree_marked(Path::new("/repo/feature")));
+    }
+
+    #[test]
+    fn action_worktrees_uses_checked_worktrees_before_cursor() {
+        let mut app = test_app(
+            vec![
+                test_worktree("main", WorktreeStatus::Clean),
+                test_worktree("feature-a", WorktreeStatus::Clean),
+                test_worktree("feature-b", WorktreeStatus::Clean),
+            ],
+            0,
+            "/repo/.bare",
+        );
+        app.selected_worktree_paths
+            .insert(PathBuf::from("/repo/feature-a"));
+        app.selected_worktree_paths
+            .insert(PathBuf::from("/repo/feature-b"));
+
+        let action_paths: Vec<PathBuf> = app
+            .action_worktrees()
+            .into_iter()
+            .map(|wt| wt.path)
+            .collect();
+
+        assert_eq!(
+            action_paths,
+            vec![
+                PathBuf::from("/repo/feature-a"),
+                PathBuf::from("/repo/feature-b")
+            ]
+        );
+    }
+
+    #[test]
+    fn batch_pull_blocks_when_any_checked_worktree_is_dirty() {
+        let mut app = test_app(
+            vec![
+                test_worktree("main", WorktreeStatus::Clean),
+                test_worktree("dirty", WorktreeStatus::Unstaged),
+            ],
+            0,
+            "/repo/.bare",
+        );
+        app.selected_worktree_paths
+            .insert(PathBuf::from("/repo/main"));
+        app.selected_worktree_paths
+            .insert(PathBuf::from("/repo/dirty"));
+
+        app.pull_worktree();
+
+        assert!(app.active_op.is_none());
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Cannot pull: worktree has uncommitted changes: dirty")
+        );
+    }
+
+    #[test]
+    fn batch_delete_dirty_guard_checks_checked_worktrees_not_cursor() {
+        let mut app = test_app(
+            vec![
+                test_worktree("dirty-cursor", WorktreeStatus::Unstaged),
+                test_worktree("clean-target", WorktreeStatus::Clean),
+            ],
+            0,
+            "/repo/.bare",
+        );
+        app.selected_worktree_paths
+            .insert(PathBuf::from("/repo/clean-target"));
+        app.state = AppState::ConfirmDelete {
+            delete_branch: false,
+            force: false,
+        };
+
+        app.handle_confirm_delete_input(KeyCode::Enter, false, false);
+
+        assert!(app.active_op.is_some());
+        assert!(matches!(app.state, AppState::List));
     }
 
     #[test]

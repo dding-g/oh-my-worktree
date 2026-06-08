@@ -94,11 +94,12 @@ TUI에서 다음 키를 사용합니다.
 | Key | Action |
 | --- | --- |
 | `j` / `k` | selection 이동 |
+| `Space` | batch action 대상 worktree 선택/해제 |
 | `Enter` | 선택한 worktree로 이동 |
 | `a` | worktree 추가 |
-| `d` | worktree 삭제 |
+| `d` | 선택한 worktree 삭제. 체크된 worktree가 있으면 여러 개 삭제 |
 | `f` | remote fetch |
-| `p` / `P` | pull / push |
+| `p` / `P` | 선택한 worktree pull / 현재 worktree push |
 | `m` / `M` | upstream merge / 선택 branch merge |
 | `o` / `t` | editor / terminal에서 열기 |
 | `y` | path 복사 |

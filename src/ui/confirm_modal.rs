@@ -54,17 +54,44 @@ pub fn render(frame: &mut Frame, app: &App) {
     )]));
     frame.render_widget(question, chunks[1]);
 
-    if let Some(wt) = app.selected_worktree() {
+    let targets = app.action_worktrees();
+    let dirty_count = targets
+        .iter()
+        .filter(|wt| wt.status != WorktreeStatus::Clean)
+        .count();
+
+    if let Some(wt) = targets.first() {
         // Worktree name
         let name = Paragraph::new(Line::from(vec![
-            Span::styled("Name: ", Style::default().fg(t.text_muted)),
-            Span::styled(wt.display_name(), Style::default().fg(t.text_primary)),
+            Span::styled(
+                if targets.len() == 1 {
+                    "Name: "
+                } else {
+                    "Selection: "
+                },
+                Style::default().fg(t.text_muted),
+            ),
+            Span::styled(
+                if targets.len() == 1 {
+                    wt.display_name()
+                } else {
+                    format!("{} worktrees", targets.len())
+                },
+                Style::default().fg(t.text_primary),
+            ),
         ]));
         frame.render_widget(name, chunks[3]);
 
         // Branch
         let branch = Paragraph::new(Line::from(vec![
-            Span::styled("Branch: ", Style::default().fg(t.text_muted)),
+            Span::styled(
+                if targets.len() == 1 {
+                    "Branch: "
+                } else {
+                    "First branch: "
+                },
+                Style::default().fg(t.text_muted),
+            ),
             Span::styled(wt.branch_display(), Style::default().fg(t.cyan)),
         ]));
         frame.render_widget(branch, chunks[4]);
@@ -79,7 +106,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         frame.render_widget(delete_branch_opt, chunks[5]);
 
         // Force delete option
-        let is_dirty = wt.status != WorktreeStatus::Clean;
+        let is_dirty = dirty_count > 0;
         let force_checkbox = if force { "[x]" } else { "[ ]" };
         let force_color = if force { t.red } else { t.text_muted };
         let force_opt = Paragraph::new(Line::from(vec![
@@ -98,9 +125,9 @@ pub fn render(frame: &mut Frame, app: &App) {
         // Status warning
         if is_dirty {
             let warning_text = if force {
-                "Warning: Force deleting worktree with uncommitted changes!"
+                "Warning: Force deleting worktree(s) with uncommitted changes!"
             } else {
-                "Warning: Worktree has uncommitted changes! Enable force (f) to delete."
+                "Warning: Worktree(s) have uncommitted changes! Enable force (f)."
             };
             let warning = Paragraph::new(Line::from(vec![Span::styled(
                 warning_text,

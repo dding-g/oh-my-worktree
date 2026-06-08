@@ -208,6 +208,7 @@ pub struct OpResult {
     pub message: String,
     pub cmd_detail: String,
     pub worktree_path: PathBuf,
+    pub affected_paths: Vec<PathBuf>,
     pub display_name: String,
 }
 
@@ -215,6 +216,7 @@ pub struct OpResult {
 pub struct ActiveOp {
     pub kind: OpKind,
     pub worktree_path: PathBuf,
+    pub worktree_paths: Vec<PathBuf>,
     pub display_name: String,
 }
 
