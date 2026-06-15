@@ -1,6 +1,6 @@
 ---
 title: owt Shell Integration / Exit 계약
-description: Enter key cd handoff, `OWT_OUTPUT_FILE`, `/dev/tty`, `owt setup` 정책
+description: Enter key and create-worktree cd handoff, `OWT_OUTPUT_FILE`, `/dev/tty`, `owt setup` 정책
 ref:
   - src/main.rs
   - src/app.rs
@@ -16,6 +16,7 @@ ref:
 document_contract:
   source_of_truth_for:
     - enter_key_exit_action
+    - create_worktree_exit_action
     - OWT_OUTPUT_FILE_contract
     - tty_contract
     - setup_command_behavior
@@ -24,12 +25,13 @@ document_contract:
     - terminal emulator behavior
 ```
 
-# 2. Enter Key Directory Change 계약
+# 2. Exit Action Directory Change 계약
 
 | 조건 | 동작 |
 |---|---|
 | shell integration 있음 | `Enter`로 선택 worktree path를 `OWT_OUTPUT_FILE`에 기록하고 TUI 종료 후 shell function이 `cd`한다. |
 | shell integration 없음 | TUI는 path를 stdout에 출력하고 setup 안내를 stderr에 표시한다. |
+| AddModal worktree 생성 | `Enter` 직후 TUI를 종료하고, terminal restore 후 생성/copy/post-add/tmux 작업을 실행한 뒤 새 worktree path를 `OWT_OUTPUT_FILE` 또는 stdout으로 handoff한다. |
 | background operation 진행 중 | `Enter`는 directory change를 수행하지 않고 operation 진행 메시지를 표시한다. |
 | 선택 대상이 bare repo | worktree 진입 대상으로 취급하지 않는다. |
 
@@ -43,7 +45,7 @@ output_file_policy:
   must_be_existing_regular_file: true
   symlink_allowed: false
   unix_group_world_access_allowed: false
-  content: selected_worktree_absolute_path
+  content: selected_or_created_worktree_absolute_path
 ```
 
 # 4. TTY 정책
@@ -77,10 +79,12 @@ Symlink-managed config는 자동 수정하지 않고 수동 추가 안내를 우
 - `owt --help`는 stdout capture 방식의 오래된 wrapper를 안내하지 않고 `owt setup` 기반 `OWT_OUTPUT_FILE` 계약을 안내한다.
 - `OWT_OUTPUT_FILE` writer는 기존 regular file만 열 수 있고, symlink/directory/non-file을 거부한다.
 - Unix에서는 `OWT_OUTPUT_FILE`이 group/world accessible이면 거부한다.
-- `OWT_OUTPUT_FILE` writer는 stale content를 남기지 않도록 truncate 후 선택 worktree path를 기록한다.
+- `OWT_OUTPUT_FILE` writer는 stale content를 남기지 않도록 truncate 후 선택 또는 생성 worktree path를 기록한다.
+- TUI AddModal `Enter`는 worktree 생성 작업을 TUI 내부 background operation으로 실행하지 않고, TUI 종료 후 secure handoff writer를 재사용한다.
 
 # 8. 검증 규칙
 
 - shell integration 변경은 `src/main.rs`, `docs/getting-started/shell-integration.md`, 이 SSOT를 함께 갱신한다.
 - output file security check를 완화하지 않는다.
 - Enter key behavior를 변경하면 `docs/usage/navigation.md`, keybinding docs, TUI use case SSOT를 함께 확인한다.
+- TUI worktree create handoff를 변경하면 `docs/usage/worktrees.md`, TUI use case SSOT, 관련 app/main tests를 함께 갱신한다.

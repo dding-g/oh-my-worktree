@@ -6,6 +6,7 @@ ref:
   - src/app.rs
   - src/types.rs
   - tests/git_test.rs
+  - .agents/skills/owt-worktree/SKILL.md
   - docs/usage/git-operations.md
   - docs/usage/worktrees.md
 ---
@@ -53,6 +54,8 @@ git_command_policy:
 | push | `P` | selected branch push | remote에 현재 branch push | 실패는 status bar/message로 표시한다 |
 | merge upstream | `m` | upstream branch merge | upstream을 현재 branch에 merge | conflict는 status `!`로 드러난다 |
 | merge branch | `M` | branch select modal 후 merge | 선택 branch merge | cancel 가능해야 한다 |
+
+Agent worktree mutation은 raw `git worktree add/remove/prune` 대신 `owt worktree create/delete/prune` plain CLI를 기본 경로로 사용한다. fallback은 `owt`가 실행 불가능하고 사용자가 명시적으로 승인한 경우로 제한한다.
 
 # 4. Background Operation 정책
 

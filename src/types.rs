@@ -135,6 +135,17 @@ pub enum AppState {
 pub enum ExitAction {
     Quit,
     ChangeDirectory(PathBuf),
+    CreateWorktree(WorktreeCreateRequest),
+}
+
+#[derive(Debug, Clone)]
+pub struct WorktreeCreateRequest {
+    pub bare_repo_path: PathBuf,
+    pub project_root_path: PathBuf,
+    pub branch: String,
+    pub base_branch: String,
+    pub worktree_path: PathBuf,
+    pub source_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -197,6 +208,7 @@ pub enum OpKind {
     Fetch,
     Pull,
     Push,
+    #[allow(dead_code)]
     Add,
     Delete,
     Merge,

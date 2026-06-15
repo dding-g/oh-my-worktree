@@ -31,6 +31,7 @@ ssot_contract:
     - low_level_refactor_notes
   companion_layers:
     agents_operational_guide: AGENTS.md
+    agent_bootstrap_assets: .agents/
     reusable_context: docs/solutions/
     user_facing_docs: docs/
 ```
@@ -90,5 +91,6 @@ SSOT 계약이 Rust behavior를 정의하는 경우 해당 계약은 unit/integr
 # 5. Agent 적용 원칙
 
 - 구현 전에는 `AGENTS.md`를 먼저 읽고, 관련 SSOT를 확인한다.
+- Agent용 install prompt와 skills는 `.agents/`에 두며, worktree handling 정책은 `docs/ssot/03-cli-tui-use-case-contract.md`와 `docs/ssot/04-git-operation-safety-policy.md`를 따른다.
 - SSOT가 user-facing docs와 충돌하면 SSOT를 기준으로 판단하되, 구현과 테스트가 더 최신이면 SSOT를 갱신한다.
 - SSOT에는 session log를 넣지 않는다. 시행착오와 배경 설명은 `docs/solutions/`에 둔다.

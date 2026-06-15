@@ -39,7 +39,7 @@ Start with these files in order:
 
 | Area | Files | Responsibility |
 |---|---|---|
-| CLI entry | `src/main.rs` | Parses commands: default TUI, `clone`, `init`, `setup`, `test-cd`, help, version. Detects repo layout before creating `App`. |
+| CLI entry | `src/main.rs` | Parses commands: default TUI, `clone`, `init`, `setup`, `test-cd`, help, version, plus noun-first plain CLI groups (`worktree`, `pr`, `commit`, `search`). Detects repo layout before TUI or plain CLI operations. |
 | App state | `src/app.rs` | Owns worktrees, selected row, modal state, messages, shell integration state, background ops, selected details, sorting, filtering. |
 | Git integration | `src/git.rs` | Runs `git` via `std::process::Command`; lists/adds/removes worktrees; fetch/pull/push/merge; derives status, details, dates. |
 | Config | `src/config.rs` | Loads global and project config; project config may override safe values but must not enable trusted post-add auto-run. |
@@ -60,18 +60,33 @@ Start with these files in order:
 4. Otherwise, treat the current repo as regular non-bare and use the worktree root as project root.
 5. Create `App::new(repo_path, project_root_path, repo_is_bare, launch_path, has_shell_integration)`.
 
+### Plain CLI Surface
+
+Agent/script use cases should prefer the noun-first plain CLI instead of driving the TUI:
+
+- `owt worktree list/create/delete/prune`
+- `owt pr status`
+- `owt commit tree`
+- `owt search <QUERY>`
+
+These commands follow the GitHub CLI help pattern (`owt <noun> --help`, action-level `--help`) and keep stdout parseable. Worktree listing/search output is tab-separated as `kind path branch status last_commit ahead behind pr`. Decorative tables, color, and TUI escape sequences do not belong on this surface.
+
+Agent bootstrap assets live under `.agents/`: `.agents/prompts/install-owt.md` is the copy/paste setup prompt, `.agents/skills/owt-install/SKILL.md` verifies or installs the CLI, and `.agents/skills/owt-worktree/SKILL.md` directs worktree mutations through `owt worktree ...` instead of raw `git worktree`.
+
 ### Shell Integration
 
-`owt setup` installs a shell function that sets `OWT_OUTPUT_FILE`. When the user presses `Enter`, `App` sets `ExitAction::ChangeDirectory(path)`. After the TUI exits, `main.rs` writes the path into the secure output file. `open_shell_output_file` rejects symlinks and group/world-accessible files.
+`owt setup` installs a shell function that sets `OWT_OUTPUT_FILE`. When the user presses `Enter` on a worktree, `App` sets `ExitAction::ChangeDirectory(path)`. When the user confirms the add modal, `App` sets `ExitAction::CreateWorktree(request)` and quits the TUI. After the terminal is restored, `main.rs` writes the selected or created worktree path into the secure output file. `open_shell_output_file` rejects symlinks and group/world-accessible files.
 
 ### Worktree Creation
 
-The add flow is owned by `App` and implemented through `git.rs`:
+The TUI add flow is split between `App` and `main.rs`:
 
-- The add modal collects branch/base input.
+- The add modal collects branch/base input and queues `ExitAction::CreateWorktree`; it does not create the worktree while ratatui owns the terminal.
+- `main.rs` runs the post-TUI create workflow after terminal restore: fetch base branch, `git worktree add`, configured file copies, optional post-add script, optional tmux pane, then shell handoff.
 - Git operations run through `git_command()`, which strips inherited `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, and `GIT_COMMON_DIR`.
 - Regular repositories create new worktrees under `~/.owt/worktree/<repo-name>/` unless `worktree_root` is configured.
 - `.bare` layouts keep sibling worktree behavior next to existing worktrees.
+- `tmux_worktree_mode` is separate from detached post-add script execution: it opens/focuses tmux panes for worktrees and can be controlled by project config or `owt worktree create --tmux=on`.
 
 ### Background Operations
 

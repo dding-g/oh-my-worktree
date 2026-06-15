@@ -7,7 +7,7 @@ nav_order: 3
 
 # Shell Integration
 
-Shell integration allows owt to change your working directory when you press `Enter` on a worktree. Without it, owt can only print the path.
+Shell integration allows owt to change your working directory when you press `Enter` on a worktree. It also lets a TUI-created worktree hand off to the new worktree after owt exits the TUI and finishes creation. Without shell integration, owt can only print the target path.
 
 ## Setup
 
@@ -114,6 +114,8 @@ source ~/.config/fish/config.fish
 2. Select a different worktree
 3. Press `Enter`
 4. Your shell should now be in the selected worktree directory
+
+Creating a worktree from the TUI follows the same handoff path: after you press `Enter` in the add dialog, the TUI closes, creation/copy/post-add/tmux steps run in the normal terminal, and your shell moves into the new worktree when creation succeeds.
 
 ## Troubleshooting
 

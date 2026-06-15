@@ -54,6 +54,7 @@ cargo fmt
 - Before non-trivial changes, read `docs/solutions/README.md` and the relevant compound docs under `docs/solutions/` to reuse prior project knowledge.
 - Add or refresh a `docs/solutions/` compound doc when a change creates durable knowledge about architecture, worktree behavior, config trust boundaries, shell integration, docs policy, release assets, or AI-agent workflow.
 - Use `docs/solutions/best-practices/ai-agent-project-map.md` as the fast project map for future AI agents.
+- Agent-facing bootstrap assets live under `.agents/`. When changing plain CLI or worktree agent workflow, update `.agents/prompts/install-owt.md` and `.agents/skills/owt-*` with README and SSOT.
 - Use `docs/solutions/documentation-gaps/repository-layout-documentation-contract.md` when changing README, docs, npm README, AGENTS, CLAUDE, or SSOT wording about regular repositories and `.bare` layouts.
 - Use `docs/solutions/developer-experience/compound-engineering-workflow.md` to decide whether knowledge belongs in `AGENTS.md`, `docs/ssot/`, `docs/solutions/`, or user-facing docs.
 - Compound docs should include YAML frontmatter, concrete file references, when-to-apply guidance, and related links. Keep them durable and pattern-focused rather than session transcripts.

@@ -11,9 +11,10 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::git;
+use crate::tmux;
 use crate::types::{
     ActiveOp, AppMessage, AppState, ExitAction, GithubPrStatus, OpKind, OpResult, ScriptStatus,
-    SortMode, Worktree, WorktreeDetails, WorktreeStatus,
+    SortMode, Worktree, WorktreeCreateRequest, WorktreeDetails, WorktreeStatus,
 };
 use crate::ui::theme::Theme;
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
@@ -288,6 +289,7 @@ impl App {
         }
 
         if success {
+            let mut msg = message;
             match kind {
                 OpKind::Delete => {
                     let removed_paths: HashSet<PathBuf> = affected_paths.into_iter().collect();
@@ -309,6 +311,20 @@ impl App {
                     }
                     self.update_selected_details();
                     self.run_post_add_script(&worktree_path);
+                    if self.config.tmux_worktree_mode {
+                        let worktree_name = self
+                            .selected_worktree()
+                            .map(Worktree::display_name)
+                            .unwrap_or_else(|| worktree_name_from_path(&worktree_path));
+                        match tmux::open_worktree_pane(&worktree_path, &worktree_name) {
+                            Ok(()) => {
+                                msg = format!("{}\nOpened tmux pane: {}", msg, worktree_name);
+                            }
+                            Err(error) => {
+                                msg = format!("{}\nTmux pane warning: {}", msg, error);
+                            }
+                        }
+                    }
                 }
                 OpKind::Fetch | OpKind::Pull | OpKind::Push | OpKind::Merge => {
                     self.refresh_worktrees();
@@ -316,7 +332,6 @@ impl App {
                 }
             }
 
-            let mut msg = message;
             if self.verbose {
                 self.last_command_detail = Some(cmd_detail.clone());
                 msg = format!("{}\n$ {}", msg, cmd_detail);
@@ -632,7 +647,7 @@ impl App {
             }
             KeyCode::Enter => {
                 if !self.input_buffer.trim().is_empty() {
-                    self.add_worktree();
+                    self.queue_worktree_create_after_exit();
                 }
             }
             KeyCode::Tab => {
@@ -749,14 +764,23 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if selected == 4 {
+                        self.config.tmux_worktree_mode = !self.config.tmux_worktree_mode;
+                        let state = if self.config.tmux_worktree_mode {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        };
+                        self.message = Some(AppMessage::info(format!(
+                            "Tmux worktree mode {} (press 's' to save to file)",
+                            state
+                        )));
+                    } else if selected == 5 {
                         self.message = Some(AppMessage::info(
                             "Post-add auto-run can only be changed in global config",
                         ));
-                    } else if selected == 5 {
-                        // post_add_script - open with $EDITOR
+                    } else if selected == 6 {
                         self.open_post_add_script_editor();
                     } else {
-                        // Enter inline editing mode
                         self.input_buffer = self.get_config_value_for_editing(selected);
                         self.state = AppState::ConfigModal {
                             selected_index: selected,
@@ -1167,6 +1191,51 @@ impl App {
             .and_then(|wt| git::get_worktree_details(&wt.path).ok());
     }
 
+    fn queue_worktree_create_after_exit(&mut self) {
+        if self.active_op.is_some() {
+            self.message = Some(AppMessage::error("Another operation is in progress"));
+            self.state = AppState::List;
+            return;
+        }
+
+        let branch = self.input_buffer.trim().to_string();
+        if branch.is_empty() {
+            self.message = Some(AppMessage::error("Branch name cannot be empty"));
+            return;
+        }
+
+        let worktree_path = self.worktree_path_for_branch(&branch);
+        if let Some(existing) = self.conflicting_worktree_for_branch(&branch, &worktree_path) {
+            self.message = Some(AppMessage::error(format!(
+                "Branch '{}' is already checked out at {}. Remove or move that worktree first.",
+                branch,
+                existing.path.display()
+            )));
+            self.state = AppState::List;
+            return;
+        }
+
+        let source_path = self.current_worktree_path.clone().or_else(|| {
+            self.worktrees
+                .iter()
+                .find(|wt| !wt.is_bare)
+                .map(|wt| wt.path.clone())
+        });
+
+        self.exit_action = ExitAction::CreateWorktree(WorktreeCreateRequest {
+            bare_repo_path: self.bare_repo_path.clone(),
+            project_root_path: self.project_root_path.clone(),
+            branch,
+            base_branch: self.add_base_branch.clone(),
+            worktree_path,
+            source_path,
+        });
+        self.should_quit = true;
+        self.state = AppState::List;
+        self.input_buffer.clear();
+    }
+
+    #[cfg(test)]
     fn add_worktree(&mut self) {
         if self.active_op.is_some() {
             self.message = Some(AppMessage::error("Another operation is in progress"));
@@ -1636,6 +1705,13 @@ impl App {
                 self.message = Some(AppMessage::error("Cannot enter bare repository"));
                 return;
             }
+            if self.config.tmux_worktree_mode {
+                if tmux::focus_pane_named(&wt.display_name()).unwrap_or(false) {
+                    self.exit_action = ExitAction::Quit;
+                    self.should_quit = true;
+                    return;
+                }
+            }
             // Always allow enter - even without shell integration, we print the path
             // The shell wrapper function (from `owt setup`) will handle the cd
             self.exit_action = ExitAction::ChangeDirectory(wt.path.clone());
@@ -2032,12 +2108,14 @@ impl App {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 enum CopyFileOutcome {
     Copied { file: String },
     Warning { file: String, reason: String },
 }
 
+#[cfg(test)]
 fn copy_configured_files(
     source: &Path,
     destination: &Path,
@@ -2049,6 +2127,7 @@ fn copy_configured_files(
         .collect()
 }
 
+#[cfg(test)]
 fn copy_configured_file(source: &Path, destination: &Path, file: &str) -> CopyFileOutcome {
     let src = source.join(file);
     let dst = destination.join(file);
@@ -2091,6 +2170,7 @@ fn copy_configured_file(source: &Path, destination: &Path, file: &str) -> CopyFi
     }
 }
 
+#[cfg(test)]
 fn append_copy_warnings(message: String, outcomes: &[CopyFileOutcome]) -> String {
     let warnings: Vec<String> = outcomes
         .iter()
@@ -2117,6 +2197,13 @@ fn batch_display_name(worktrees: &[Worktree], singular: &str) -> String {
 
 fn shell_quote(path: &std::path::Path) -> String {
     format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
+}
+
+fn worktree_name_from_path(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "worktree".to_string())
 }
 
 fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
@@ -2327,7 +2414,7 @@ mod tests {
     fn config_modal_tmux_auto_run_is_read_only_project_modal() {
         let mut app = test_app(vec![], 0, "/repo/.bare");
 
-        app.handle_config_modal_input(KeyCode::Enter, 4, false);
+        app.handle_config_modal_input(KeyCode::Enter, 5, false);
 
         assert!(!app.config.run_post_add_script_in_tmux);
         assert_eq!(
@@ -2336,9 +2423,80 @@ mod tests {
         );
 
         app.config.run_post_add_script_in_tmux = true;
-        app.handle_config_modal_input(KeyCode::Enter, 4, false);
+        app.handle_config_modal_input(KeyCode::Enter, 5, false);
 
         assert!(app.config.run_post_add_script_in_tmux);
+    }
+
+    #[test]
+    fn config_modal_toggles_tmux_worktree_mode() {
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+
+        app.handle_config_modal_input(KeyCode::Enter, 4, false);
+
+        assert!(app.config.tmux_worktree_mode);
+        assert_eq!(
+            app.message.as_ref().map(|message| message.text.as_str()),
+            Some("Tmux worktree mode enabled (press 's' to save to file)")
+        );
+
+        app.handle_config_modal_input(KeyCode::Enter, 4, false);
+
+        assert!(!app.config.tmux_worktree_mode);
+    }
+
+    #[test]
+    fn enter_worktree_focuses_matching_tmux_pane_in_tmux_mode() {
+        let _guard = env_lock().lock().unwrap();
+        let base = temp_dir("enter_tmux_pane_focus");
+        let fake_bin = base.join("bin");
+        fs::create_dir_all(&fake_bin).unwrap();
+
+        let tmux_log = base.join("tmux-args.txt");
+        let fake_tmux = fake_bin.join("tmux");
+        fs::write(
+            &fake_tmux,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nif [ \"$1\" = \"list-panes\" ]; then printf '%%1\\tfeature\\t0:1.0\\n'; fi\n",
+                tmux_log.to_string_lossy().replace('\'', "'\\''")
+            ),
+        )
+        .unwrap();
+        make_executable(&fake_tmux);
+
+        let original_path = std::env::var_os("PATH");
+        let path = if let Some(existing) = original_path.as_ref() {
+            let mut paths = vec![fake_bin.clone()];
+            paths.extend(std::env::split_paths(existing));
+            std::env::join_paths(paths).unwrap()
+        } else {
+            fake_bin.clone().into_os_string()
+        };
+        std::env::set_var("PATH", path);
+
+        let mut app = test_app(
+            vec![test_worktree("feature", WorktreeStatus::Clean)],
+            0,
+            "/repo/.bare",
+        );
+        app.config.tmux_worktree_mode = true;
+
+        app.enter_worktree();
+
+        if let Some(path) = original_path {
+            std::env::set_var("PATH", path);
+        } else {
+            std::env::remove_var("PATH");
+        }
+
+        assert!(app.should_quit);
+        assert!(matches!(app.exit_action, ExitAction::Quit));
+        let tmux_args = fs::read_to_string(tmux_log).unwrap();
+        assert!(tmux_args.contains("list-panes -a -F"));
+        assert!(tmux_args.contains("switch-client -t 0:1.0"));
+        assert!(tmux_args.contains("select-pane -t %1"));
+
+        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
@@ -2502,6 +2660,38 @@ mod tests {
     }
 
     #[test]
+    fn add_modal_enter_queues_post_tui_create_request() {
+        let mut app = test_app(
+            vec![test_worktree("main", WorktreeStatus::Clean)],
+            0,
+            "/repo/.bare",
+        );
+        app.current_worktree_path = Some(PathBuf::from("/repo/main"));
+        app.input_buffer = "feature/post-tui".to_string();
+
+        app.handle_add_modal_input(KeyCode::Enter);
+
+        assert!(app.should_quit);
+        assert!(app.active_op.is_none());
+        assert!(matches!(app.state, AppState::List));
+        assert!(app.input_buffer.is_empty());
+        match app.exit_action {
+            ExitAction::CreateWorktree(request) => {
+                assert_eq!(request.bare_repo_path, PathBuf::from("/repo/.bare"));
+                assert_eq!(request.project_root_path, PathBuf::from("/repo"));
+                assert_eq!(request.branch, "feature/post-tui");
+                assert_eq!(request.base_branch, "main");
+                assert_eq!(
+                    request.worktree_path,
+                    PathBuf::from("/repo/feature/post-tui")
+                );
+                assert_eq!(request.source_path, Some(PathBuf::from("/repo/main")));
+            }
+            other => panic!("expected post-TUI create request, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn non_bare_worktree_path_uses_configurable_root_and_repo_namespace() {
         let mut app = test_app(vec![], 0, "/repo");
         app.repo_is_bare = false;
@@ -2576,6 +2766,7 @@ mod tests {
                 assert!(paths_refer_to_same_location(&path, &feature_path));
             }
             ExitAction::Quit => panic!("enter should request directory change"),
+            ExitAction::CreateWorktree(_) => panic!("enter should not create a worktree"),
         }
         assert!(app.should_quit);
 
@@ -2885,6 +3076,7 @@ mod tests {
                 assert_eq!(path, PathBuf::from("/repo/feature-search"));
             }
             ExitAction::Quit => panic!("filter enter should request directory change"),
+            ExitAction::CreateWorktree(_) => panic!("filter enter should not create a worktree"),
         }
         assert!(!app.is_filtering);
         assert!(app.should_quit);

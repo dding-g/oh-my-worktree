@@ -499,6 +499,7 @@ fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
 }
 
 /// Build command detail string for verbose mode (mirrors add_worktree logic)
+#[cfg(test)]
 pub fn build_add_worktree_command_detail(
     bare_repo_path: &Path,
     branch: &str,

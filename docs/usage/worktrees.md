@@ -34,7 +34,7 @@ Type your branch name. Use `Tab` to cycle the base branch for the new worktree. 
 
 | Key | Action |
 |:----|:-------|
-| `Enter` | Create worktree |
+| `Enter` | Exit TUI, then create worktree |
 | `Tab` | Cycle base branch |
 | `Esc` | Cancel |
 
@@ -42,9 +42,12 @@ Type your branch name. Use `Tab` to cycle the base branch for the new worktree. 
 
 When you create a worktree:
 
-1. A new folder is created next to your existing worktrees for the `.bare` layout, or under `~/.owt/worktree/<repo-name>/` for regular non-bare repos
-2. If configured, files are copied from an existing worktree (e.g., `.env`)
-3. If configured, a post-add script runs (e.g., `npm install`)
+1. The TUI exits immediately so the terminal is restored before any long-running work starts
+2. A new folder is created next to your existing worktrees for the `.bare` layout, or under `~/.owt/worktree/<repo-name>/` for regular non-bare repos
+3. If configured, files are copied from an existing worktree (e.g., `.env`)
+4. If configured, a post-add script runs (e.g., `npm install`)
+5. If `tmux_worktree_mode` is enabled, a tmux pane opens in the new worktree path
+6. With shell integration installed, your shell moves into the new worktree after creation succeeds
 
 Set `worktree_root` in `~/.config/owt/config.toml` to change the root used for regular repositories or to override the default location for new worktrees.
 
@@ -54,6 +57,8 @@ Set `worktree_root` in `~/.config/owt/config.toml` to change the root used for r
 2. Press `Enter`
 
 Your shell's current directory changes to that worktree.
+
+If `tmux_worktree_mode` is enabled and a tmux pane title matches the selected worktree name, owt focuses that pane instead of using shell handoff. If no matching pane exists, the normal shell handoff still applies.
 
 ## Deleting a Worktree
 

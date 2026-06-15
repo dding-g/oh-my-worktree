@@ -9,6 +9,8 @@ pub struct Config {
     pub worktree_root: Option<String>,
     pub copy_files: Vec<String>, // Files to copy when adding worktree
     pub post_add_script: Option<String>, // Script to run after adding worktree
+    pub tmux_worktree_mode: bool,
+    tmux_worktree_mode_configured: bool,
     pub run_post_add_script_in_tmux: bool,
     run_post_add_script_in_tmux_configured: bool,
 }
@@ -62,6 +64,9 @@ impl Config {
         }
         if other.post_add_script.is_some() {
             self.post_add_script = other.post_add_script;
+        }
+        if other.tmux_worktree_mode_configured {
+            self.tmux_worktree_mode = other.tmux_worktree_mode;
         }
     }
 
@@ -126,6 +131,10 @@ impl Config {
             content.push_str(&format!("post_add_script = \"{}\"\n", script));
         }
         content.push_str(&format!(
+            "tmux_worktree_mode = {}\n",
+            self.tmux_worktree_mode
+        ));
+        content.push_str(&format!(
             "run_post_add_script_in_tmux = {}\n",
             self.run_post_add_script_in_tmux
         ));
@@ -164,6 +173,10 @@ impl Config {
         if let Some(ref script) = self.post_add_script {
             content.push_str(&format!("post_add_script = \"{}\"\n", script));
         }
+        content.push_str(&format!(
+            "tmux_worktree_mode = {}\n",
+            self.tmux_worktree_mode
+        ));
 
         fs::write(config_path, content)?;
         Ok(())
@@ -189,6 +202,10 @@ impl Config {
                     "terminal" => config.terminal = Some(value.to_string()),
                     "worktree_root" => config.worktree_root = Some(value.to_string()),
                     "post_add_script" => config.post_add_script = Some(value.to_string()),
+                    "tmux_worktree_mode" => {
+                        config.tmux_worktree_mode = parse_bool(value);
+                        config.tmux_worktree_mode_configured = true;
+                    }
                     "run_post_add_script_in_tmux" => {
                         config.run_post_add_script_in_tmux = parse_bool(value);
                         config.run_post_add_script_in_tmux_configured = true;
@@ -352,6 +369,7 @@ mod tests {
         let config = Config::parse("").unwrap();
         assert!(config.editor.is_none());
         assert!(config.terminal.is_none());
+        assert!(!config.tmux_worktree_mode);
         assert!(!config.run_post_add_script_in_tmux);
     }
 
@@ -362,12 +380,14 @@ mod tests {
 editor = "code"
 terminal = "Ghostty"
 worktree_root = "~/.owt/worktree"
+tmux_worktree_mode = true
 run_post_add_script_in_tmux = true
 "#;
         let config = Config::parse(content).unwrap();
         assert_eq!(config.editor, Some("code".to_string()));
         assert_eq!(config.terminal, Some("Ghostty".to_string()));
         assert_eq!(config.worktree_root, Some("~/.owt/worktree".to_string()));
+        assert!(config.tmux_worktree_mode);
         assert!(config.run_post_add_script_in_tmux);
     }
 
@@ -406,6 +426,7 @@ copy_files = [".env", ".envrc", "config.json"]
         let path = dir.join("config.toml");
         let config = Config {
             editor: Some("code".to_string()),
+            tmux_worktree_mode: true,
             run_post_add_script_in_tmux: true,
             ..Default::default()
         };
@@ -414,7 +435,46 @@ copy_files = [".env", ".envrc", "config.json"]
         let saved = fs::read_to_string(&path).unwrap();
 
         assert!(saved.contains("editor = \"code\""));
+        assert!(saved.contains("tmux_worktree_mode = true"));
         assert!(saved.contains("run_post_add_script_in_tmux = true"));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_project_config_can_override_tmux_worktree_mode_off() {
+        let _env_lock = acquire_test_env_lock();
+        let dir = std::env::temp_dir().join(format!(
+            "owt_project_tmux_worktree_mode_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home_dir = dir.join("home");
+        let xdg_config_home = dir.join("xdg-config");
+        let project_dir = dir.join("project");
+        fs::create_dir_all(&home_dir).unwrap();
+        fs::create_dir_all(xdg_config_home.join("owt")).unwrap();
+        fs::create_dir_all(project_dir.join(".owt")).unwrap();
+        fs::write(
+            xdg_config_home.join("owt").join("config.toml"),
+            "tmux_worktree_mode = true\n",
+        )
+        .unwrap();
+        fs::write(
+            project_dir.join(".owt").join("config.toml"),
+            "tmux_worktree_mode = false\n",
+        )
+        .unwrap();
+
+        let _home_guard = EnvVarGuard::set("HOME", &home_dir);
+        let _xdg_guard = EnvVarGuard::set("XDG_CONFIG_HOME", &xdg_config_home);
+
+        let config = Config::load_with_project(Some(&project_dir)).unwrap();
+
+        assert!(!config.tmux_worktree_mode);
 
         let _ = fs::remove_dir_all(dir);
     }

@@ -31,6 +31,9 @@ copy_files = [".env", ".env.local"]
 # Script to run after creating a new worktree
 post_add_script = ".owt/post-add.sh"
 
+# Open/focus tmux panes for worktrees
+tmux_worktree_mode = false
+
 # Launch the post-add script in a detached tmux session after worktree creation
 run_post_add_script_in_tmux = false
 
@@ -45,6 +48,7 @@ run_post_add_script_in_tmux = false
 | `worktree_root` | string | Root directory for new worktrees from regular non-bare repositories. Defaults to `~/.owt/worktree` |
 | `copy_files` | array | Files to copy to new worktrees. Only files are copied. Missing files, directories, and copy errors become warnings after the worktree is created. |
 | `post_add_script` | string | Script to run after creating a worktree. Relative paths resolve from the current effective project root. Absolute paths are used as-is after path expansion. |
+| `tmux_worktree_mode` | boolean | Open a tmux pane in each new worktree and, on `Enter`, focus an existing pane whose title matches the worktree name. Project config may enable or disable this. |
 | `run_post_add_script_in_tmux` | boolean | Run the post-add script in tmux after creating a worktree. This must be enabled from global config; project config cannot enable script auto-run. |
 
 ## Environment Variables
@@ -78,7 +82,17 @@ project/
 └── main/
 ```
 
-Project config can override safe values including `post_add_script`, but it cannot enable `run_post_add_script_in_tmux`. A regular linked worktree only discovers its own `.owt/config.toml`; owt does not search ancestor directories for another project config.
+Project config can override safe values including `post_add_script` and `tmux_worktree_mode`, but it cannot enable `run_post_add_script_in_tmux`. A regular linked worktree only discovers its own `.owt/config.toml`; owt does not search ancestor directories for another project config.
+
+## Tmux Worktree Mode
+
+Set `tmux_worktree_mode = true` or toggle it in the TUI config modal. When enabled, creating a worktree opens a new tmux pane with that worktree as the pane's working directory. owt sets the pane title and tmux window name to the worktree name. When you press `Enter` on a worktree in the list, owt first looks for a tmux pane with the same title and focuses it; if no matching pane exists, the normal shell handoff behavior still applies.
+
+For a single CLI create command, use:
+
+```bash
+owt worktree create feature/login --tmux=on
+```
 
 ## Post-Add Script
 
@@ -123,5 +137,6 @@ terminal = "$TERMINAL or Terminal"
 worktree_root = "~/.owt/worktree"
 copy_files = []
 post_add_script = ".owt/post-add.sh"
+tmux_worktree_mode = false
 run_post_add_script_in_tmux = false
 ```

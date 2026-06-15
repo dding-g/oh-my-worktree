@@ -17,6 +17,7 @@ Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, p
 ## What you get
 
 - A keyboard-first TUI for browsing and managing worktrees
+- A plain, tab-separated CLI surface for agents and scripts
 - First-class support for existing regular repositories
 - Optional `.bare` project layout for teams that like sibling worktrees
 - Fast worktree creation from local or remote branches
@@ -123,6 +124,27 @@ Then use the TUI:
 
 The `PR` column is GitHub-only and best-effort. No PR, non-GitHub remotes, missing auth, network failures, and unknown states all show `-` so the worktree list stays fast and reliable.
 
+## Plain CLI for agents
+
+Use noun command groups when you need stable, non-TUI output. Each command has its own help, for example `owt worktree --help` and `owt pr status --help`.
+
+Agent bootstrap assets are versioned under `.agents/`: use `.agents/prompts/install-owt.md` to seed an agent, then install or follow `.agents/skills/owt-install/SKILL.md` and `.agents/skills/owt-worktree/SKILL.md` so worktree handling goes through `owt`.
+
+```bash
+owt worktree list
+owt worktree create feature/login --base main
+owt worktree delete feature/login --branch --force
+owt pr status --branch feature/login
+owt commit tree -n 12
+owt search login
+```
+
+`worktree list` and `search` print tab-separated records:
+
+```text
+kind<TAB>path<TAB>branch<TAB>status<TAB>last_commit<TAB>ahead<TAB>behind<TAB>pr
+```
+
 ## Shell integration
 
 Install the shell helper:
@@ -131,7 +153,7 @@ Install the shell helper:
 owt setup
 ```
 
-Reload your shell. After that, pressing `Enter` in the TUI exits `owt` and moves the current shell into the selected worktree. Without shell integration, `owt` still prints the selected path for wrapper scripts and manual use.
+Reload your shell. After that, pressing `Enter` in the TUI exits `owt` and moves the current shell into the selected worktree. When you create a worktree from the TUI, `owt` exits the TUI first, creates the worktree, runs copy/post-add/tmux steps in the normal terminal, then hands off to the new worktree path. Without shell integration, `owt` still prints the target path for wrapper scripts and manual use.
 
 ## Configuration
 
@@ -149,6 +171,7 @@ terminal = "Ghostty"
 worktree_root = "~/.owt/worktree"
 copy_files = [".env", ".envrc"]
 post_add_script = ".owt/post-add.sh"
+tmux_worktree_mode = false
 run_post_add_script_in_tmux = false
 ```
 
@@ -161,6 +184,7 @@ Useful options:
 | `worktree_root` | Root for new worktrees in regular repositories |
 | `copy_files` | Files copied into new worktrees. Only files are copied; copy problems are shown as warnings after creation. |
 | `post_add_script` | Script path for post-add setup. Relative paths use the current effective project root. |
+| `tmux_worktree_mode` | Open a tmux pane in each new worktree and focus an existing matching pane on `Enter`. |
 | `run_post_add_script_in_tmux` | Run the post-add script in detached tmux after creating a worktree. Only global config can enable this. |
 
 Project config in `.owt/config.toml` can override safe values, including `post_add_script`, but it cannot enable automatic post-add execution. A regular linked worktree only reads its own project config; it does not inherit an ancestor `.owt/config.toml`.
@@ -173,6 +197,12 @@ Project config in `.owt/config.toml` can override safe values, including `post_a
 | `owt clone <URL> [PATH]` | Clone into the `.bare` layout and create the first worktree |
 | `owt init` | Print a manual conversion guide for `.bare` layout |
 | `owt setup` | Install shell integration |
+| `owt worktree list` | List worktrees as tab-separated records |
+| `owt worktree create <BRANCH>` | Create a worktree without opening the TUI. Use `--tmux=on` to open it in tmux for that run. |
+| `owt worktree delete <TARGET>` | Delete a worktree by branch, name, or path |
+| `owt pr status` | Check GitHub PR status through `gh` |
+| `owt commit tree` | Print recent commits as a git graph |
+| `owt search <QUERY>` | Search worktrees |
 | `owt --version` | Print version |
 
 ## Requirements
@@ -180,7 +210,7 @@ Project config in `.owt/config.toml` can override safe values, including `post_a
 - Git 2.5+
 - A regular Git repository or a `.bare` worktree layout
 - Optional: GitHub CLI `gh` for PR status
-- Optional: tmux for post-add setup scripts
+- Optional: tmux for worktree pane mode and post-add setup scripts
 
 ## License
 

@@ -12,7 +12,7 @@ use crate::types::AppState;
 use crate::ui::theme::{centered_rect, Theme};
 use std::path::Path;
 
-pub const CONFIG_ITEM_COUNT: usize = 6;
+pub const CONFIG_ITEM_COUNT: usize = 7;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let t = &app.theme;
@@ -47,6 +47,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         Constraint::Length(1), // Terminal
         Constraint::Length(1), // Worktree root
         Constraint::Length(1), // Copy files
+        Constraint::Length(1),
         Constraint::Length(1), // Run post-add in tmux
         Constraint::Length(1), // Post-add script
         Constraint::Min(1),    // Spacing
@@ -124,8 +125,8 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_config_item(
         frame,
         chunks[9],
-        "run_post_add_script_in_tmux",
-        &get_tmux_script_display(app),
+        "tmux_worktree_mode",
+        &get_tmux_worktree_display(app),
         selected_index == 4,
         false,
         &app.input_buffer,
@@ -134,9 +135,19 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_config_item(
         frame,
         chunks[10],
+        "run_post_add_script_in_tmux",
+        &get_tmux_script_display(app),
+        selected_index == 5,
+        false,
+        &app.input_buffer,
+        t,
+    );
+    render_config_item(
+        frame,
+        chunks[11],
         "post_add_script",
         &get_script_display(app),
-        selected_index == 5,
+        selected_index == 6,
         false,
         &app.input_buffer,
         t,
@@ -163,7 +174,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         ]
     };
     let help = Paragraph::new(Line::from(help_text)).style(Style::default().fg(t.text_muted));
-    frame.render_widget(help, chunks[12]);
+    frame.render_widget(help, chunks[13]);
 }
 
 fn render_config_item(
@@ -256,6 +267,14 @@ fn get_script_display(app: &App) -> String {
     script_display(&app.config, &app.project_root_path)
 }
 
+fn get_tmux_worktree_display(app: &App) -> String {
+    if app.config.tmux_worktree_mode {
+        "on".to_string()
+    } else {
+        "off".to_string()
+    }
+}
+
 fn script_display(config: &Config, project_root_path: &Path) -> String {
     let script_path = config.resolved_post_add_script_path(project_root_path);
     if script_path.exists() {
@@ -280,6 +299,7 @@ fn tmux_script_display(run_in_tmux: bool) -> String {
 fn selected_config_hint(label: &str) -> Option<&'static str> {
     match label {
         "post_add_script" => Some("(Enter to edit with $EDITOR)"),
+        "tmux_worktree_mode" => Some("(Enter to toggle)"),
         "run_post_add_script_in_tmux" => Some("(global config only)"),
         _ => None,
     }
