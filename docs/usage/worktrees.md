@@ -92,3 +92,20 @@ Press `r` to refresh the worktree list. This updates:
 - GitHub PR state in the `PR` column
 
 The `PR` column shows only `open`, `closed`, `merged`, or `draft` for GitHub pull requests. Branches without a GitHub PR, non-GitHub remotes, lookup failures, and unknown states show `-`; PR lookup is optional and does not block the worktree list.
+
+Use the plain CLI prune command to remove stale metadata and completed worktrees:
+
+```bash
+owt worktree prune
+```
+
+This removes non-current worktrees only when they are clean and their branch has already been merged into `HEAD`. It does not delete branches. Dirty worktrees, unmerged worktrees, bare entries, detached worktrees, and the current worktree are left in place.
+
+## Commands
+
+| Command | Purpose |
+|:--------|:--------|
+| `owt worktree list` | List worktrees |
+| `owt worktree create <branch>` | Create a worktree |
+| `owt worktree delete <target>` | Delete a worktree |
+| `owt worktree prune` | Prune stale metadata and clean merged worktrees |

@@ -134,6 +134,7 @@ Agent bootstrap assets are versioned under `.agents/`: use `.agents/prompts/inst
 owt worktree list
 owt worktree create feature/login --base main
 owt worktree delete feature/login --branch --force
+owt worktree prune
 owt pr status --branch feature/login
 owt commit tree -n 12
 owt search login
@@ -200,6 +201,7 @@ Project config in `.owt/config.toml` can override safe values, including `post_a
 | `owt worktree list` | List worktrees as tab-separated records |
 | `owt worktree create <BRANCH>` | Create a worktree without opening the TUI. Use `--tmux=on` to open it in tmux for that run. |
 | `owt worktree delete <TARGET>` | Delete a worktree by branch, name, or path |
+| `owt worktree prune` | Prune stale metadata and remove non-current clean worktrees whose branches are merged into `HEAD` |
 | `owt pr status` | Check GitHub PR status through `gh` |
 | `owt commit tree` | Print recent commits as a git graph |
 | `owt search <QUERY>` | Search worktrees |

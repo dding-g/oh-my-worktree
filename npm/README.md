@@ -130,6 +130,7 @@ Use noun command groups when you need stable, non-TUI output:
 owt worktree list
 owt worktree create feature/login --base main
 owt worktree delete feature/login --branch --force
+owt worktree prune
 owt pr status --branch feature/login
 owt commit tree -n 12
 owt search login

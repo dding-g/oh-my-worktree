@@ -88,6 +88,11 @@ struct RepositoryContext {
     repo_is_bare: bool,
 }
 
+struct PrunedWorktree {
+    branch: String,
+    path: PathBuf,
+}
+
 #[cfg(test)]
 impl Command {
     fn tui_path(&self) -> Option<&std::path::Path> {
@@ -457,12 +462,21 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
         }
         WorktreeCommand::Prune { path } => {
             let context = resolve_repository_context(&path)?;
-            let output = git::prune_worktrees(&context.repo_path)?;
-            if output.is_empty() {
+            let metadata_output = git::prune_worktrees(&context.repo_path)?;
+            let pruned_worktrees = prune_clean_merged_worktrees(&context.repo_path, &path)?;
+
+            if metadata_output.is_empty() && pruned_worktrees.is_empty() {
                 println!("pruned\t0");
             } else {
-                for line in output.lines() {
-                    println!("pruned\t{}", plain_field(line));
+                for worktree in pruned_worktrees {
+                    println!(
+                        "pruned\tworktree\t{}\t{}",
+                        plain_field(&worktree.branch),
+                        plain_field(&worktree.path.display().to_string())
+                    );
+                }
+                for line in metadata_output.lines() {
+                    println!("pruned\tmetadata\t{}", plain_field(line));
                 }
             }
             Ok(())
@@ -647,6 +661,42 @@ fn find_worktree_target(worktrees: &[types::Worktree], target: &str) -> Result<t
             target
         ),
     }
+}
+
+fn prune_clean_merged_worktrees(
+    repo_path: &Path,
+    launch_path: &Path,
+) -> Result<Vec<PrunedWorktree>> {
+    let worktrees = git::list_worktrees(repo_path)?;
+    let current_path = current_worktree_path(&worktrees, launch_path);
+    let mut pruned = Vec::new();
+
+    for worktree in worktrees {
+        if worktree.is_bare || worktree.status != types::WorktreeStatus::Clean {
+            continue;
+        }
+        if current_path
+            .as_ref()
+            .map(|path| paths_refer_to_same_location(path, &worktree.path))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let Some(branch) = worktree.branch.as_deref() else {
+            continue;
+        };
+        if !git::is_branch_merged(repo_path, branch, "HEAD")? {
+            continue;
+        }
+
+        git::remove_worktree(repo_path, &worktree.path, false)?;
+        pruned.push(PrunedWorktree {
+            branch: branch.to_string(),
+            path: worktree.path,
+        });
+    }
+
+    Ok(pruned)
 }
 
 fn current_worktree_path(worktrees: &[types::Worktree], launch_path: &Path) -> Option<PathBuf> {
@@ -1437,7 +1487,7 @@ COMMANDS:
     list      List worktrees as tab-separated records
     create    Create a worktree for a branch
     delete    Delete a worktree by branch, name, or path
-    prune     Prune missing worktree metadata
+    prune     Prune missing metadata and clean merged worktrees
 
 EXAMPLES:
     owt worktree list
@@ -1503,7 +1553,7 @@ OUTPUT:
 
 fn print_worktree_prune_help() {
     println!(
-        r#"Prune missing worktree metadata.
+        r#"Prune missing metadata and clean merged worktrees.
 
 USAGE:
     owt worktree prune [OPTIONS]
@@ -1513,7 +1563,12 @@ OPTIONS:
     -h, --help           Print help information
 
 OUTPUT:
-    pruned<TAB>result"#
+    pruned<TAB>0
+    pruned<TAB>worktree<TAB>branch<TAB>path
+    pruned<TAB>metadata<TAB>result
+
+NOTES:
+    Removes non-current worktrees only when they are clean and their branch is already merged into HEAD. Branches are not deleted."#
     );
 }
 
@@ -1692,6 +1747,55 @@ mod tests {
         );
     }
 
+    fn add_worktree_branch(repo: &Path, path: &Path, branch: &str) {
+        assert_git_success(
+            git_cmd()
+                .current_dir(repo)
+                .args([
+                    "worktree",
+                    "add",
+                    "-b",
+                    branch,
+                    &path.to_string_lossy(),
+                    "main",
+                ])
+                .output()
+                .unwrap(),
+            "git worktree add failed",
+        );
+    }
+
+    fn commit_file(repo: &Path, relative_path: &str, contents: &str, message: &str) {
+        fs::write(repo.join(relative_path), contents).unwrap();
+        assert_git_success(
+            git_cmd()
+                .current_dir(repo)
+                .args(["add", relative_path])
+                .output()
+                .unwrap(),
+            "git add failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(repo)
+                .args(["commit", "-m", message])
+                .output()
+                .unwrap(),
+            "git commit failed",
+        );
+    }
+
+    fn merge_branch(repo: &Path, branch: &str) {
+        assert_git_success(
+            git_cmd()
+                .current_dir(repo)
+                .args(["merge", "--no-ff", branch, "-m", &format!("merge {branch}")])
+                .output()
+                .unwrap(),
+            "git merge failed",
+        );
+    }
+
     #[test]
     fn parse_args_defaults_to_current_directory_tui() {
         let command = parse_args_from(vec!["owt".to_string()], || PathBuf::from("/repo/main"));
@@ -1839,6 +1943,20 @@ mod tests {
                 ..
             }) if target == "feature/login"
         ));
+        assert!(matches!(
+            parse_args_from(
+                vec![
+                    "owt".to_string(),
+                    "worktree".to_string(),
+                    "prune".to_string(),
+                    "--path".to_string(),
+                    "/repo".to_string(),
+                ],
+                PathBuf::new
+            ),
+            Command::Worktree(WorktreeCommand::Prune { path })
+                if path == PathBuf::from("/repo")
+        ));
     }
 
     #[test]
@@ -1865,6 +1983,18 @@ mod tests {
                 PathBuf::new
             ),
             Command::Help(HelpTopic::WorktreeCreate)
+        ));
+        assert!(matches!(
+            parse_args_from(
+                vec![
+                    "owt".to_string(),
+                    "worktree".to_string(),
+                    "prune".to_string(),
+                    "--help".to_string(),
+                ],
+                PathBuf::new
+            ),
+            Command::Help(HelpTopic::WorktreePrune)
         ));
         assert!(matches!(
             parse_args_from(
@@ -1959,6 +2089,67 @@ mod tests {
         assert!(project_dir.join("main").is_dir());
         assert!(git::is_bare_repo(&project_dir.join(".bare")).unwrap());
         assert!(git::is_git_repo(&project_dir.join("main")));
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn worktree_prune_removes_clean_merged_worktrees_only() {
+        let base = temp_dir("prune_clean_merged");
+        let repo = base.join("repo");
+        let merged = base.join("merged");
+        let merged_second = base.join("merged-second");
+        let unmerged = base.join("unmerged");
+        let dirty = base.join("dirty");
+
+        create_source_repo(&repo);
+
+        add_worktree_branch(&repo, &merged, "feature/merged");
+        commit_file(&merged, "merged.txt", "merged\n", "feature merged");
+        add_worktree_branch(&repo, &merged_second, "feature/merged-second");
+        commit_file(
+            &merged_second,
+            "merged-second.txt",
+            "merged second\n",
+            "feature merged second",
+        );
+        add_worktree_branch(&repo, &unmerged, "feature/unmerged");
+        commit_file(&unmerged, "unmerged.txt", "unmerged\n", "feature unmerged");
+        add_worktree_branch(&repo, &dirty, "feature/dirty");
+        commit_file(&dirty, "dirty.txt", "dirty\n", "feature dirty");
+
+        merge_branch(&repo, "feature/merged");
+        merge_branch(&repo, "feature/merged-second");
+        merge_branch(&repo, "feature/dirty");
+        fs::write(dirty.join("dirty.txt"), "dirty\nuncommitted\n").unwrap();
+
+        run_worktree_command(WorktreeCommand::Prune { path: repo.clone() }).unwrap();
+
+        assert!(!merged.exists(), "clean merged worktree should be removed");
+        assert!(
+            !merged_second.exists(),
+            "all clean merged worktrees should be removed"
+        );
+        assert!(unmerged.exists(), "clean unmerged worktree should stay");
+        assert!(dirty.exists(), "dirty merged worktree should stay");
+        assert!(repo.exists(), "current worktree should stay");
+
+        let list_output = git_cmd()
+            .current_dir(&repo)
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            list_output.status.success(),
+            "git worktree list failed: {}",
+            String::from_utf8_lossy(&list_output.stderr)
+        );
+        let list_stdout = String::from_utf8_lossy(&list_output.stdout);
+        assert!(!list_stdout.contains(&merged.to_string_lossy().to_string()));
+        assert!(!list_stdout.contains(&merged_second.to_string_lossy().to_string()));
+        assert!(list_stdout.contains(&unmerged.to_string_lossy().to_string()));
+        assert!(list_stdout.contains(&dirty.to_string_lossy().to_string()));
+        assert!(list_stdout.contains(&repo.to_string_lossy().to_string()));
 
         let _ = fs::remove_dir_all(base);
     }

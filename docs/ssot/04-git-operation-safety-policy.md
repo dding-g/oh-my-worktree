@@ -49,6 +49,7 @@ git_command_policy:
 | list | TUI load/refresh | `git worktree list --porcelain` + optional GitHub/gh-style PR lookup | bare entry와 non-bare worktree를 구분하고, GitHub PR 상태가 확인되면 list metadata로 표시한다 | bare entry는 status/ahead/behind 계산 대상이 아니며 PR lookup 실패는 list를 실패시키거나 block하지 않는다 |
 | add | `a` modal confirm | `git worktree add` | branch/base 정책에 맞는 worktree 생성 | 생성 후 usable worktree인지 확인/repair한다 |
 | delete | `d` confirm | `git worktree remove` + optional branch delete | 선택 worktree 제거. `Space`로 체크한 worktree가 있으면 체크된 대상 전체에 적용 | dirty worktree는 기본적으로 삭제하지 않는다 |
+| prune | `owt worktree prune` | `git worktree prune -v` + clean/merged worktree scan | stale metadata를 정리하고 완료된 worktree를 제거한다 | non-current, clean, local branch가 `HEAD`에 merge된 worktree만 제거한다. branch는 삭제하지 않는다 |
 | fetch | `f` | selected worktree/repo remote fetch | remote refs와 ahead/behind 갱신 | long operation은 background op로 처리한다 |
 | pull | `p` | selected worktree `git pull` | remote 변경 merge. `Space`로 체크한 worktree가 있으면 체크된 대상 전체에 적용 | clean worktree expectation을 문서에 노출한다 |
 | push | `P` | selected branch push | remote에 현재 branch push | 실패는 status bar/message로 표시한다 |
@@ -125,6 +126,7 @@ PR status는 worktree row의 보조 표시다. GitHub remote에서 확인된 `op
 - Git helper command는 shell integration stdout/stderr handoff를 오염시키면 안 된다. Remote URL 확인처럼 값을 조회하는 helper는 child stdout/stderr를 capture해야 한다.
 - 새 worktree 생성 직후 list refresh와 selection reconcile은 즉시 `Enter` 했을 때 새 worktree path를 handoff해야 한다.
 - Remote base branch fetch는 새 branch 생성 시 최신 `origin/<base>` commit을 기준으로 worktree를 만들 수 있어야 한다.
+- CLI prune은 dirty, unmerged, current, bare, detached worktree를 삭제하지 않는 regression test로 고정한다.
 - PR status lookup은 GitHub-only 보조 조회다. 실패, 누락, non-GitHub remote, unsupported provider는 모두 `-` 표시로 수렴해야 하며 list operation의 성공 여부를 바꾸면 안 된다.
 
 # 7. 검증 규칙

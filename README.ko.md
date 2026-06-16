@@ -134,6 +134,7 @@ Agent bootstrap asset은 `.agents/`에 버전 관리됩니다. `.agents/prompts/
 owt worktree list
 owt worktree create feature/login --base main
 owt worktree delete feature/login --branch --force
+owt worktree prune
 owt pr status --branch feature/login
 owt commit tree -n 12
 owt search login
@@ -200,6 +201,7 @@ run_post_add_script_in_tmux = false
 | `owt worktree list` | worktree를 tab-separated record로 출력 |
 | `owt worktree create <BRANCH>` | TUI 없이 worktree 생성. 해당 실행에서 tmux를 열려면 `--tmux=on` 사용 |
 | `owt worktree delete <TARGET>` | branch, 이름, path로 worktree 삭제 |
+| `owt worktree prune` | stale metadata를 정리하고 `HEAD`에 merge된 non-current clean worktree를 제거 |
 | `owt pr status` | `gh`를 통해 GitHub PR 상태 확인 |
 | `owt commit tree` | 최근 commit graph 출력 |
 | `owt search <QUERY>` | worktree 검색 |

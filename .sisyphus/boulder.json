@@ -1,9 +1,275 @@
 {
-  "active_plan": "/Users/matthew/dev/oh-my-worktree/main/.sisyphus/plans/non-blocking-ops.md",
-  "started_at": "2026-02-26T05:47:53.747Z",
+  "active_plan": "/Users/matthew/dev/oh-my-worktree/main/.sisyphus/plans/post-add-copy-files-fix.md",
+  "started_at": "2026-05-21T14:25:23.234Z",
   "session_ids": [
-    "ses_367aea222ffeQwxNABcBV15h2h"
+    "ses_1c4fcd1f1ffeVdlPjDCFpbyrp4"
   ],
-  "plan_name": "non-blocking-ops",
-  "agent": "atlas"
+  "plan_name": "post-add-copy-files-fix",
+  "agent": "atlas",
+  "session_origins": {
+    "ses_1c4fcd1f1ffeVdlPjDCFpbyrp4": "direct"
+  },
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Define Configured Post-add Script Path Resolution",
+      "session_id": "ses_1b5115947ffe7TBkUy7Fosy2I0",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-21T14:28:57.599Z",
+      "started_at": "2026-05-21T14:28:57.599Z",
+      "status": "running"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "Wire Configured Script Path into App Execution and Editor Target",
+      "session_id": "ses_1b5115947ffe7TBkUy7Fosy2I0",
+      "agent": "Sisyphus-Junior",
+      "category": "",
+      "started_at": "2026-05-21T14:35:30.081Z",
+      "status": "running",
+      "updated_at": "2026-05-21T14:47:51.881Z"
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "Align Config Modal Display with Effective Script Path and Trust Boundary",
+      "session_id": "ses_1b50ce284ffeeOjjHwmtNXh30C",
+      "agent": "Sisyphus-Junior",
+      "category": "visual-engineering",
+      "updated_at": "2026-05-21T14:38:28.927Z",
+      "started_at": "2026-05-21T14:38:28.927Z",
+      "status": "running"
+    },
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "Surface Copy Files Results as Non-fatal Add Warnings",
+      "session_id": "ses_1b4fc2c11ffenIot1n5tBk3Vf2",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-21T14:53:40.580Z",
+      "started_at": "2026-05-21T14:53:40.580Z",
+      "status": "running"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "Update Docs and SSOT for Exact Behavior",
+      "session_id": "ses_1b4f711d9ffeY1M6pa7Jvks86X",
+      "agent": "Sisyphus-Junior",
+      "category": "",
+      "started_at": "2026-05-21T14:59:02.898Z",
+      "status": "running",
+      "updated_at": "2026-05-21T15:01:17.739Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "Full Regression and Behavior Hardening Pass",
+      "session_id": "ses_1b4f01431ffeNhRFweSX4n0HBU",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-21T15:10:39.800Z",
+      "started_at": "2026-05-21T15:10:39.800Z",
+      "status": "running"
+    },
+    "final-wave:f3": {
+      "task_key": "final-wave:f3",
+      "task_label": "F3",
+      "task_title": "Real Manual QA — unspecified-high (+ terminal/TUI interaction if practical)",
+      "session_id": "ses_1b4e69e9bffeTV00xQK4OpfA6D",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-21T15:15:26.764Z",
+      "started_at": "2026-05-21T15:15:26.764Z",
+      "status": "running"
+    },
+    "final-wave:f2": {
+      "task_key": "final-wave:f2",
+      "task_label": "F2",
+      "task_title": "Code Quality Review — unspecified-high",
+      "session_id": "ses_1b4e69f69ffeiL5hMcL2xhjTdJ",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-21T15:15:48.730Z",
+      "started_at": "2026-05-21T15:15:48.730Z",
+      "status": "running"
+    },
+    "final-wave:f4": {
+      "task_key": "final-wave:f4",
+      "task_label": "F4",
+      "task_title": "Scope Fidelity Check — deep",
+      "session_id": "ses_1b4e69e77ffe34J6ghw6UHZRuK",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-21T15:15:59.948Z",
+      "started_at": "2026-05-21T15:15:59.948Z",
+      "status": "running"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "Plan Compliance Audit — oracle",
+      "session_id": "ses_1b4e6a059ffeps2ueboucH3T05",
+      "agent": "oracle",
+      "category": "",
+      "updated_at": "2026-05-21T15:16:08.771Z",
+      "started_at": "2026-05-21T15:16:08.771Z",
+      "status": "running"
+    }
+  },
+  "active_work_id": "post-add-copy-files-fix-b66fd8be",
+  "status": "completed",
+  "updated_at": "2026-05-21T15:18:34.478Z",
+  "schema_version": 2,
+  "works": {
+    "non-blocking-ops-legacy": {
+      "work_id": "non-blocking-ops-legacy",
+      "active_plan": "/Users/matthew/dev/oh-my-worktree/main/.sisyphus/plans/non-blocking-ops.md",
+      "plan_name": "non-blocking-ops",
+      "started_at": "2026-02-26T05:47:53.747Z",
+      "session_ids": [
+        "ses_367aea222ffeQwxNABcBV15h2h"
+      ],
+      "session_origins": {
+        "ses_367aea222ffeQwxNABcBV15h2h": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {}
+    },
+    "post-add-copy-files-fix-b66fd8be": {
+      "work_id": "post-add-copy-files-fix-b66fd8be",
+      "active_plan": "/Users/matthew/dev/oh-my-worktree/main/.sisyphus/plans/post-add-copy-files-fix.md",
+      "plan_name": "post-add-copy-files-fix",
+      "status": "completed",
+      "started_at": "2026-05-21T14:25:23.234Z",
+      "updated_at": "2026-05-21T15:18:34.478Z",
+      "session_ids": [
+        "ses_1c4fcd1f1ffeVdlPjDCFpbyrp4"
+      ],
+      "session_origins": {
+        "ses_1c4fcd1f1ffeVdlPjDCFpbyrp4": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "Define Configured Post-add Script Path Resolution",
+          "session_id": "ses_1b5115947ffe7TBkUy7Fosy2I0",
+          "agent": "Sisyphus-Junior",
+          "category": "quick",
+          "updated_at": "2026-05-21T14:28:57.599Z",
+          "started_at": "2026-05-21T14:28:57.599Z",
+          "status": "running"
+        },
+        "todo:2": {
+          "task_key": "todo:2",
+          "task_label": "2",
+          "task_title": "Wire Configured Script Path into App Execution and Editor Target",
+          "session_id": "ses_1b5115947ffe7TBkUy7Fosy2I0",
+          "agent": "Sisyphus-Junior",
+          "category": "",
+          "started_at": "2026-05-21T14:35:30.081Z",
+          "status": "running",
+          "updated_at": "2026-05-21T14:47:51.881Z"
+        },
+        "todo:4": {
+          "task_key": "todo:4",
+          "task_label": "4",
+          "task_title": "Align Config Modal Display with Effective Script Path and Trust Boundary",
+          "session_id": "ses_1b50ce284ffeeOjjHwmtNXh30C",
+          "agent": "Sisyphus-Junior",
+          "category": "visual-engineering",
+          "updated_at": "2026-05-21T14:38:28.927Z",
+          "started_at": "2026-05-21T14:38:28.927Z",
+          "status": "running"
+        },
+        "todo:3": {
+          "task_key": "todo:3",
+          "task_label": "3",
+          "task_title": "Surface Copy Files Results as Non-fatal Add Warnings",
+          "session_id": "ses_1b4fc2c11ffenIot1n5tBk3Vf2",
+          "agent": "Sisyphus-Junior",
+          "category": "deep",
+          "updated_at": "2026-05-21T14:53:40.580Z",
+          "started_at": "2026-05-21T14:53:40.580Z",
+          "status": "running"
+        },
+        "todo:5": {
+          "task_key": "todo:5",
+          "task_label": "5",
+          "task_title": "Update Docs and SSOT for Exact Behavior",
+          "session_id": "ses_1b4f711d9ffeY1M6pa7Jvks86X",
+          "agent": "Sisyphus-Junior",
+          "category": "",
+          "started_at": "2026-05-21T14:59:02.898Z",
+          "status": "running",
+          "updated_at": "2026-05-21T15:01:17.739Z"
+        },
+        "todo:6": {
+          "task_key": "todo:6",
+          "task_label": "6",
+          "task_title": "Full Regression and Behavior Hardening Pass",
+          "session_id": "ses_1b4f01431ffeNhRFweSX4n0HBU",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-21T15:10:39.800Z",
+          "started_at": "2026-05-21T15:10:39.800Z",
+          "status": "running"
+        },
+        "final-wave:f3": {
+          "task_key": "final-wave:f3",
+          "task_label": "F3",
+          "task_title": "Real Manual QA — unspecified-high (+ terminal/TUI interaction if practical)",
+          "session_id": "ses_1b4e69e9bffeTV00xQK4OpfA6D",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-21T15:15:26.764Z",
+          "started_at": "2026-05-21T15:15:26.764Z",
+          "status": "running"
+        },
+        "final-wave:f2": {
+          "task_key": "final-wave:f2",
+          "task_label": "F2",
+          "task_title": "Code Quality Review — unspecified-high",
+          "session_id": "ses_1b4e69f69ffeiL5hMcL2xhjTdJ",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-21T15:15:48.730Z",
+          "started_at": "2026-05-21T15:15:48.730Z",
+          "status": "running"
+        },
+        "final-wave:f4": {
+          "task_key": "final-wave:f4",
+          "task_label": "F4",
+          "task_title": "Scope Fidelity Check — deep",
+          "session_id": "ses_1b4e69e77ffe34J6ghw6UHZRuK",
+          "agent": "Sisyphus-Junior",
+          "category": "deep",
+          "updated_at": "2026-05-21T15:15:59.948Z",
+          "started_at": "2026-05-21T15:15:59.948Z",
+          "status": "running"
+        },
+        "final-wave:f1": {
+          "task_key": "final-wave:f1",
+          "task_label": "F1",
+          "task_title": "Plan Compliance Audit — oracle",
+          "session_id": "ses_1b4e6a059ffeps2ueboucH3T05",
+          "agent": "oracle",
+          "category": "",
+          "updated_at": "2026-05-21T15:16:08.771Z",
+          "started_at": "2026-05-21T15:16:08.771Z",
+          "status": "running"
+        }
+      },
+      "ended_at": "2026-05-21T15:18:34.477Z",
+      "elapsed_ms": 3191243
+    }
+  },
+  "ended_at": "2026-05-21T15:18:34.477Z",
+  "elapsed_ms": 3191243
 }

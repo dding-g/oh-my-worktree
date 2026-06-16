@@ -90,6 +90,8 @@ Prune stale metadata:
 owt worktree prune
 ```
 
+`owt worktree prune` also removes non-current worktrees when they are clean and their branch has already been merged into `HEAD`. It does not delete branches, dirty worktrees, unmerged worktrees, detached worktrees, bare entries, or the current worktree.
+
 ## Guardrails
 
 - Prefer branch/name/path inputs accepted by `owt worktree delete`; do not hand-roll path matching with raw Git mutation commands.

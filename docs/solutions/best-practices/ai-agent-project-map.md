@@ -73,6 +73,8 @@ These commands follow the GitHub CLI help pattern (`owt <noun> --help`, action-l
 
 Agent bootstrap assets live under `.agents/`: `.agents/prompts/install-owt.md` is the copy/paste setup prompt, `.agents/skills/owt-install/SKILL.md` verifies or installs the CLI, and `.agents/skills/owt-worktree/SKILL.md` directs worktree mutations through `owt worktree ...` instead of raw `git worktree`.
 
+`owt worktree prune` is a cleanup command, not just a `git worktree prune` wrapper: it removes stale metadata and also deletes non-current worktrees only when they are clean and their local branch is already merged into `HEAD`. It never deletes the branch.
+
 ### Shell Integration
 
 `owt setup` installs a shell function that sets `OWT_OUTPUT_FILE`. When the user presses `Enter` on a worktree, `App` sets `ExitAction::ChangeDirectory(path)`. When the user confirms the add modal, `App` sets `ExitAction::CreateWorktree(request)` and quits the TUI. After the terminal is restored, `main.rs` writes the selected or created worktree path into the secure output file. `open_shell_output_file` rejects symlinks and group/world-accessible files.

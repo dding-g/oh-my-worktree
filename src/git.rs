@@ -577,6 +577,30 @@ pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
     Ok(stdout.trim().to_string())
 }
 
+pub fn is_branch_merged(repo_path: &Path, branch: &str, base_ref: &str) -> Result<bool> {
+    let branch_ref = format!("refs/heads/{branch}");
+    let output = git_command()
+        .args([
+            "-C",
+            &repo_path.to_string_lossy(),
+            "merge-base",
+            "--is-ancestor",
+            &branch_ref,
+            base_ref,
+        ])
+        .output()
+        .context("Failed to check branch merge status")?;
+
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => anyhow::bail!(
+            "Failed to check branch merge status: {}",
+            command_failure_detail(&output)
+        ),
+    }
+}
+
 pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result<()> {
     let flag = if force { "-D" } else { "-d" };
 
