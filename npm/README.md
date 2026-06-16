@@ -26,14 +26,18 @@ Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, p
 
 ## Install
 
+Current release with Cargo (`v0.13.0`):
+
 ```bash
-npm install -g oh-my-worktree
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
 ```
 
-Or run it without installing:
+Prebuilt binaries are attached to the latest [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest).
+
+This npm wrapper is also supported when the npm registry package is current:
 
 ```bash
-npx oh-my-worktree
+npm install -g oh-my-worktree
 ```
 
 From source:

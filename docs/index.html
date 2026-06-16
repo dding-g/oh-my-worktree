@@ -370,9 +370,11 @@
     }
 
     .install-cmd {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 12px;
+      max-width: 100%;
+      overflow-x: auto;
       margin-top: 48px;
       padding: 14px 20px;
       background: var(--bg-elevated);
@@ -384,6 +386,7 @@
 
     .install-cmd code {
       color: var(--text-secondary);
+      overflow-wrap: anywhere;
     }
 
     .install-cmd code span {
@@ -1233,7 +1236,7 @@
         <div class="hero-content">
           <div class="badge animate-in delay-1">
             <span class="badge-dot"></span>
-            v0.10.3 · regular repos first-class
+            v0.13.0 · regular repos first-class
           </div>
 
           <h1 class="animate-in delay-2">Branches are working contexts.</h1>
@@ -1259,8 +1262,8 @@
           </div>
 
           <div class="install-cmd animate-in delay-4">
-            <code><span>$</span> npm install -g oh-my-worktree</code>
-            <button class="copy-btn" data-copy="npm install -g oh-my-worktree" aria-label="Copy to clipboard">
+            <code><span>$</span> cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0</code>
+            <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0" aria-label="Copy to clipboard">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1411,7 +1414,7 @@
             Installation
           </div>
           <h2 class="section-title">Install, then open your current repo</h2>
-          <p class="section-desc">Use npm for the packaged binary, npx for a one-off run, or build from source.</p>
+          <p class="section-desc">Use Cargo or GitHub Release binaries for the latest release; use npm when the registry package is current.</p>
         </div>
 
         <div class="install-grid">
@@ -1422,11 +1425,11 @@
                   <path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0h-2.666V8.667h2.666v5.331zm12.001 0h-1.333v-4h-1.333v4h-1.333v-4h-1.333v4h-2.666V8.667h8v5.331z"/>
                 </svg>
               </div>
-              <h3>npm <span>Recommended</span></h3>
+              <h3>Latest <span>Recommended</span></h3>
             </div>
             <div class="code-block">
-              <code><span class="hl">npm</span> install -g oh-my-worktree</code>
-              <button class="copy-btn" data-copy="npm install -g oh-my-worktree">
+              <code><span class="hl">cargo</span> install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force</code>
+              <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1434,8 +1437,8 @@
               </button>
             </div>
             <div class="code-block">
-              <code><span class="comment"># Or run without installing</span><br><span class="hl">npx</span> oh-my-worktree</code>
-              <button class="copy-btn" data-copy="npx oh-my-worktree">
+              <code><span class="comment"># Prebuilt binaries</span><br>https://github.com/dding-g/oh-my-worktree/releases/latest</code>
+              <button class="copy-btn" data-copy="https://github.com/dding-g/oh-my-worktree/releases/latest">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1451,11 +1454,11 @@
                   <path d="M23.687 11.709l-10.313-10.312c-.417-.417-1.09-.417-1.507 0l-2.14 2.14 2.717 2.717c.63-.216 1.353-.054 1.855.448.505.505.665 1.231.444 1.867l2.618 2.618c.635-.221 1.363-.062 1.867.443.705.705.705 1.848 0 2.553-.706.706-1.849.706-2.554 0-.527-.527-.675-1.302-.416-1.954l-2.441-2.441v6.425c.174.086.335.198.477.341.706.705.706 1.848 0 2.553-.705.706-1.848.706-2.553 0-.706-.705-.706-1.848 0-2.553.182-.181.391-.316.616-.409v-6.486c-.225-.093-.434-.228-.616-.409-.529-.529-.674-1.306-.413-1.96l-2.678-2.678-7.069 7.069c-.417.417-.417 1.09 0 1.507l10.312 10.313c.417.417 1.09.417 1.507 0l10.284-10.284c.417-.417.417-1.09 0-1.507"/>
                 </svg>
               </div>
-              <h3>Cargo <span>Rust</span></h3>
+              <h3>npm <span>Wrapper</span></h3>
             </div>
             <div class="code-block">
-              <code><span class="hl">cargo</span> install --git https://github.com/dding-g/oh-my-worktree</code>
-              <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree">
+              <code><span class="hl">npm</span> install -g oh-my-worktree</code>
+              <button class="copy-btn" data-copy="npm install -g oh-my-worktree">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1463,8 +1466,8 @@
               </button>
             </div>
             <div class="code-block">
-              <code><span class="comment"># Or build from source</span><br>git clone https://github.com/dding-g/oh-my-worktree.git<br>cd oh-my-worktree && <span class="hl">cargo</span> build --release</code>
-              <button class="copy-btn" data-copy="git clone https://github.com/dding-g/oh-my-worktree.git && cd oh-my-worktree && cargo build --release">
+              <code><span class="comment"># When the npm registry package is current</span><br><span class="hl">npx</span> oh-my-worktree</code>
+              <button class="copy-btn" data-copy="npx oh-my-worktree">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>

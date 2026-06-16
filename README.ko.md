@@ -27,14 +27,18 @@ Git worktree는 이 문제의 정답에 가깝습니다. `owt`는 그 정답을 
 
 ## 설치
 
+현재 릴리즈(`v0.13.0`)를 Cargo로 설치:
+
 ```bash
-npm install -g oh-my-worktree
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
 ```
 
-설치 없이 실행할 수도 있습니다.
+Prebuilt 바이너리는 최신 [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest)에 첨부됩니다.
+
+npm wrapper는 npm registry package가 현재 릴리즈로 올라와 있을 때 사용할 수 있습니다.
 
 ```bash
-npx oh-my-worktree
+npm install -g oh-my-worktree
 ```
 
 소스에서 빌드하려면:

@@ -5,7 +5,7 @@ theme: just-the-docs
 url: https://dding-g.github.io
 
 # Version (update on release)
-owt_version: "0.10.3"
+owt_version: "0.13.0"
 baseurl: /oh-my-worktree
 
 # Enable search

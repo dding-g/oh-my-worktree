@@ -7,7 +7,9 @@ ref:
   - npm/README.md
   - docs/index.md
   - docs/index.html
+  - docs/getting-started/installation.md
   - docs/_config.yml
+  - .agents/skills/owt-install/SKILL.md
   - assets/
   - package.json
   - npm/package.json
@@ -39,10 +41,13 @@ document_contract:
 | config option | `README.md`, `README.ko.md`, `docs/reference/configuration.md`, `docs/ssot/02-configuration-trust-boundary-policy.md` |
 | shell integration | `docs/getting-started/shell-integration.md`, `docs/usage/navigation.md`, `docs/ssot/05-shell-integration-exit-contract.md` |
 | Git operation | `docs/usage/git-operations.md`, `docs/usage/worktrees.md`, `docs/ssot/04-git-operation-safety-policy.md` |
+| release/install path | `README.md`, `README.ko.md`, `npm/README.md`, `docs/index.md`, `docs/index.html`, `docs/getting-started/installation.md`, `.agents/skills/owt-install/SKILL.md` |
 
 # 3. npm README 정책
 
 `npm/README.md`는 package registry용 축약 문서다. 짧아도 제품 포지셔닝은 root README와 충돌하면 안 된다.
+
+`npm install -g oh-my-worktree`나 `npx oh-my-worktree`는 npm registry의 `latest` dist-tag가 현재 GitHub release와 일치할 때만 latest/recommended 설치 경로로 표현한다. npm publish가 늦거나 실패한 상태에서는 Cargo tag install 또는 GitHub Release asset을 최신 설치 경로로 문서화한다.
 
 ```yaml
 npm_readme_policy:
@@ -65,6 +70,7 @@ npm_readme_policy:
 | dark screenshot archive | `assets/owt-darkmode.png` | archive/source | 원본성 asset은 `assets/` 아래 보관한다. |
 | favicon package archive | `assets/owt-favicon-package/` | archive/source | 생성 원본/variant는 archive에 보관한다. |
 | published favicon files | `docs/favicon.ico`, `docs/favicon-*.png`, `docs/site.webmanifest` | GitHub Pages root | browser가 접근해야 하는 파일만 docs root에 둔다. |
+| release binary assets | GitHub Release assets | `releases/latest/download/owt-*` | homepage와 install docs의 최신 설치 안내는 실제 업로드된 release asset 또는 Cargo tag를 기준으로 한다. |
 
 # 5. Release Version File 정책
 
