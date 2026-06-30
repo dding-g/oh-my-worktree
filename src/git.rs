@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -586,30 +587,6 @@ fn run_worktree_prune(bare_repo_path: &Path, dry_run: bool) -> Result<String> {
     Ok(stdout.trim().to_string())
 }
 
-pub fn is_branch_merged(repo_path: &Path, branch: &str, base_ref: &str) -> Result<bool> {
-    let branch_ref = format!("refs/heads/{branch}");
-    let output = git_command()
-        .args([
-            "-C",
-            &repo_path.to_string_lossy(),
-            "merge-base",
-            "--is-ancestor",
-            &branch_ref,
-            base_ref,
-        ])
-        .output()
-        .context("Failed to check branch merge status")?;
-
-    match output.status.code() {
-        Some(0) => Ok(true),
-        Some(1) => Ok(false),
-        _ => anyhow::bail!(
-            "Failed to check branch merge status: {}",
-            command_failure_detail(&output)
-        ),
-    }
-}
-
 pub fn delete_branch(bare_repo_path: &Path, branch: &str, force: bool) -> Result<()> {
     let flag = if force { "-D" } else { "-d" };
 
@@ -757,16 +734,18 @@ pub fn github_pr_statuses_for_worktrees(
     bare_repo_path: &Path,
     worktrees: &[(PathBuf, String)],
 ) -> Vec<(PathBuf, Option<GithubPrStatus>)> {
-    let repo = github_repo_slug(bare_repo_path);
+    let Some(repo) = github_repo_slug(bare_repo_path) else {
+        return worktrees
+            .iter()
+            .map(|(path, _)| (path.clone(), None))
+            .collect();
+    };
+    let branches: Vec<String> = worktrees.iter().map(|(_, branch)| branch.clone()).collect();
+    let status_by_branch = github_pr_statuses_for_branches(&repo, &branches);
 
     worktrees
         .iter()
-        .map(|(path, branch)| {
-            let status = repo
-                .as_deref()
-                .and_then(|repo| github_pr_status_for_branch(repo, branch));
-            (path.clone(), status)
-        })
+        .map(|(path, branch)| (path.clone(), status_by_branch.get(branch).copied()))
         .collect()
 }
 
@@ -810,78 +789,72 @@ fn github_repo_slug_from_remote_url(url: &str) -> Option<String> {
     Some(format!("{}/{}", owner, repo))
 }
 
-fn github_pr_status_for_branch(repo: &str, branch: &str) -> Option<GithubPrStatus> {
+fn github_pr_statuses_for_branches(
+    repo: &str,
+    branches: &[String],
+) -> HashMap<String, GithubPrStatus> {
+    if branches.is_empty() {
+        return HashMap::new();
+    }
+
+    let limit = branches.len().max(1000).to_string();
     let output = Command::new("gh")
         .args([
             "pr",
             "list",
             "--repo",
             repo,
-            "--head",
-            branch,
             "--state",
             "all",
             "--limit",
-            "1",
+            &limit,
             "--json",
-            "state,isDraft,mergedAt",
+            "headRefName,state,isDraft,mergedAt",
+            "--template",
+            r#"{{range .}}{{.headRefName}}{{"\t"}}{{if .isDraft}}draft{{else if .mergedAt}}merged{{else}}{{.state}}{{end}}{{"\n"}}{{end}}"#,
         ])
         .output()
-        .ok()?;
+        .ok();
 
+    let Some(output) = output else {
+        return HashMap::new();
+    };
     if !output.status.success() {
-        return None;
+        return HashMap::new();
     }
 
-    github_pr_status_from_gh_json(&String::from_utf8_lossy(&output.stdout))
+    github_pr_statuses_from_gh_template(&String::from_utf8_lossy(&output.stdout), branches)
 }
 
-fn github_pr_status_from_gh_json(json: &str) -> Option<GithubPrStatus> {
-    let item = first_json_object(json)?;
+fn github_pr_statuses_from_gh_template(
+    output: &str,
+    branches: &[String],
+) -> HashMap<String, GithubPrStatus> {
+    let target_branches: HashSet<&str> = branches.iter().map(String::as_str).collect();
+    let mut statuses = HashMap::new();
 
-    if json_bool_field(item, "isDraft") == Some(true) {
-        return Some(GithubPrStatus::Draft);
+    for line in output.lines() {
+        let Some((branch, label)) = line.split_once('\t') else {
+            continue;
+        };
+        if target_branches.contains(branch) {
+            if let Some(status) = github_pr_status_from_label(label) {
+                statuses.entry(branch.to_string()).or_insert(status);
+            }
+        }
     }
 
-    if json_string_field(item, "mergedAt").is_some_and(|value| !value.is_empty()) {
-        return Some(GithubPrStatus::Merged);
-    }
+    statuses
+}
 
-    match json_string_field(item, "state")?.as_str() {
-        "OPEN" => Some(GithubPrStatus::Open),
-        "CLOSED" => Some(GithubPrStatus::Closed),
+fn github_pr_status_from_label(label: &str) -> Option<GithubPrStatus> {
+    match label.trim().to_ascii_lowercase().as_str() {
+        "open" => Some(GithubPrStatus::Open),
+        "closed" => Some(GithubPrStatus::Closed),
+        "merged" => Some(GithubPrStatus::Merged),
+        "draft" => Some(GithubPrStatus::Draft),
         _ => None,
     }
-}
-
-fn first_json_object(json: &str) -> Option<&str> {
-    let start = json.find('{')?;
-    let end = json[start..].find('}')? + start;
-    Some(&json[start..=end])
-}
-
-fn json_bool_field(json: &str, field: &str) -> Option<bool> {
-    let value = json_field_value(json, field)?;
-    if value.starts_with("true") {
-        Some(true)
-    } else if value.starts_with("false") {
-        Some(false)
-    } else {
-        None
-    }
-}
-
-fn json_string_field(json: &str, field: &str) -> Option<String> {
-    let value = json_field_value(json, field)?;
-    let value = value.strip_prefix('"')?;
-    let end = value.find('"')?;
-    Some(value[..end].to_string())
-}
-
-fn json_field_value<'a>(json: &'a str, field: &str) -> Option<&'a str> {
-    let needle = format!("\"{}\":", field);
-    let start = json.find(&needle)? + needle.len();
-    Some(json[start..].trim_start())
 }
 
 pub fn get_ahead_behind(path: &Path) -> Option<AheadBehind> {
@@ -1100,7 +1073,7 @@ pub fn list_local_branches(bare_repo_path: &Path) -> Result<Vec<String>> {
 mod tests {
     use super::{
         add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root,
-        github_pr_status_from_gh_json, github_pr_statuses_for_worktrees,
+        github_pr_statuses_for_worktrees, github_pr_statuses_from_gh_template,
         github_repo_slug_from_remote_url, list_worktrees,
     };
     use std::fs;
@@ -1928,34 +1901,31 @@ mod tests {
     }
 
     #[test]
-    fn github_pr_status_parser_accepts_contract_statuses_only() {
-        let cases = [
-            (
-                r#"[{"isDraft":false,"mergedAt":null,"state":"OPEN"}]"#,
-                Some(GithubPrStatus::Open),
-            ),
-            (
-                r#"[{"isDraft":false,"mergedAt":null,"state":"CLOSED"}]"#,
-                Some(GithubPrStatus::Closed),
-            ),
-            (
-                r#"[{"isDraft":false,"mergedAt":"2026-05-18T00:00:00Z","state":"CLOSED"}]"#,
-                Some(GithubPrStatus::Merged),
-            ),
-            (
-                r#"[{"isDraft":true,"mergedAt":null,"state":"OPEN"}]"#,
-                Some(GithubPrStatus::Draft),
-            ),
-            (
-                r#"[{"isDraft":false,"mergedAt":null,"state":"UNKNOWN"}]"#,
-                None,
-            ),
-            (r#"[]"#, None),
+    fn github_pr_status_template_parser_accepts_contract_statuses_only() {
+        let branches = vec![
+            "feature/open".to_string(),
+            "feature/closed".to_string(),
+            "feature/merged".to_string(),
+            "feature/draft".to_string(),
+            "feature/missing".to_string(),
         ];
+        let statuses = github_pr_statuses_from_gh_template(
+            "feature/open\tOPEN\nfeature/closed\tCLOSED\nfeature/merged\tmerged\nfeature/draft\tdraft\nfeature/unknown\tUNKNOWN\n",
+            &branches,
+        );
 
-        for (json, expected) in cases {
-            assert_eq!(github_pr_status_from_gh_json(json), expected);
-        }
+        assert_eq!(statuses.get("feature/open"), Some(&GithubPrStatus::Open));
+        assert_eq!(
+            statuses.get("feature/closed"),
+            Some(&GithubPrStatus::Closed)
+        );
+        assert_eq!(
+            statuses.get("feature/merged"),
+            Some(&GithubPrStatus::Merged)
+        );
+        assert_eq!(statuses.get("feature/draft"), Some(&GithubPrStatus::Draft));
+        assert_eq!(statuses.get("feature/missing"), None);
+        assert_eq!(statuses.get("feature/unknown"), None);
     }
 
     #[test]

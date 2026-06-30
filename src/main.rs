@@ -4,11 +4,11 @@ mod git;
 mod tmux;
 mod types;
 mod ui;
+mod worktree_prune;
 
 use anyhow::{Context, Result};
 use config::Config;
 use std::env;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
@@ -88,18 +88,6 @@ struct RepositoryContext {
     repo_path: PathBuf,
     project_root_path: PathBuf,
     repo_is_bare: bool,
-}
-
-enum PruneWorktreeAction {
-    Removed,
-    WouldRemove,
-    Kept(String),
-}
-
-struct PruneWorktreeLog {
-    branch: Option<String>,
-    path: PathBuf,
-    action: PruneWorktreeAction,
 }
 
 #[cfg(test)]
@@ -476,8 +464,9 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
             } else {
                 git::prune_worktrees(&context.repo_path)?
             };
-            let logs = prune_clean_merged_worktrees(&context.repo_path, &path, dry_run)?;
-            print_prune_output(&metadata_output, &logs);
+            let logs =
+                worktree_prune::prune_completed_pr_worktrees(&context.repo_path, &path, dry_run)?;
+            worktree_prune::print_prune_output(&metadata_output, &logs);
             Ok(())
         }
     }
@@ -659,141 +648,6 @@ fn find_worktree_target(worktrees: &[types::Worktree], target: &str) -> Result<t
             "Multiple worktrees match '{}'; use an absolute path",
             target
         ),
-    }
-}
-
-fn prune_clean_merged_worktrees(
-    repo_path: &Path,
-    launch_path: &Path,
-    dry_run: bool,
-) -> Result<Vec<PruneWorktreeLog>> {
-    let worktrees = git::list_worktrees(repo_path)?;
-    let current_path = current_worktree_path(&worktrees, launch_path);
-    let head_branch = git::get_default_branch(repo_path).ok();
-    let mut logs = Vec::new();
-
-    for worktree in worktrees {
-        let action = prune_worktree_action(
-            repo_path,
-            current_path.as_deref(),
-            head_branch.as_deref(),
-            &worktree,
-        )?;
-        let action = match action {
-            PruneWorktreeAction::WouldRemove if dry_run => {
-                if confirm_dry_run_prune(&worktree)? {
-                    PruneWorktreeAction::WouldRemove
-                } else {
-                    PruneWorktreeAction::Kept("declined".to_string())
-                }
-            }
-            PruneWorktreeAction::WouldRemove => {
-                git::remove_worktree(repo_path, &worktree.path, false)?;
-                PruneWorktreeAction::Removed
-            }
-            action => action,
-        };
-
-        logs.push(PruneWorktreeLog {
-            branch: worktree.branch.clone(),
-            path: worktree.path,
-            action,
-        });
-    }
-
-    Ok(logs)
-}
-
-fn prune_worktree_action(
-    repo_path: &Path,
-    current_path: Option<&Path>,
-    head_branch: Option<&str>,
-    worktree: &types::Worktree,
-) -> Result<PruneWorktreeAction> {
-    if worktree.is_bare {
-        return Ok(PruneWorktreeAction::Kept("bare".to_string()));
-    }
-    if current_path
-        .map(|path| paths_refer_to_same_location(path, &worktree.path))
-        .unwrap_or(false)
-    {
-        return Ok(PruneWorktreeAction::Kept("current".to_string()));
-    }
-    if worktree.status != types::WorktreeStatus::Clean {
-        return Ok(PruneWorktreeAction::Kept(format!(
-            "status-{}",
-            worktree.status.label()
-        )));
-    }
-    let Some(branch) = worktree.branch.as_deref() else {
-        return Ok(PruneWorktreeAction::Kept("detached".to_string()));
-    };
-    if head_branch.map(|head| head == branch).unwrap_or(false) {
-        return Ok(PruneWorktreeAction::Kept("head".to_string()));
-    }
-    if !git::is_branch_merged(repo_path, branch, "HEAD")? {
-        return Ok(PruneWorktreeAction::Kept("unmerged".to_string()));
-    }
-
-    Ok(PruneWorktreeAction::WouldRemove)
-}
-
-fn confirm_dry_run_prune(worktree: &types::Worktree) -> Result<bool> {
-    let branch = worktree.branch.as_deref().unwrap_or("-");
-    eprint!(
-        "dry-run delete candidate\t{}\t{} [y/N] ",
-        plain_field(branch),
-        plain_field(&worktree.path.display().to_string())
-    );
-    io::stderr()
-        .flush()
-        .context("Failed to flush dry-run prune prompt")?;
-
-    let mut answer = String::new();
-    io::stdin()
-        .read_line(&mut answer)
-        .context("Failed to read dry-run prune answer")?;
-    Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "YES"))
-}
-
-fn print_prune_output(metadata_output: &str, logs: &[PruneWorktreeLog]) {
-    let removed_or_selected = logs
-        .iter()
-        .filter(|log| {
-            matches!(
-                log.action,
-                PruneWorktreeAction::Removed | PruneWorktreeAction::WouldRemove
-            )
-        })
-        .count();
-
-    if metadata_output.is_empty() && removed_or_selected == 0 {
-        println!("pruned\t0");
-    }
-
-    for log in logs {
-        let branch = plain_field(log.branch.as_deref().unwrap_or("-"));
-        let path = plain_field(&log.path.display().to_string());
-        match &log.action {
-            PruneWorktreeAction::Removed => {
-                println!("pruned\tworktree\t{}\t{}", branch, path);
-            }
-            PruneWorktreeAction::WouldRemove => {
-                println!("pruned\tlog\twould-remove\t{}\t{}\tselected", branch, path);
-            }
-            PruneWorktreeAction::Kept(reason) => {
-                println!(
-                    "pruned\tlog\tkept\t{}\t{}\t{}",
-                    branch,
-                    path,
-                    plain_field(reason)
-                );
-            }
-        }
-    }
-
-    for line in metadata_output.lines() {
-        println!("pruned\tmetadata\t{}", plain_field(line));
     }
 }
 
@@ -1590,7 +1444,7 @@ COMMANDS:
     list      List worktrees as tab-separated records
     create    Create a worktree for a branch
     delete    Delete a worktree by branch, name, or path
-    prune     Prune missing metadata and clean merged worktrees
+    prune     Prune missing metadata and completed PR worktrees
 
 EXAMPLES:
     owt worktree list
@@ -1656,14 +1510,14 @@ OUTPUT:
 
 fn print_worktree_prune_help() {
     println!(
-        r#"Prune missing metadata and clean merged worktrees.
+        r#"Prune missing metadata and completed PR worktrees.
 
 USAGE:
     owt worktree prune [OPTIONS]
 
 OPTIONS:
     -p, --path <PATH>    Repository or worktree path (default: current directory)
-        --dry-run        Preview metadata pruning and prompt through removable worktrees
+        --dry-run        Preview metadata pruning and review removable worktrees one at a time
     -h, --help           Print help information
 
 OUTPUT:
@@ -1673,8 +1527,8 @@ OUTPUT:
     pruned<TAB>metadata<TAB>result
 
 NOTES:
-    Normal mode logs every worktree, removes non-current clean worktrees whose branch is already merged into HEAD, and never deletes branches or the HEAD branch worktree.
-    --dry-run does not delete worktrees; it prompts through removable candidates and logs selected candidates as would-remove."#
+    Normal mode logs every worktree and removes non-current clean worktrees whose GitHub PR status is merged or closed. Removal runs in parallel and never deletes branches or the HEAD branch worktree.
+    --dry-run does not delete worktrees; it reviews removable candidates serially and logs selected candidates as would-remove."#
     );
 }
 
@@ -2215,8 +2069,8 @@ mod tests {
     }
 
     #[test]
-    fn worktree_prune_removes_clean_merged_worktrees_only() {
-        let base = temp_dir("prune_clean_merged");
+    fn worktree_prune_keeps_locally_merged_worktrees_without_pr_status() {
+        let base = temp_dir("prune_without_pr_status");
         let repo = base.join("repo");
         let merged = base.join("merged");
         let merged_second = base.join("merged-second");
@@ -2250,13 +2104,19 @@ mod tests {
         })
         .unwrap();
 
-        assert!(!merged.exists(), "clean merged worktree should be removed");
         assert!(
-            !merged_second.exists(),
-            "all clean merged worktrees should be removed"
+            merged.exists(),
+            "locally merged worktree without PR status should stay"
         );
-        assert!(unmerged.exists(), "clean unmerged worktree should stay");
-        assert!(dirty.exists(), "dirty merged worktree should stay");
+        assert!(
+            merged_second.exists(),
+            "all worktrees without PR status should stay"
+        );
+        assert!(unmerged.exists(), "worktree without PR status should stay");
+        assert!(
+            dirty.exists(),
+            "dirty worktree with missing PR status should stay"
+        );
         assert!(repo.exists(), "current worktree should stay");
 
         let list_output = git_cmd()
@@ -2270,8 +2130,8 @@ mod tests {
             String::from_utf8_lossy(&list_output.stderr)
         );
         let list_stdout = String::from_utf8_lossy(&list_output.stdout);
-        assert!(!list_stdout.contains(&merged.to_string_lossy().to_string()));
-        assert!(!list_stdout.contains(&merged_second.to_string_lossy().to_string()));
+        assert!(list_stdout.contains(&merged.to_string_lossy().to_string()));
+        assert!(list_stdout.contains(&merged_second.to_string_lossy().to_string()));
         assert!(list_stdout.contains(&unmerged.to_string_lossy().to_string()));
         assert!(list_stdout.contains(&dirty.to_string_lossy().to_string()));
         assert!(list_stdout.contains(&repo.to_string_lossy().to_string()));
@@ -2338,8 +2198,8 @@ mod tests {
 
         assert!(main.exists(), "HEAD branch worktree should stay");
         assert!(
-            !merged.exists(),
-            "merged feature worktree should be removed"
+            merged.exists(),
+            "worktree without PR status should stay even when locally merged"
         );
 
         let _ = fs::remove_dir_all(base);

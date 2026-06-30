@@ -91,7 +91,7 @@ owt worktree prune
 owt worktree prune --dry-run
 ```
 
-`owt worktree prune` logs every worktree decision as tab-separated output. It also removes non-current worktrees when they are clean and their branch has already been merged into `HEAD`, except the `HEAD` branch worktree itself. `--dry-run` previews metadata pruning, prompts through removable candidates, and records selected candidates without deleting them. It does not delete branches, dirty worktrees, unmerged worktrees, detached worktrees, bare entries, the current worktree, or the `HEAD` branch worktree.
+`owt worktree prune` logs every worktree decision as tab-separated output. It also removes non-current worktrees when they are clean and their GitHub PR status is `merged` or `closed`, except the `HEAD` branch worktree itself. Normal mode removes candidates in parallel. `--dry-run` previews metadata pruning, reviews removable candidates one at a time, and records selected candidates without deleting them. It does not delete branches, dirty worktrees, worktrees without completed PR status, detached worktrees, bare entries, the current worktree, or the `HEAD` branch worktree.
 
 ## Guardrails
 

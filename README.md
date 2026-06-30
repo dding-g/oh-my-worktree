@@ -151,7 +151,7 @@ owt search login
 kind<TAB>path<TAB>branch<TAB>status<TAB>last_commit<TAB>ahead<TAB>behind<TAB>pr
 ```
 
-`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose branch is already merged into `HEAD`, except the `HEAD` branch worktree itself; `--dry-run` previews stale metadata pruning, prompts through removable candidates, and records selected candidates without deleting them.
+`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose GitHub PR status is `merged` or `closed`, except the `HEAD` branch worktree itself; removal runs in parallel and never deletes branches. `--dry-run` previews stale metadata pruning, reviews removable candidates one at a time, and records selected candidates without deleting them.
 
 ## Shell integration
 
@@ -208,7 +208,7 @@ Project config in `.owt/config.toml` can override safe values, including `post_a
 | `owt worktree list` | List worktrees as tab-separated records |
 | `owt worktree create <BRANCH>` | Create a worktree without opening the TUI. Use `--tmux=on` to open it in tmux for that run. |
 | `owt worktree delete <TARGET>` | Delete a worktree by branch, name, or path |
-| `owt worktree prune` | Prune stale metadata, log every worktree decision, and remove non-current clean worktrees whose branches are merged into `HEAD` |
+| `owt worktree prune` | Prune stale metadata, log every worktree decision, and remove non-current clean worktrees whose PR status is `merged` or `closed` |
 | `owt pr status` | Check GitHub PR status through `gh` |
 | `owt commit tree` | Print recent commits as a git graph |
 | `owt search <QUERY>` | Search worktrees |

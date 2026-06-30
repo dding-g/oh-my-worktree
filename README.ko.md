@@ -151,7 +151,7 @@ owt search login
 kind<TAB>path<TAB>branch<TAB>status<TAB>last_commit<TAB>ahead<TAB>behind<TAB>pr
 ```
 
-`worktree prune`은 모든 worktree 판단 결과를 tab-separated log로 출력합니다. 일반 모드는 `HEAD`에 이미 merge된 non-current clean worktree를 제거하되 `HEAD` branch worktree 자체는 보존하고, `--dry-run`은 stale metadata prune을 preview하며 제거 가능한 worktree를 하나씩 물어본 뒤 선택된 후보를 삭제하지 않고 기록합니다.
+`worktree prune`은 모든 worktree 판단 결과를 tab-separated log로 출력합니다. 일반 모드는 GitHub PR 상태가 `merged` 또는 `closed`인 non-current clean worktree를 병렬로 제거하되 branch와 `HEAD` branch worktree 자체는 보존하고, `--dry-run`은 stale metadata prune을 preview하며 제거 가능한 worktree를 하나씩 직렬로 검토한 뒤 선택된 후보를 삭제하지 않고 기록합니다.
 
 ## Shell integration
 
@@ -208,7 +208,7 @@ run_post_add_script_in_tmux = false
 | `owt worktree list` | worktree를 tab-separated record로 출력 |
 | `owt worktree create <BRANCH>` | TUI 없이 worktree 생성. 해당 실행에서 tmux를 열려면 `--tmux=on` 사용 |
 | `owt worktree delete <TARGET>` | branch, 이름, path로 worktree 삭제 |
-| `owt worktree prune` | stale metadata를 정리하고 모든 worktree 판단 로그를 출력하며 `HEAD`에 merge된 non-current clean worktree를 제거 |
+| `owt worktree prune` | stale metadata를 정리하고 모든 worktree 판단 로그를 출력하며 PR 상태가 `merged` 또는 `closed`인 non-current clean worktree를 제거 |
 | `owt pr status` | `gh`를 통해 GitHub PR 상태 확인 |
 | `owt commit tree` | 최근 commit graph 출력 |
 | `owt search <QUERY>` | worktree 검색 |
