@@ -34,3 +34,5 @@ package-lock.json
 # Downloaded npm wrapper binaries
 npm/bin/owt-bin
 npm/bin/owt-bin.exe
+
+.codegraph
