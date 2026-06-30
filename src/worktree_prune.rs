@@ -145,7 +145,7 @@ fn remove_prune_candidates(repo_path: &Path, logs: &mut [PruneWorktreeLog]) -> R
             .into_iter()
             .map(|(index, path)| {
                 scope.spawn(move || {
-                    let result = git::remove_worktree(repo_path, &path, false);
+                    let result = git::remove_completed_pr_worktree(repo_path, &path);
                     (index, path, result)
                 })
             })

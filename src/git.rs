@@ -557,6 +557,31 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
     Ok(())
 }
 
+pub fn remove_completed_pr_worktree(bare_repo_path: &Path, worktree_path: &Path) -> Result<()> {
+    match remove_worktree(bare_repo_path, worktree_path, false) {
+        Ok(()) => Ok(()),
+        Err(error) if is_submodule_worktree_remove_error(&error) => {
+            std::fs::remove_dir_all(worktree_path).with_context(|| {
+                format!(
+                    "Failed to remove submodule worktree directory {}",
+                    worktree_path.display()
+                )
+            })?;
+            run_worktree_prune(bare_repo_path, false)?;
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn is_submodule_worktree_remove_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .to_string()
+            .contains("working trees containing submodules")
+    })
+}
+
 pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
     run_worktree_prune(bare_repo_path, false)
 }
@@ -1074,7 +1099,8 @@ mod tests {
     use super::{
         add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root,
         github_pr_statuses_for_worktrees, github_pr_statuses_from_gh_template,
-        github_repo_slug_from_remote_url, list_worktrees,
+        github_repo_slug_from_remote_url, list_worktrees, remove_completed_pr_worktree,
+        remove_worktree,
     };
     use std::fs;
     use std::io::Write;
@@ -1952,6 +1978,83 @@ mod tests {
         );
 
         assert_eq!(statuses, vec![(PathBuf::from("/repo/main"), None)]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn remove_completed_pr_worktree_handles_git_submodule_refusal() {
+        let base = temp_dir("remove_submodule_worktree");
+        let submodule_repo = base.join("submodule");
+        let source_repo = base.join("source");
+        let worktree_path = base.join("feature-submodule");
+
+        create_test_regular_repo(&submodule_repo);
+        create_test_regular_repo(&source_repo);
+        assert_git_success(
+            &git_cmd()
+                .current_dir(&source_repo)
+                .args([
+                    "-c",
+                    "protocol.file.allow=always",
+                    "submodule",
+                    "add",
+                    &submodule_repo.to_string_lossy(),
+                    "vendor/submodule",
+                ])
+                .output()
+                .unwrap(),
+            "git submodule add failed",
+        );
+        assert_git_success(&git_in(&source_repo, &["add", "."]), "git add failed");
+        assert_git_success(
+            &git_in(&source_repo, &["commit", "-m", "add submodule"]),
+            "git commit failed",
+        );
+        assert_git_success(
+            &git_in(
+                &source_repo,
+                &[
+                    "worktree",
+                    "add",
+                    "-b",
+                    "feature/submodule",
+                    &worktree_path.to_string_lossy(),
+                ],
+            ),
+            "git worktree add failed",
+        );
+        assert_git_success(
+            &git_cmd()
+                .current_dir(&worktree_path)
+                .args([
+                    "-c",
+                    "protocol.file.allow=always",
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--recursive",
+                ])
+                .output()
+                .unwrap(),
+            "git submodule update failed",
+        );
+
+        let normal_remove = remove_worktree(&source_repo, &worktree_path, false);
+        assert!(
+            normal_remove
+                .unwrap_err()
+                .to_string()
+                .contains("working trees containing submodules"),
+            "plain git worktree remove should refuse submodule worktrees"
+        );
+
+        remove_completed_pr_worktree(&source_repo, &worktree_path).unwrap();
+
+        assert!(!worktree_path.exists());
+        let list_output = git_in(&source_repo, &["worktree", "list", "--porcelain"]);
+        assert_git_success(&list_output, "git worktree list failed");
+        assert!(!String::from_utf8_lossy(&list_output.stdout)
+            .contains(&worktree_path.to_string_lossy().to_string()));
         let _ = fs::remove_dir_all(&base);
     }
 }
