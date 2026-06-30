@@ -143,7 +143,7 @@ owt search login
 
 Agent bootstrap assets are versioned in the repository under `.agents/`: use `.agents/prompts/install-owt.md`, `.agents/skills/owt-install/SKILL.md`, and `.agents/skills/owt-worktree/SKILL.md` so worktree handling goes through `owt`.
 
-`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose branch is already merged into `HEAD`; `--dry-run` previews stale metadata pruning, prompts through removable candidates, and records selected candidates without deleting them.
+`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose branch is already merged into `HEAD`, except the `HEAD` branch worktree itself; `--dry-run` previews stale metadata pruning, prompts through removable candidates, and records selected candidates without deleting them.
 
 ## Shell integration
 

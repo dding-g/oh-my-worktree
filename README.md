@@ -151,7 +151,7 @@ owt search login
 kind<TAB>path<TAB>branch<TAB>status<TAB>last_commit<TAB>ahead<TAB>behind<TAB>pr
 ```
 
-`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose branch is already merged into `HEAD`; `--dry-run` previews stale metadata pruning, prompts through removable candidates, and records selected candidates without deleting them.
+`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose branch is already merged into `HEAD`, except the `HEAD` branch worktree itself; `--dry-run` previews stale metadata pruning, prompts through removable candidates, and records selected candidates without deleting them.
 
 ## Shell integration
 

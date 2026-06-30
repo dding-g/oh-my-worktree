@@ -100,7 +100,7 @@ owt worktree prune
 owt worktree prune --dry-run
 ```
 
-This logs every worktree decision as tab-separated output. Normal mode removes non-current worktrees only when they are clean and their branch has already been merged into `HEAD`. `--dry-run` previews stale metadata pruning, prompts through removable worktrees, and records selected candidates without deleting them. It does not delete branches. Dirty worktrees, unmerged worktrees, bare entries, detached worktrees, and the current worktree are left in place.
+This logs every worktree decision as tab-separated output. Normal mode removes non-current worktrees only when they are clean and their branch has already been merged into `HEAD`, except the `HEAD` branch worktree itself. `--dry-run` previews stale metadata pruning, prompts through removable worktrees, and records selected candidates without deleting them. It does not delete branches. Dirty worktrees, unmerged worktrees, bare entries, detached worktrees, the current worktree, and the `HEAD` branch worktree are left in place.
 
 ## Commands
 

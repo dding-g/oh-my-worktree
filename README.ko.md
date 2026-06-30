@@ -151,7 +151,7 @@ owt search login
 kind<TAB>path<TAB>branch<TAB>status<TAB>last_commit<TAB>ahead<TAB>behind<TAB>pr
 ```
 
-`worktree prune`은 모든 worktree 판단 결과를 tab-separated log로 출력합니다. 일반 모드는 `HEAD`에 이미 merge된 non-current clean worktree를 제거하고, `--dry-run`은 stale metadata prune을 preview하며 제거 가능한 worktree를 하나씩 물어본 뒤 선택된 후보를 삭제하지 않고 기록합니다.
+`worktree prune`은 모든 worktree 판단 결과를 tab-separated log로 출력합니다. 일반 모드는 `HEAD`에 이미 merge된 non-current clean worktree를 제거하되 `HEAD` branch worktree 자체는 보존하고, `--dry-run`은 stale metadata prune을 preview하며 제거 가능한 worktree를 하나씩 물어본 뒤 선택된 후보를 삭제하지 않고 기록합니다.
 
 ## Shell integration
 

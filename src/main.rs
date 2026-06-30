@@ -669,10 +669,16 @@ fn prune_clean_merged_worktrees(
 ) -> Result<Vec<PruneWorktreeLog>> {
     let worktrees = git::list_worktrees(repo_path)?;
     let current_path = current_worktree_path(&worktrees, launch_path);
+    let head_branch = git::get_default_branch(repo_path).ok();
     let mut logs = Vec::new();
 
     for worktree in worktrees {
-        let action = prune_worktree_action(repo_path, current_path.as_deref(), &worktree)?;
+        let action = prune_worktree_action(
+            repo_path,
+            current_path.as_deref(),
+            head_branch.as_deref(),
+            &worktree,
+        )?;
         let action = match action {
             PruneWorktreeAction::WouldRemove if dry_run => {
                 if confirm_dry_run_prune(&worktree)? {
@@ -701,6 +707,7 @@ fn prune_clean_merged_worktrees(
 fn prune_worktree_action(
     repo_path: &Path,
     current_path: Option<&Path>,
+    head_branch: Option<&str>,
     worktree: &types::Worktree,
 ) -> Result<PruneWorktreeAction> {
     if worktree.is_bare {
@@ -721,6 +728,9 @@ fn prune_worktree_action(
     let Some(branch) = worktree.branch.as_deref() else {
         return Ok(PruneWorktreeAction::Kept("detached".to_string()));
     };
+    if head_branch.map(|head| head == branch).unwrap_or(false) {
+        return Ok(PruneWorktreeAction::Kept("head".to_string()));
+    }
     if !git::is_branch_merged(repo_path, branch, "HEAD")? {
         return Ok(PruneWorktreeAction::Kept("unmerged".to_string()));
     }
@@ -1663,7 +1673,7 @@ OUTPUT:
     pruned<TAB>metadata<TAB>result
 
 NOTES:
-    Normal mode logs every worktree, removes non-current clean worktrees whose branch is already merged into HEAD, and never deletes branches.
+    Normal mode logs every worktree, removes non-current clean worktrees whose branch is already merged into HEAD, and never deletes branches or the HEAD branch worktree.
     --dry-run does not delete worktrees; it prompts through removable candidates and logs selected candidates as would-remove."#
     );
 }
@@ -2265,6 +2275,72 @@ mod tests {
         assert!(list_stdout.contains(&unmerged.to_string_lossy().to_string()));
         assert!(list_stdout.contains(&dirty.to_string_lossy().to_string()));
         assert!(list_stdout.contains(&repo.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn worktree_prune_from_bare_project_parent_keeps_head_branch_worktree() {
+        let base = temp_dir("prune_bare_parent_keeps_head");
+        let source = base.join("source");
+        let project = base.join("project");
+        let bare = project.join(".bare");
+        let main = project.join("main");
+        let merged = project.join("feature-merged");
+
+        create_source_repo(&source);
+        fs::create_dir_all(&project).unwrap();
+        assert_git_success(
+            git_cmd()
+                .args([
+                    "clone",
+                    "--bare",
+                    &source.to_string_lossy(),
+                    &bare.to_string_lossy(),
+                ])
+                .output()
+                .unwrap(),
+            "git clone --bare failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(&bare)
+                .args(["config", "user.email", "test@example.com"])
+                .output()
+                .unwrap(),
+            "git config email failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(&bare)
+                .args(["config", "user.name", "Test User"])
+                .output()
+                .unwrap(),
+            "git config name failed",
+        );
+        assert_git_success(
+            git_cmd()
+                .current_dir(&bare)
+                .args(["worktree", "add", &main.to_string_lossy(), "main"])
+                .output()
+                .unwrap(),
+            "git worktree add main failed",
+        );
+        add_worktree_branch(&bare, &merged, "feature/merged");
+        commit_file(&merged, "merged.txt", "merged\n", "feature merged");
+        merge_branch(&main, "feature/merged");
+
+        run_worktree_command(WorktreeCommand::Prune {
+            path: project.clone(),
+            dry_run: false,
+        })
+        .unwrap();
+
+        assert!(main.exists(), "HEAD branch worktree should stay");
+        assert!(
+            !merged.exists(),
+            "merged feature worktree should be removed"
+        );
 
         let _ = fs::remove_dir_all(base);
     }
