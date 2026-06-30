@@ -54,7 +54,7 @@ document_contract:
 | `owt worktree list` | agent/script가 TUI 없이 worktree 목록 확인 | tab-separated `kind path branch status last_commit ahead behind pr` record를 출력한다 | Git repo가 아니면 오류; `--pr` 실패는 `-` 표시 |
 | `owt worktree create <BRANCH>` | agent/script가 TUI 없이 worktree 생성 | regular repo는 configured root 아래, `.bare` layout은 sibling path에 worktree를 생성한다. `--tmux=on`이면 생성 후 worktree pane을 연다 | branch 중복 checkout, git add 실패 시 오류 |
 | `owt worktree delete <TARGET>` | agent/script가 TUI 없이 worktree 삭제 | branch/name/path로 단일 worktree를 찾아 제거하고 `--branch`면 local branch도 삭제한다 | bare repo 삭제 거부; dirty worktree는 `--force` 없으면 오류 |
-| `owt worktree prune` | agent/script가 stale metadata와 완료된 worktree 정리 | stale metadata를 정리하고, non-current clean worktree 중 branch가 `HEAD`에 merge된 대상만 제거한 뒤 tab-separated 결과를 출력한다 | Git repo가 아니면 오류; dirty/unmerged/current/bare/detached worktree와 branch는 삭제하지 않음 |
+| `owt worktree prune` | agent/script가 stale metadata와 완료된 worktree 정리 | stale metadata를 정리하고, `owt worktree list`가 조회하는 모든 worktree 판단 결과를 tab-separated log로 출력하며, non-current clean worktree 중 branch가 `HEAD`에 merge된 대상만 제거한다. `--dry-run`은 metadata prune을 preview하고 제거 가능한 worktree를 prompt로 확인하되 삭제하지 않는다 | Git repo가 아니면 오류; dirty/unmerged/current/bare/detached worktree와 branch는 삭제하지 않음 |
 | `owt pr status` | agent/script가 GitHub merge/PR 상태 확인 | `gh` 기반으로 `open`, `closed`, `merged`, `draft`, `-` 중 하나를 출력한다 | non-GitHub/auth/network/lookup 실패는 `-` |
 | `owt commit tree` | agent/script가 commit graph 확인 | 현재 worktree의 recent commit graph를 출력한다 | bare repo path면 오류 |
 | `owt search <QUERY>` | agent/script가 worktree 검색 | path/name/branch/status/PR status를 검색하고 list와 같은 record shape을 출력한다 | Git repo가 아니면 오류 |
@@ -142,7 +142,7 @@ user_cases:
 - user-facing flow가 바뀌면 `docs/usage/`와 이 SSOT를 함께 갱신한다.
 - CLI parsing은 default TUI path, `--path`/`-p`, positional path, `clone`, `init`, `setup`, `test-cd`, help/version command를 test로 고정한다.
 - Plain CLI parsing은 `worktree`, `pr`, `commit`, `search` group과 group/action `--help`를 test로 고정한다.
-- Plain CLI stdout은 TUI escape, decorative table, color 없이 tab-separated record로 유지한다. `worktree prune` 제거 출력은 `pruned<TAB>worktree<TAB>branch<TAB>path` shape을 유지한다.
+- Plain CLI stdout은 TUI escape, decorative table, color 없이 tab-separated record로 유지한다. `worktree prune` 제거 출력은 `pruned<TAB>worktree<TAB>branch<TAB>path` shape을 유지하고, 판단 로그는 `pruned<TAB>log<TAB>action<TAB>branch<TAB>path<TAB>reason` shape으로 출력한다.
 - Agent install prompt와 skills를 변경하면 `.agents/`, README, 이 SSOT의 plain CLI 계약을 함께 확인한다.
 - `tmux_worktree_mode`는 worktree 생성 후 pane open과 `Enter` pane focus를 app-level/fake tmux test로 고정한다.
 - `owt clone <URL> [PATH]`는 `.bare` repository와 default branch 첫 worktree를 만드는 integration test로 고정한다.

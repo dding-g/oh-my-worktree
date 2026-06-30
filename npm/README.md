@@ -135,12 +135,15 @@ owt worktree list
 owt worktree create feature/login --base main
 owt worktree delete feature/login --branch --force
 owt worktree prune
+owt worktree prune --dry-run
 owt pr status --branch feature/login
 owt commit tree -n 12
 owt search login
 ```
 
 Agent bootstrap assets are versioned in the repository under `.agents/`: use `.agents/prompts/install-owt.md`, `.agents/skills/owt-install/SKILL.md`, and `.agents/skills/owt-worktree/SKILL.md` so worktree handling goes through `owt`.
+
+`worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose branch is already merged into `HEAD`; `--dry-run` previews stale metadata pruning, prompts through removable candidates, and records selected candidates without deleting them.
 
 ## Shell integration
 

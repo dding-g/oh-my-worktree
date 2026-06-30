@@ -557,14 +557,23 @@ pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool)
 }
 
 pub fn prune_worktrees(bare_repo_path: &Path) -> Result<String> {
+    run_worktree_prune(bare_repo_path, false)
+}
+
+pub fn preview_prune_worktrees(bare_repo_path: &Path) -> Result<String> {
+    run_worktree_prune(bare_repo_path, true)
+}
+
+fn run_worktree_prune(bare_repo_path: &Path, dry_run: bool) -> Result<String> {
+    let bare_repo = bare_repo_path.to_string_lossy();
+    let mut args = vec!["-C", &*bare_repo, "worktree", "prune"];
+    if dry_run {
+        args.push("--dry-run");
+    }
+    args.push("-v");
+
     let output = git_command()
-        .args([
-            "-C",
-            &bare_repo_path.to_string_lossy(),
-            "worktree",
-            "prune",
-            "-v",
-        ])
+        .args(&args)
         .output()
         .context("Failed to prune worktrees")?;
 

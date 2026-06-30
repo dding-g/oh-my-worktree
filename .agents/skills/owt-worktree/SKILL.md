@@ -88,9 +88,10 @@ Prune stale metadata:
 
 ```bash
 owt worktree prune
+owt worktree prune --dry-run
 ```
 
-`owt worktree prune` also removes non-current worktrees when they are clean and their branch has already been merged into `HEAD`. It does not delete branches, dirty worktrees, unmerged worktrees, detached worktrees, bare entries, or the current worktree.
+`owt worktree prune` logs every worktree decision as tab-separated output. It also removes non-current worktrees when they are clean and their branch has already been merged into `HEAD`. `--dry-run` previews metadata pruning, prompts through removable candidates, and records selected candidates without deleting them. It does not delete branches, dirty worktrees, unmerged worktrees, detached worktrees, bare entries, or the current worktree.
 
 ## Guardrails
 

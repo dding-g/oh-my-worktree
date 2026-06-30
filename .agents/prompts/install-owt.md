@@ -19,6 +19,6 @@ Operational rules:
 - Use `owt worktree list/create/delete/prune`, `owt search`, `owt pr status`, and `owt commit tree` for automation.
 - Do not drive the TUI for scripted agent work.
 - Do not use raw `git worktree add/remove/prune` for mutations unless `owt` cannot run and the user explicitly approves the fallback.
-- Parse stdout as tab-separated records. `owt worktree create` prints `created<TAB>branch<TAB>path`.
+- Parse stdout as tab-separated records. `owt worktree create` prints `created<TAB>branch<TAB>path`; `owt worktree prune` prints `pruned<TAB>...` records, including per-worktree logs.
 - Use `--tmux=on` only when the user requests tmux pane creation or the task requires it.
 - Use `--branch` on delete only when the user wants the local branch removed too. Use `--force` only after confirming dirty-worktree risk.
