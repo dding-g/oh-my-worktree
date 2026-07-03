@@ -6,6 +6,49 @@ mod types;
 mod ui;
 mod worktree_prune;
 
+#[cfg(test)]
+mod test_support {
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    pub(crate) fn acquire_test_env_lock() -> MutexGuard<'static, ()> {
+        ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub(crate) struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        pub(crate) fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+            let original = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+
+        pub(crate) fn unset(key: &'static str) -> Self {
+            let original = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(ref value) = self.original {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+}
+
 use anyhow::{Context, Result};
 use config::Config;
 use std::env;
@@ -415,6 +458,12 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
                         eprintln!("warning\t{}", plain_field(&warning));
                     }
                 }
+            }
+
+            if let Err(error) =
+                launch_post_add_script(&config, &context.project_root_path, &target_path)
+            {
+                eprintln!("warning\tpost_add\t{}", plain_field(&error.to_string()));
             }
 
             println!(
@@ -1626,6 +1675,7 @@ Please navigate to a git repository or specify the path with --path."#
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{acquire_test_env_lock, EnvVarGuard};
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -1643,6 +1693,18 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
         path
     }
+
+    #[cfg(unix)]
+    fn make_executable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[cfg(not(unix))]
+    fn make_executable(_path: &Path) {}
 
     fn git_cmd() -> ProcessCommand {
         let mut cmd = ProcessCommand::new("git");
@@ -2245,6 +2307,68 @@ mod tests {
             fs::read_to_string(output_path).unwrap(),
             format!("{}\n", worktree_path.display())
         );
+
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn worktree_create_runs_post_add_script_when_globally_enabled() {
+        let _env_lock = acquire_test_env_lock();
+        let base = temp_dir("worktree_create_post_add");
+        let source = base.join("source-repo");
+        let worktree_path = base.join("feature-cli-post-add");
+        let fake_bin = base.join("bin");
+        let xdg_config_home = base.join("xdg");
+        let tmux_log = base.join("tmux-args.txt");
+        create_source_repo(&source);
+        fs::create_dir_all(source.join(".owt")).unwrap();
+        fs::write(source.join(".owt/post-add.sh"), "#!/bin/sh\n").unwrap();
+        fs::create_dir_all(xdg_config_home.join("owt")).unwrap();
+        fs::write(
+            xdg_config_home.join("owt/config.toml"),
+            "run_post_add_script_in_tmux = true\n",
+        )
+        .unwrap();
+
+        fs::create_dir_all(&fake_bin).unwrap();
+        let fake_tmux = fake_bin.join("tmux");
+        fs::write(
+            &fake_tmux,
+            format!(
+                "#!/bin/sh\nprintf '%s' \"$*\" > '{}'\nexit 0\n",
+                tmux_log.to_string_lossy().replace('\'', "'\\''")
+            ),
+        )
+        .unwrap();
+        make_executable(&fake_tmux);
+
+        let path = if let Some(existing) = std::env::var_os("PATH") {
+            let mut paths = vec![fake_bin.clone()];
+            paths.extend(std::env::split_paths(&existing));
+            std::env::join_paths(paths).unwrap()
+        } else {
+            fake_bin.clone().into_os_string()
+        };
+        let _path_guard = EnvVarGuard::set("PATH", path);
+        let _xdg_guard = EnvVarGuard::set("XDG_CONFIG_HOME", &xdg_config_home);
+
+        run_worktree_command(WorktreeCommand::Create {
+            path: source.clone(),
+            branch: "feature/cli-post-add".to_string(),
+            base: Some("main".to_string()),
+            worktree_path: Some(worktree_path.clone()),
+            tmux: Some(false),
+        })
+        .unwrap();
+
+        let tmux_args = fs::read_to_string(tmux_log).unwrap();
+        assert!(worktree_path.exists());
+        assert!(tmux_args.contains("new-session -d -s owt-post-add-"));
+        assert!(tmux_args.contains(&format!("cd {}", shell_quote(&worktree_path))));
+        assert!(tmux_args.contains(&format!(
+            "sh {}",
+            shell_quote(&source.canonicalize().unwrap().join(".owt/post-add.sh"))
+        )));
 
         let _ = fs::remove_dir_all(base);
     }

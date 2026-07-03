@@ -2220,10 +2220,8 @@ fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
+    use crate::test_support::{acquire_test_env_lock, EnvVarGuard};
     use std::time::{Duration as StdDuration, Instant, SystemTime, UNIX_EPOCH};
-
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     fn temp_dir(name: &str) -> PathBuf {
         let id = std::process::id();
@@ -2235,10 +2233,6 @@ mod tests {
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
         path
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     #[cfg(unix)]
@@ -2447,7 +2441,7 @@ mod tests {
 
     #[test]
     fn enter_worktree_focuses_matching_tmux_pane_in_tmux_mode() {
-        let _guard = env_lock().lock().unwrap();
+        let _env_lock = acquire_test_env_lock();
         let base = temp_dir("enter_tmux_pane_focus");
         let fake_bin = base.join("bin");
         fs::create_dir_all(&fake_bin).unwrap();
@@ -2464,15 +2458,14 @@ mod tests {
         .unwrap();
         make_executable(&fake_tmux);
 
-        let original_path = std::env::var_os("PATH");
-        let path = if let Some(existing) = original_path.as_ref() {
+        let path = if let Some(existing) = std::env::var_os("PATH") {
             let mut paths = vec![fake_bin.clone()];
-            paths.extend(std::env::split_paths(existing));
+            paths.extend(std::env::split_paths(&existing));
             std::env::join_paths(paths).unwrap()
         } else {
             fake_bin.clone().into_os_string()
         };
-        std::env::set_var("PATH", path);
+        let _path_guard = EnvVarGuard::set("PATH", path);
 
         let mut app = test_app(
             vec![test_worktree("feature", WorktreeStatus::Clean)],
@@ -2482,12 +2475,6 @@ mod tests {
         app.config.tmux_worktree_mode = true;
 
         app.enter_worktree();
-
-        if let Some(path) = original_path {
-            std::env::set_var("PATH", path);
-        } else {
-            std::env::remove_var("PATH");
-        }
 
         assert!(app.should_quit);
         assert!(matches!(app.exit_action, ExitAction::Quit));
@@ -2560,7 +2547,7 @@ mod tests {
 
     #[test]
     fn post_add_script_configured_path_execution_launches_configured_script_in_tmux() {
-        let _guard = env_lock().lock().unwrap();
+        let _env_lock = acquire_test_env_lock();
         let base = temp_dir("post_add_script_configured_path_tmux");
         let project_root = base.join("project");
         let worktree_path = base.join("worktree");
@@ -2583,15 +2570,14 @@ mod tests {
         .unwrap();
         make_executable(&fake_tmux);
 
-        let original_path = std::env::var_os("PATH");
-        let path = if let Some(existing) = original_path.as_ref() {
+        let path = if let Some(existing) = std::env::var_os("PATH") {
             let mut paths = vec![fake_bin.clone()];
-            paths.extend(std::env::split_paths(existing));
+            paths.extend(std::env::split_paths(&existing));
             std::env::join_paths(paths).unwrap()
         } else {
             fake_bin.clone().into_os_string()
         };
-        std::env::set_var("PATH", path);
+        let _path_guard = EnvVarGuard::set("PATH", path);
 
         let mut app = test_app(vec![], 0, "/repo/.bare");
         app.project_root_path = project_root.clone();
@@ -2599,12 +2585,6 @@ mod tests {
         app.config.run_post_add_script_in_tmux = true;
 
         app.run_post_add_script(&worktree_path);
-
-        if let Some(path) = original_path {
-            std::env::set_var("PATH", path);
-        } else {
-            std::env::remove_var("PATH");
-        }
 
         let tmux_args = fs::read_to_string(tmux_log).unwrap();
         assert!(tmux_args.contains("new-session -d -s owt-post-add-"));
