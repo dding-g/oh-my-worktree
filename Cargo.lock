@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "oh-my-worktree"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "anyhow",
  "crossterm 0.29.0",
