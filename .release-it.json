@@ -18,9 +18,9 @@
       "cargo test"
     ],
     "after:bump": [
-      "sed -i '' 's/^version = \".*\"/version = \"${version}\"/' Cargo.toml",
-      "sed -i '' 's/\"version\": \".*\"/\"version\": \"${version}\"/' npm/package.json",
-      "cargo check"
+      "node scripts/sync-release-version.js ${version}",
+      "cargo check",
+      "node scripts/sync-release-version.js --check"
     ],
     "after:release": "echo Successfully released ${name} v${version}"
   }

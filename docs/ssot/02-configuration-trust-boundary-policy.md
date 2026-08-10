@@ -54,7 +54,7 @@ config_precedence:
 | `editor` | string | `o` key로 worktree를 열 editor | yes | safe |
 | `terminal` | string | `t` key로 worktree를 열 terminal | yes | safe |
 | `worktree_root` | string | regular repository에서 새 worktree를 만들 root | yes | safe |
-| `copy_files` | array[string] | 새 worktree 생성 후 복사할 파일 목록. 파일만 대상이다. | yes | safe with non-fatal filesystem warnings |
+| `copy_files` | array[string] | 새 worktree 생성 후 복사할 worktree-relative 파일 목록. | yes | path confinement + non-fatal filesystem warnings |
 | `post_add_script` | string | 새 worktree 생성 후 실행할 script path. 상대 path는 현재 effective `project_root_path` 기준이다. | yes | inert unless globally enabled |
 | `tmux_worktree_mode` | bool | 새 worktree pane 생성 및 matching pane focus 여부 | yes | safe tmux UI automation |
 | `run_post_add_script_in_tmux` | bool | post-add script 자동 실행 여부 | no for enabling from project config | trusted global only |
@@ -81,7 +81,7 @@ post_add_script_policy:
 - Project config가 `post_add_script`를 지정해도 자동 실행 권한은 생기지 않는다. 자동 실행은 global config에서 `run_post_add_script_in_tmux = true`로 켠 경우에만 가능하다.
 - `tmux_worktree_mode`는 shell script를 실행하지 않고 tmux pane/window를 조작하는 UI automation이므로 project config가 켜거나 끌 수 있는 safe value다.
 - 나중에 생성된 regular linked worktree 안에서 `owt`를 다시 실행하면 그 worktree 자신의 project config만 발견한다. 부모 directory의 `.owt/config.toml`을 탐색하거나 상속하지 않는다.
-- `copy_files`는 파일 복사 전용이다. 누락된 파일, directory 항목, directory 생성 실패, 복사 실패는 worktree 생성 성공을 취소하지 않고 warning으로 보고한다.
+- `copy_files`는 파일 복사 전용이며 relative `Normal` path component만 허용한다. absolute path, `..`, source root escape, destination symlink는 거부한다. 누락된 파일, directory 항목, directory 생성 실패, 복사 실패는 worktree 생성 성공을 취소하지 않고 warning으로 보고한다.
 
 # 5. Project Config 저장 정책
 
@@ -94,5 +94,6 @@ post_add_script_policy:
 
 - `src/config.rs`를 변경하면 config parsing, save, merge test를 갱신한다.
 - Project config safe override는 `editor`, `terminal`, `worktree_root`, `copy_files`, `post_add_script`, `tmux_worktree_mode`가 적용되고 `run_post_add_script_in_tmux` enable은 무시되는 test로 고정한다.
+- `copy_files` test는 production copy 함수를 직접 호출하며 nested relative path 성공, absolute/parent escape 거부, destination symlink 거부를 고정한다.
 - post-add script 실행 경계를 바꾸면 `docs/reference/configuration.md`, `README.md`, `README.ko.md`, 이 SSOT를 함께 갱신한다.
 - trust boundary 변경은 단순 UX 변경이 아니라 security-sensitive behavior로 취급한다.

@@ -19,10 +19,8 @@ fn git_command() -> Command {
 /// Returns the path to .bare if found
 pub fn find_bare_in_parent(path: &Path) -> Option<PathBuf> {
     let bare_path = path.join(".bare");
-    if bare_path.exists() && bare_path.is_dir() {
-        if is_bare_repo(&bare_path).unwrap_or(false) {
-            return Some(bare_path);
-        }
+    if bare_path.exists() && bare_path.is_dir() && is_bare_repo(&bare_path).unwrap_or(false) {
+        return Some(bare_path);
     }
     None
 }
@@ -125,12 +123,15 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
     for line in output.lines() {
         if line.starts_with("worktree ") {
             if let Some(path) = current_path.take() {
-                let (status, last_commit_time, ahead_behind) = if is_bare {
-                    (WorktreeStatus::Clean, None, None)
+                let (status, last_commit_time, last_commit_timestamp, ahead_behind) = if is_bare {
+                    (WorktreeStatus::Clean, None, None, None)
                 } else {
+                    let (last_commit_time, last_commit_timestamp) =
+                        get_last_commit_info(&path).unwrap_or((None, None));
                     (
-                        get_status(&path).unwrap_or(WorktreeStatus::Clean),
-                        get_last_commit_time(&path).ok(),
+                        get_status(&path).unwrap_or(WorktreeStatus::Unknown),
+                        last_commit_time,
+                        last_commit_timestamp,
                         get_ahead_behind(&path),
                     )
                 };
@@ -140,6 +141,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
                     is_bare,
                     status,
                     last_commit_time,
+                    last_commit_timestamp,
                     ahead_behind,
                     github_pr_status: None,
                 });
@@ -160,12 +162,15 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
 
     // Handle the last worktree
     if let Some(path) = current_path {
-        let (status, last_commit_time, ahead_behind) = if is_bare {
-            (WorktreeStatus::Clean, None, None)
+        let (status, last_commit_time, last_commit_timestamp, ahead_behind) = if is_bare {
+            (WorktreeStatus::Clean, None, None, None)
         } else {
+            let (last_commit_time, last_commit_timestamp) =
+                get_last_commit_info(&path).unwrap_or((None, None));
             (
-                get_status(&path).unwrap_or(WorktreeStatus::Clean),
-                get_last_commit_time(&path).ok(),
+                get_status(&path).unwrap_or(WorktreeStatus::Unknown),
+                last_commit_time,
+                last_commit_timestamp,
                 get_ahead_behind(&path),
             )
         };
@@ -175,6 +180,7 @@ fn parse_worktree_list(output: &str, _bare_repo_path: &Path) -> Result<Vec<Workt
             is_bare,
             status,
             last_commit_time,
+            last_commit_timestamp,
             ahead_behind,
             github_pr_status: None,
         });
@@ -212,6 +218,11 @@ pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
         let index = line.chars().next().unwrap_or(' ');
         let worktree = line.chars().nth(1).unwrap_or(' ');
 
+        if (index, worktree) == ('?', '?') {
+            has_unstaged = true;
+            continue;
+        }
+
         // Check for conflicts (UU, AA, DD, etc.)
         if matches!(
             (index, worktree),
@@ -225,8 +236,8 @@ pub fn get_status(path: &Path) -> Result<WorktreeStatus> {
             has_staged = true;
         }
 
-        // Unstaged changes (worktree has non-space character)
-        if worktree != ' ' && worktree != '?' {
+        // Unstaged changes (including untracked files handled above)
+        if worktree != ' ' {
             has_unstaged = true;
         }
     }
@@ -499,38 +510,23 @@ fn ensure_worktree_is_usable(worktree_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Build command detail string for verbose mode (mirrors add_worktree logic)
-#[cfg(test)]
-pub fn build_add_worktree_command_detail(
-    bare_repo_path: &Path,
-    branch: &str,
-    worktree_path: &Path,
-    base_branch: Option<&str>,
-) -> String {
-    let branch_exists = ref_exists(bare_repo_path, &format!("refs/heads/{}", branch));
-    let remote_branch_exists =
-        ref_exists(bare_repo_path, &format!("refs/remotes/origin/{}", branch));
-    let base_ref = resolve_base_ref(bare_repo_path, base_branch);
-
-    let bare = bare_repo_path.display();
-    let wt = worktree_path.display();
-
-    if branch_exists {
-        format!("git -C {} worktree add {} {}", bare, wt, branch)
-    } else if remote_branch_exists {
-        format!(
-            "git -C {} worktree add --track -b {} {} origin/{}",
-            bare, branch, wt, branch
-        )
-    } else {
-        match base_ref {
-            Some(base) => format!("git -C {} worktree add -b {} {} {}", bare, branch, wt, base),
-            _ => format!("git -C {} worktree add -b {} {}", bare, branch, wt),
+pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool) -> Result<()> {
+    if !force {
+        let status = get_status(worktree_path).with_context(|| {
+            format!(
+                "Refusing to remove worktree because its live status could not be verified: {}",
+                worktree_path.display()
+            )
+        })?;
+        if status != WorktreeStatus::Clean {
+            anyhow::bail!(
+                "Refusing to remove non-clean worktree {} (status: {})",
+                worktree_path.display(),
+                status.label()
+            );
         }
     }
-}
 
-pub fn remove_worktree(bare_repo_path: &Path, worktree_path: &Path, force: bool) -> Result<()> {
     let bare_repo_str = bare_repo_path.to_string_lossy();
     let worktree_str = worktree_path.to_string_lossy();
 
@@ -649,9 +645,15 @@ pub fn fetch_worktree(worktree_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn get_last_commit_time(path: &Path) -> Result<String> {
+fn get_last_commit_info(path: &Path) -> Result<(Option<String>, Option<i64>)> {
     let output = git_command()
-        .args(["-C", &path.to_string_lossy(), "log", "-1", "--format=%ar"])
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "log",
+            "-1",
+            "--format=%ar%x09%ct",
+        ])
         .output()
         .context("Failed to get last commit time")?;
 
@@ -659,7 +661,15 @@ pub fn get_last_commit_time(path: &Path) -> Result<String> {
         anyhow::bail!("Failed to get last commit time");
     }
 
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value = stdout.trim();
+    if value.is_empty() {
+        return Ok((None, None));
+    }
+    let (relative, timestamp) = value
+        .split_once('\t')
+        .context("Git returned malformed last commit metadata")?;
+    Ok((Some(relative.to_string()), timestamp.parse::<i64>().ok()))
 }
 
 pub fn get_worktree_details(path: &Path) -> Result<WorktreeDetails> {
@@ -1099,18 +1109,21 @@ mod tests {
     use super::{
         add_worktree, fetch_remote_branch, get_worktree_details, get_worktree_root,
         github_pr_statuses_for_worktrees, github_pr_statuses_from_gh_template,
-        github_repo_slug_from_remote_url, list_worktrees, remove_completed_pr_worktree,
-        remove_worktree,
+        github_repo_slug_from_remote_url, list_worktrees, parse_worktree_list,
+        remove_completed_pr_worktree, remove_worktree,
     };
     use std::fs;
+    #[cfg(unix)]
     use std::io::Write;
+    #[cfg(unix)]
     use std::os::fd::AsRawFd;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
+    #[cfg(unix)]
     use std::sync::{Mutex, OnceLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::types::GithubPrStatus;
+    use crate::types::{GithubPrStatus, WorktreeStatus};
 
     fn temp_dir(name: &str) -> PathBuf {
         let id = std::process::id();
@@ -1133,7 +1146,7 @@ mod tests {
         cmd
     }
 
-    fn create_test_bare_repo(path: &PathBuf) -> String {
+    fn create_test_bare_repo(path: &Path) -> String {
         let temp = path.parent().unwrap().join("temp_init");
         fs::create_dir_all(&temp).unwrap();
 
@@ -1629,9 +1642,7 @@ mod tests {
             .find(|line| line.contains("Initial commit"))
             .expect("recent commits should include the commit subject");
         assert!(
-            initial_commit
-                .split_whitespace()
-                .any(|token| is_short_commit_date(token)),
+            initial_commit.split_whitespace().any(is_short_commit_date),
             "recent commit should include a short date: {}",
             initial_commit
         );
@@ -1833,7 +1844,7 @@ mod tests {
                 "missing remote branch should be a non-fatal lookup result: {:?}",
                 result
             );
-            assert_eq!(result.unwrap(), false);
+            assert!(!result.unwrap());
         });
 
         assert!(
@@ -1978,6 +1989,52 @@ mod tests {
         );
 
         assert_eq!(statuses, vec![(PathBuf::from("/repo/main"), None)]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn worktree_status_failure_is_reported_as_unknown() {
+        let base = temp_dir("unknown_worktree_status");
+        let missing_path = base.join("missing");
+        let porcelain = format!(
+            "worktree {}\nHEAD deadbeef\nbranch refs/heads/main\n",
+            missing_path.display()
+        );
+
+        let worktrees = parse_worktree_list(&porcelain, &base).unwrap();
+
+        assert_eq!(worktrees.len(), 1);
+        assert_eq!(worktrees[0].status, WorktreeStatus::Unknown);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn remove_worktree_rechecks_and_refuses_dirty_worktree() {
+        let base = temp_dir("refuse_dirty_remove");
+        let source_repo = base.join("source");
+        let worktree_path = base.join("feature");
+        create_test_regular_repo(&source_repo);
+        assert_git_success(
+            &git_in(
+                &source_repo,
+                &[
+                    "worktree",
+                    "add",
+                    "-b",
+                    "feature/dirty",
+                    &worktree_path.to_string_lossy(),
+                ],
+            ),
+            "git worktree add failed",
+        );
+        fs::write(worktree_path.join("uncommitted.txt"), "dirty").unwrap();
+
+        let error = remove_worktree(&source_repo, &worktree_path, false).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("Refusing to remove non-clean worktree"));
+        assert!(worktree_path.exists());
         let _ = fs::remove_dir_all(&base);
     }
 

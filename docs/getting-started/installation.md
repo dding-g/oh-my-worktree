@@ -14,7 +14,7 @@ There are several ways to install owt.
 If you have Rust installed, install the current release directly from the Git tag:
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.14.4 --force
 ```
 
 ## Prebuilt Binaries
@@ -61,7 +61,7 @@ After installation, verify owt is working:
 owt --version
 ```
 
-The current release prints `owt v0.13.0`.
+The current release prints `owt v0.14.4`.
 
 ## Requirements
 

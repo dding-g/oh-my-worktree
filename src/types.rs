@@ -3,6 +3,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorktreeStatus {
     Clean,
+    Unknown,
     Staged,
     Unstaged,
     Conflict,
@@ -32,6 +33,7 @@ impl WorktreeStatus {
     pub fn symbol(&self) -> &'static str {
         match self {
             WorktreeStatus::Clean => "✓",
+            WorktreeStatus::Unknown => "?",
             WorktreeStatus::Staged => "+",
             WorktreeStatus::Unstaged => "~",
             WorktreeStatus::Conflict => "!",
@@ -42,6 +44,7 @@ impl WorktreeStatus {
     pub fn label(&self) -> &'static str {
         match self {
             WorktreeStatus::Clean => "clean",
+            WorktreeStatus::Unknown => "unknown",
             WorktreeStatus::Staged => "staged",
             WorktreeStatus::Unstaged => "unstaged",
             WorktreeStatus::Conflict => "conflict",
@@ -77,6 +80,7 @@ pub struct Worktree {
     pub is_bare: bool,
     pub status: WorktreeStatus,
     pub last_commit_time: Option<String>,
+    pub last_commit_timestamp: Option<i64>,
     pub ahead_behind: Option<AheadBehind>,
     pub github_pr_status: Option<GithubPrStatus>,
 }
@@ -221,7 +225,6 @@ pub struct OpResult {
     pub cmd_detail: String,
     pub worktree_path: PathBuf,
     pub affected_paths: Vec<PathBuf>,
-    pub display_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +243,7 @@ mod tests {
     fn worktree_status_symbols_and_labels_match_contract() {
         let cases = [
             (WorktreeStatus::Clean, "✓", "clean"),
+            (WorktreeStatus::Unknown, "?", "unknown"),
             (WorktreeStatus::Staged, "+", "staged"),
             (WorktreeStatus::Unstaged, "~", "unstaged"),
             (WorktreeStatus::Conflict, "!", "conflict"),
@@ -296,6 +300,7 @@ mod tests {
             is_bare: false,
             status: WorktreeStatus::Clean,
             last_commit_time: None,
+            last_commit_timestamp: None,
             ahead_behind: None,
             github_pr_status: None,
         };

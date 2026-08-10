@@ -73,7 +73,7 @@ These commands follow the GitHub CLI help pattern (`owt <noun> --help`, action-l
 
 Agent bootstrap assets live under `.agents/`: `.agents/prompts/install-owt.md` is the copy/paste setup prompt, `.agents/skills/owt-install/SKILL.md` verifies or installs the CLI, and `.agents/skills/owt-worktree/SKILL.md` directs worktree mutations through `owt worktree ...` instead of raw `git worktree`.
 
-`owt worktree prune` is a cleanup command, not just a `git worktree prune` wrapper: it removes stale metadata and also deletes non-current worktrees only when they are clean and their local branch is already merged into `HEAD`. It never deletes the branch.
+`owt worktree prune` is a cleanup command, not just a `git worktree prune` wrapper: it removes stale metadata and also deletes non-current worktrees only when their live status is clean and their GitHub PR is `merged` or `closed`. Status lookup failures are fail-closed and keep the worktree. It never deletes the branch.
 
 ### Shell Integration
 

@@ -63,7 +63,7 @@ project/
 
 ```bash
 # Install the current release
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.14.4 --force
 
 # Run directly inside an existing regular Git repository
 cd /path/to/regular-git-repo

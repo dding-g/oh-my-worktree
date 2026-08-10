@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod copy_files;
 mod git;
 mod tmux;
 mod types;
@@ -51,6 +52,7 @@ mod test_support {
 
 use anyhow::{Context, Result};
 use config::Config;
+use copy_files::copy_configured_files;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
@@ -188,8 +190,55 @@ fn main() -> Result<()> {
     }
 }
 
+#[cfg(unix)]
+type TuiWriter = std::fs::File;
+#[cfg(not(unix))]
+type TuiWriter = std::io::Stdout;
+
+#[cfg(unix)]
+fn open_tui_writer() -> Result<TuiWriter> {
+    Ok(std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")?)
+}
+
+#[cfg(not(unix))]
+fn open_tui_writer() -> Result<TuiWriter> {
+    Ok(std::io::stdout())
+}
+
+struct TerminalModeGuard;
+
+impl TerminalModeGuard {
+    fn enter() -> Result<Self> {
+        crossterm::terminal::enable_raw_mode()?;
+        let mut control = match open_tui_writer() {
+            Ok(control) => control,
+            Err(error) => {
+                let _ = crossterm::terminal::disable_raw_mode();
+                return Err(error);
+            }
+        };
+        if let Err(error) = crossterm::execute!(control, crossterm::terminal::EnterAlternateScreen)
+        {
+            let _ = crossterm::terminal::disable_raw_mode();
+            return Err(error.into());
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalModeGuard {
+    fn drop(&mut self) {
+        if let Ok(mut control) = open_tui_writer() {
+            let _ = crossterm::execute!(control, crossterm::terminal::LeaveAlternateScreen);
+        }
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+}
+
 fn run_tui(path: PathBuf) -> Result<()> {
-    use std::fs::File;
     use std::io::Write;
 
     // Check if we should write result to a file (for shell integration)
@@ -203,14 +252,8 @@ fn run_tui(path: PathBuf) -> Result<()> {
         }
     };
 
-    // Always use /dev/tty for TUI to support shell integration
-    let tty = File::options().read(true).write(true).open("/dev/tty")?;
-    let mut tty_for_control = tty.try_clone()?;
-
-    crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(tty_for_control, crossterm::terminal::EnterAlternateScreen)?;
-
-    let backend = ratatui::backend::CrosstermBackend::new(tty);
+    let terminal_mode = TerminalModeGuard::enter()?;
+    let backend = ratatui::backend::CrosstermBackend::new(open_tui_writer()?);
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let has_shell_integration = output_file.is_some();
@@ -223,9 +266,8 @@ fn run_tui(path: PathBuf) -> Result<()> {
     )?;
     let result = app.run(&mut terminal);
 
-    // Restore terminal
-    crossterm::execute!(tty_for_control, crossterm::terminal::LeaveAlternateScreen)?;
-    crossterm::terminal::disable_raw_mode()?;
+    drop(terminal);
+    drop(terminal_mode);
 
     let exit_action = app.exit_action.clone();
 
@@ -312,7 +354,7 @@ fn run_post_tui_create_worktree(
     );
 
     let base_branch = Some(request.base_branch.as_str());
-    let _ = git::fetch_remote_branch(&request.bare_repo_path, &request.base_branch);
+    git::fetch_remote_branch(&request.bare_repo_path, &request.base_branch)?;
     git::add_worktree(
         &request.bare_repo_path,
         &request.branch,
@@ -431,7 +473,7 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
             }
 
             if let Some(base_branch) = base.as_deref() {
-                let _ = git::fetch_remote_branch(&context.repo_path, base_branch);
+                git::fetch_remote_branch(&context.repo_path, base_branch)?;
             }
 
             git::add_worktree(&context.repo_path, &branch, &target_path, base.as_deref())?;
@@ -790,36 +832,6 @@ fn print_worktree_record(worktree: &types::Worktree) {
         behind,
         worktree.github_pr_display()
     );
-}
-
-fn copy_configured_files(source: &Path, destination: &Path, files: &[String]) -> Vec<String> {
-    files
-        .iter()
-        .filter_map(|file| {
-            copy_configured_file(source, destination, file)
-                .err()
-                .map(|error| error.to_string())
-        })
-        .collect()
-}
-
-fn copy_configured_file(source: &Path, destination: &Path, file: &str) -> Result<()> {
-    let src = source.join(file);
-    let dst = destination.join(file);
-
-    if !src.exists() {
-        anyhow::bail!("{} source file missing at {}", file, src.display());
-    }
-    if !src.is_file() {
-        anyhow::bail!("{} source is not a file at {}", file, src.display());
-    }
-    if let Some(parent) = dst.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("could not create {}", parent.display()))?;
-    }
-    std::fs::copy(&src, &dst)
-        .with_context(|| format!("could not copy {} to {}", src.display(), dst.display()))?;
-    Ok(())
 }
 
 fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
@@ -1899,7 +1911,7 @@ mod tests {
                 || PathBuf::from("/cwd")
             ),
             Command::Worktree(WorktreeCommand::List { path, include_pr })
-                if path == PathBuf::from("/repo") && include_pr
+                if path == Path::new("/repo") && include_pr
         ));
         assert!(matches!(
             parse_args_from(
@@ -1922,7 +1934,7 @@ mod tests {
                 base,
                 worktree_path,
                 tmux
-            }) if path == PathBuf::from("/cwd")
+            }) if path == Path::new("/cwd")
                 && branch == "feature/login"
                 && base == Some("main".to_string())
                 && worktree_path == Some(PathBuf::from("/tmp/login"))
@@ -2062,7 +2074,7 @@ mod tests {
                 || PathBuf::from("/repo")
             ),
             Command::Pr(PrCommand::Status { path, branch, all: true })
-                if path == PathBuf::from("/repo") && branch == Some("feature/login".to_string())
+                if path == Path::new("/repo") && branch == Some("feature/login".to_string())
         ));
         assert!(matches!(
             parse_args_from(
@@ -2076,7 +2088,7 @@ mod tests {
                 || PathBuf::from("/repo")
             ),
             Command::Commit(CommitCommand::Tree { path, limit: 12 })
-                if path == PathBuf::from("/repo")
+                if path == Path::new("/repo")
         ));
         assert!(matches!(
             parse_args_from(
@@ -2092,7 +2104,7 @@ mod tests {
                 path,
                 query,
                 include_pr: true
-            }) if path == PathBuf::from("/repo") && query == "login"
+            }) if path == Path::new("/repo") && query == "login"
         ));
     }
 
@@ -2308,6 +2320,39 @@ mod tests {
             format!("{}\n", worktree_path.display())
         );
 
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn worktree_create_stops_when_base_branch_fetch_fails() {
+        let base = temp_dir("create_fetch_failure");
+        let source = base.join("source-repo");
+        let worktree_path = base.join("feature-fetch-failure");
+        create_source_repo(&source);
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source)
+                .args([
+                    "remote",
+                    "add",
+                    "origin",
+                    "file:///definitely/missing/owt-review.git",
+                ])
+                .output()
+                .unwrap(),
+            "git remote add failed",
+        );
+
+        let result = run_worktree_command(WorktreeCommand::Create {
+            path: source.clone(),
+            branch: "feature/fetch-failure".to_string(),
+            base: Some("main".to_string()),
+            worktree_path: Some(worktree_path.clone()),
+            tmux: Some(false),
+        });
+
+        assert!(result.is_err());
+        assert!(!worktree_path.exists());
         let _ = fs::remove_dir_all(base);
     }
 

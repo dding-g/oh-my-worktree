@@ -27,10 +27,10 @@ Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, p
 
 ## Install
 
-Current release with Cargo (`v0.13.0`):
+Current release with Cargo (`v0.14.4`):
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.14.4 --force
 ```
 
 Prebuilt binaries are attached to the latest [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest).
@@ -103,14 +103,16 @@ Then use the TUI:
 | `Enter` | Enter the selected worktree |
 | `a` | Add a worktree |
 | `d` | Delete the selected worktree, or selected worktrees when any are checked |
+| `r` / `x` | Refresh the list / prune stale worktree metadata |
 | `f` | Fetch remotes |
-| `p` / `P` | Pull selected worktree(s) / push current worktree |
+| `p` / `P` | Pull selected worktree(s) / push the selected worktree |
 | `m` / `M` | Merge upstream / merge selected branch |
 | `o` / `t` | Open in editor / terminal |
 | `y` | Copy path |
 | `/` | Filter |
 | `s` | Cycle sort mode |
 | `c` | View config |
+| `v` | Toggle verbose Git command details |
 | `?` | Help |
 | `q` | Quit |
 
@@ -119,6 +121,7 @@ Then use the TUI:
 | Signal | Meaning |
 | --- | --- |
 | `✓ clean` | No local changes |
+| `? unknown` | Git status could not be verified; destructive cleanup treats it as unsafe |
 | `+ staged` | Staged changes |
 | `~ unstaged` | Unstaged changes |
 | `! conflict` | Merge conflict |
@@ -190,7 +193,7 @@ Useful options:
 | `editor` | Command used by `o` |
 | `terminal` | Terminal app used by `t` |
 | `worktree_root` | Root for new worktrees in regular repositories |
-| `copy_files` | Files copied into new worktrees. Only files are copied; copy problems are shown as warnings after creation. |
+| `copy_files` | Relative file paths copied into new worktrees. Absolute paths, `..`, and destination symlinks are rejected; copy problems are shown as warnings after creation. |
 | `post_add_script` | Script path for post-add setup. Relative paths use the current effective project root. |
 | `tmux_worktree_mode` | Open a tmux pane in each new worktree and focus an existing matching pane on `Enter`. |
 | `run_post_add_script_in_tmux` | Run the post-add script in detached tmux after creating a worktree. Only global config can enable this. |

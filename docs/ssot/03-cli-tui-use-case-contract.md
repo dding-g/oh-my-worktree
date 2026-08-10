@@ -149,6 +149,6 @@ user_cases:
 - AddModal `Enter`는 background add operation을 시작하지 않고 `ExitAction::CreateWorktree`를 queue한 뒤 TUI를 종료하는 app-level test로 고정한다.
 - `Enter` key는 정상 선택, filter 선택, background operation 중 block, bare repository 선택 거부를 app-level test로 고정한다.
 - Dirty worktree delete guard는 force가 없을 때 delete operation을 시작하지 않는 test로 고정한다.
-- Worktree status symbol/label과 ahead/behind display는 `types` unit test로 고정한다.
+- Worktree status symbol/label(`?`/`unknown` 포함)과 ahead/behind display는 `types` unit test로 고정한다. Git status 조회 실패는 clean으로 축소하지 않고 unknown으로 표시한다.
 - PR column/list metadata는 GitHub remote에서 `open`, `closed`, `merged`, `draft`만 표시하고, PR 없음, non-GitHub remote, auth/network/lookup 실패, unsupported provider, unknown/other 값은 `-`로 표시하는 검증으로 고정한다.
 - PR 조회 실패는 core worktree listing을 실패시키거나 block하지 않는 검증으로 고정한다.

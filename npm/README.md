@@ -17,6 +17,7 @@ Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, p
 ## What you get
 
 - A keyboard-first TUI for browsing and managing worktrees
+- A plain, tab-separated CLI surface for agents and scripts
 - First-class support for existing regular repositories
 - Optional `.bare` project layout for teams that like sibling worktrees
 - Fast worktree creation from local or remote branches
@@ -26,10 +27,10 @@ Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, p
 
 ## Install
 
-Current release with Cargo (`v0.13.0`):
+Current release with Cargo (`v0.14.4`):
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.14.4 --force
 ```
 
 Prebuilt binaries are attached to the latest [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest).
@@ -98,17 +99,20 @@ Then use the TUI:
 | Key | Action |
 | --- | --- |
 | `j` / `k` | Move selection |
+| `Space` | Select/unselect a worktree for batch actions |
 | `Enter` | Enter the selected worktree |
 | `a` | Add a worktree |
-| `d` | Delete a worktree |
+| `d` | Delete the selected worktree, or selected worktrees when any are checked |
+| `r` / `x` | Refresh the list / prune stale worktree metadata |
 | `f` | Fetch remotes |
-| `p` / `P` | Pull / push |
+| `p` / `P` | Pull selected worktree(s) / push the selected worktree |
 | `m` / `M` | Merge upstream / merge selected branch |
 | `o` / `t` | Open in editor / terminal |
 | `y` | Copy path |
 | `/` | Filter |
 | `s` | Cycle sort mode |
 | `c` | View config |
+| `v` | Toggle verbose Git command details |
 | `?` | Help |
 | `q` | Quit |
 
@@ -117,6 +121,7 @@ Then use the TUI:
 | Signal | Meaning |
 | --- | --- |
 | `✓ clean` | No local changes |
+| `? unknown` | Git status could not be verified; destructive cleanup treats it as unsafe |
 | `+ staged` | Staged changes |
 | `~ unstaged` | Unstaged changes |
 | `! conflict` | Merge conflict |
@@ -142,6 +147,12 @@ owt search login
 ```
 
 Agent bootstrap assets are versioned in the repository under `.agents/`: use `.agents/prompts/install-owt.md`, `.agents/skills/owt-install/SKILL.md`, and `.agents/skills/owt-worktree/SKILL.md` so worktree handling goes through `owt`.
+
+`worktree list` and `search` print tab-separated records:
+
+```text
+kind<TAB>path<TAB>branch<TAB>status<TAB>last_commit<TAB>ahead<TAB>behind<TAB>pr
+```
 
 `worktree prune` logs every worktree decision as tab-separated output. Normal mode removes non-current clean worktrees whose GitHub PR status is `merged` or `closed`, except the `HEAD` branch worktree itself; removal runs in parallel and never deletes branches. `--dry-run` previews stale metadata pruning, reviews removable candidates one at a time, and records selected candidates without deleting them.
 
@@ -182,7 +193,7 @@ Useful options:
 | `editor` | Command used by `o` |
 | `terminal` | Terminal app used by `t` |
 | `worktree_root` | Root for new worktrees in regular repositories |
-| `copy_files` | Files copied into new worktrees. Only files are copied; copy problems are shown as warnings after creation. |
+| `copy_files` | Relative file paths copied into new worktrees. Absolute paths, `..`, and destination symlinks are rejected; copy problems are shown as warnings after creation. |
 | `post_add_script` | Script path for post-add setup. Relative paths use the current effective project root. |
 | `tmux_worktree_mode` | Open a tmux pane in each new worktree and focus an existing matching pane on `Enter`. |
 | `run_post_add_script_in_tmux` | Run the post-add script in detached tmux after creating a worktree. Only global config can enable this. |
@@ -197,6 +208,13 @@ Project config in `.owt/config.toml` can override safe values, including `post_a
 | `owt clone <URL> [PATH]` | Clone into the `.bare` layout and create the first worktree |
 | `owt init` | Print a manual conversion guide for `.bare` layout |
 | `owt setup` | Install shell integration |
+| `owt worktree list` | List worktrees as tab-separated records |
+| `owt worktree create <BRANCH>` | Create a worktree without opening the TUI. Use `--tmux=on` to open it in tmux for that run. |
+| `owt worktree delete <TARGET>` | Delete a worktree by branch, name, or path |
+| `owt worktree prune` | Prune stale metadata, log every worktree decision, and remove non-current clean worktrees whose PR status is `merged` or `closed` |
+| `owt pr status` | Check GitHub PR status through `gh` |
+| `owt commit tree` | Print recent commits as a git graph |
+| `owt search <QUERY>` | Search worktrees |
 | `owt --version` | Print version |
 
 ## Requirements

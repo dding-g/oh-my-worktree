@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Helper to create a temporary directory with unique ID
@@ -16,7 +16,7 @@ fn temp_dir(name: &str) -> PathBuf {
 }
 
 /// Helper to clean up test directory
-fn cleanup(path: &PathBuf) {
+fn cleanup(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
@@ -31,7 +31,7 @@ fn git_cmd() -> Command {
 }
 
 /// Create a bare repo with initial commit
-fn create_test_bare_repo(path: &PathBuf) {
+fn create_test_bare_repo(path: &Path) {
     // Create a temp regular repo first
     let temp = path.parent().unwrap().join("temp_init");
     fs::create_dir_all(&temp).unwrap();

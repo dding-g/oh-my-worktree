@@ -21,6 +21,7 @@ Complete list of keyboard shortcuts.
 | `Ctrl+u` | Half page up |
 | `g` | Jump to current worktree |
 | `/` | Search worktrees |
+| `Space` | Select/unselect a worktree for batch actions |
 | `Enter` | Enter worktree (cd) |
 
 ## Worktree Actions
@@ -28,7 +29,8 @@ Complete list of keyboard shortcuts.
 | Key | Action |
 |:----|:-------|
 | `a` | Add new worktree |
-| `d` | Delete worktree |
+| `d` | Delete selected worktree(s) |
+| `x` | Prune stale worktree metadata |
 | `r` | Refresh list |
 | `s` | Cycle sort mode |
 
@@ -37,7 +39,7 @@ Complete list of keyboard shortcuts.
 | Key | Action |
 |:----|:-------|
 | `f` | Fetch remotes |
-| `p` | Pull from remote |
+| `p` | Pull selected worktree(s) from remote |
 | `P` | Push to remote |
 | `m` | Merge upstream |
 | `M` | Merge branch (select) |
@@ -54,6 +56,7 @@ Complete list of keyboard shortcuts.
 | Key | Action |
 |:----|:-------|
 | `y` | Copy path to clipboard |
+| `v` | Toggle verbose Git command details |
 | `c` | Open config modal |
 | `?` | Show help |
 | `q` | Quit |
@@ -75,6 +78,7 @@ Complete list of keyboard shortcuts.
 | `y` / `Enter` | Confirm delete |
 | `n` / `Esc` | Cancel |
 | `b` | Toggle delete branch |
+| `f` | Toggle force delete for dirty worktrees |
 
 ## Config Modal
 

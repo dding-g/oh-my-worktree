@@ -3,6 +3,7 @@
   "version": "0.14.4",
   "private": true,
   "scripts": {
+    "check:release-version": "node scripts/sync-release-version.js --check",
     "release": "release-it",
     "release:patch": "release-it patch",
     "release:minor": "release-it minor",

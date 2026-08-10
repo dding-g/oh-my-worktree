@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::config::Config;
 use crate::git;
@@ -18,6 +18,9 @@ use crate::types::{
 };
 use crate::ui::theme::Theme;
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
+
+const G_SEQUENCE_TIMEOUT: Duration = Duration::from_millis(300);
+type PrStatusResults = Vec<(PathBuf, Option<GithubPrStatus>)>;
 
 pub struct ScriptResult {
     pub success: bool,
@@ -43,16 +46,17 @@ pub struct App {
     pub filter_text: String,                    // Search/filter text
     pub is_filtering: bool,                     // Whether in filter mode
     pub last_key: Option<char>,                 // For gg detection
-    pub sort_mode: SortMode,                    // Current sort mode
-    pub verbose: bool,                          // Show detailed git command output
-    pub last_command_detail: Option<String>,    // Last git command detail for verbose mode
-    pub spinner_tick: usize,                    // Spinner animation tick
-    pub theme: Theme,                           // Active color theme
-    pub viewport_height: Cell<u16>,             // Table viewport height (set during render)
-    pub help_scroll_offset: u16,                // Scroll offset for help modal
-    pub script_status: ScriptStatus,            // Background script status
+    pending_g_since: Option<Instant>,
+    pub sort_mode: SortMode,                 // Current sort mode
+    pub verbose: bool,                       // Show detailed git command output
+    pub last_command_detail: Option<String>, // Last git command detail for verbose mode
+    pub spinner_tick: usize,                 // Spinner animation tick
+    pub theme: Theme,                        // Active color theme
+    pub viewport_height: Cell<u16>,          // Table viewport height (set during render)
+    pub help_scroll_offset: u16,             // Scroll offset for help modal
+    pub script_status: ScriptStatus,         // Background script status
     pub script_receiver: Option<mpsc::Receiver<ScriptResult>>, // Channel for script completion
-    pub pr_status_receiver: Option<mpsc::Receiver<Vec<(PathBuf, Option<GithubPrStatus>)>>>,
+    pub pr_status_receiver: Option<mpsc::Receiver<PrStatusResults>>,
     pub active_op: Option<(OpKind, mpsc::Receiver<OpResult>)>,
     pub active_op_info: Option<ActiveOp>,
     pub selected_details: Option<WorktreeDetails>,
@@ -126,6 +130,7 @@ impl App {
             filter_text: String::new(),
             is_filtering: false,
             last_key: None,
+            pending_g_since: None,
             sort_mode: SortMode::default(),
             verbose: false,
             last_command_detail: None,
@@ -148,6 +153,7 @@ impl App {
 
     pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
         while !self.should_quit {
+            self.resolve_pending_g_if_expired();
             terminal.draw(|frame| self.draw(frame))?;
             self.poll_script_status();
             self.poll_pr_status();
@@ -427,6 +433,12 @@ impl App {
             return;
         }
 
+        if self.last_key == Some('g') && code != KeyCode::Char('g') {
+            self.jump_to_current_worktree();
+            self.last_key = None;
+            self.pending_g_since = None;
+        }
+
         match code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
@@ -451,13 +463,21 @@ impl App {
                 self.last_key = None;
             }
             KeyCode::Char('g') => {
-                // Check for 'gg' (go to top) or single 'g' (go to current worktree)
-                if self.last_key == Some('g') {
+                let is_timely_second_g = self.last_key == Some('g')
+                    && self
+                        .pending_g_since
+                        .map(|started| started.elapsed() < G_SEQUENCE_TIMEOUT)
+                        .unwrap_or(false);
+                if is_timely_second_g {
                     self.move_to_top();
                     self.last_key = None;
+                    self.pending_g_since = None;
                 } else {
-                    // First 'g' press - wait for next key
+                    if self.last_key == Some('g') {
+                        self.jump_to_current_worktree();
+                    }
                     self.last_key = Some('g');
+                    self.pending_g_since = Some(Instant::now());
                 }
             }
             KeyCode::Char('G') => {
@@ -573,13 +593,6 @@ impl App {
                 self.copy_path_to_clipboard();
                 self.last_key = None;
             }
-            KeyCode::Char('0') => {
-                // Go to current worktree (if single g was pressed before, treat as timeout)
-                if self.last_key == Some('g') {
-                    self.jump_to_current_worktree();
-                }
-                self.last_key = None;
-            }
             KeyCode::Esc => {
                 // Clear filter if any
                 if !self.filter_text.is_empty() {
@@ -588,10 +601,6 @@ impl App {
                 self.last_key = None;
             }
             _ => {
-                // If we were waiting for 'g' and got something else
-                if self.last_key == Some('g') {
-                    self.jump_to_current_worktree();
-                }
                 self.last_key = None;
             }
         }
@@ -623,6 +632,19 @@ impl App {
                 self.select_first_filtered_worktree();
             }
             _ => {}
+        }
+    }
+
+    fn resolve_pending_g_if_expired(&mut self) {
+        let expired = self.last_key == Some('g')
+            && self
+                .pending_g_since
+                .map(|started| started.elapsed() >= G_SEQUENCE_TIMEOUT)
+                .unwrap_or(false);
+        if expired {
+            self.jump_to_current_worktree();
+            self.last_key = None;
+            self.pending_g_since = None;
         }
     }
 
@@ -1121,7 +1143,7 @@ impl App {
                         return std::cmp::Ordering::Greater;
                     }
                     // Sort by last commit time (most recent first)
-                    b.last_commit_time.cmp(&a.last_commit_time)
+                    b.last_commit_timestamp.cmp(&a.last_commit_timestamp)
                 });
             }
             SortMode::Status => {
@@ -1139,7 +1161,8 @@ impl App {
                         WorktreeStatus::Mixed => 1,
                         WorktreeStatus::Unstaged => 2,
                         WorktreeStatus::Staged => 3,
-                        WorktreeStatus::Clean => 4,
+                        WorktreeStatus::Unknown => 4,
+                        WorktreeStatus::Clean => 5,
                     };
                     status_order(&a.status).cmp(&status_order(&b.status))
                 });
@@ -1235,113 +1258,7 @@ impl App {
         self.input_buffer.clear();
     }
 
-    #[cfg(test)]
-    fn add_worktree(&mut self) {
-        if self.active_op.is_some() {
-            self.message = Some(AppMessage::error("Another operation is in progress"));
-            self.state = AppState::List;
-            return;
-        }
-
-        let branch = self.input_buffer.trim().to_string();
-        if branch.is_empty() {
-            self.message = Some(AppMessage::error("Branch name cannot be empty"));
-            return;
-        }
-
-        let worktree_path = self.worktree_path_for_branch(&branch);
-        if let Some(existing) = self.conflicting_worktree_for_branch(&branch, &worktree_path) {
-            self.message = Some(AppMessage::error(format!(
-                "Branch '{}' is already checked out at {}. Remove or move that worktree first.",
-                branch,
-                existing.path.display()
-            )));
-            self.state = AppState::List;
-            return;
-        }
-
-        let copy_files = self.config.copy_files.clone();
-        let source_path = self.current_worktree_path.clone().or_else(|| {
-            self.worktrees
-                .iter()
-                .find(|wt| !wt.is_bare)
-                .map(|wt| wt.path.clone())
-        });
-
-        let bare_repo_path = self.bare_repo_path.clone();
-        let worktree_path_for_thread = worktree_path.clone();
-        let worktree_path_for_state = worktree_path.clone();
-        let display_name = branch.clone();
-        let display_name_for_thread = display_name.clone();
-        let display_name_for_state = display_name.clone();
-        let base_branch = self.add_base_branch.clone();
-
-        let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            let base_branch_for_add = Some(base_branch.as_str());
-            let _ = git::fetch_remote_branch(&bare_repo_path, &base_branch);
-
-            let cmd_detail = git::build_add_worktree_command_detail(
-                &bare_repo_path,
-                &branch,
-                &worktree_path_for_thread,
-                base_branch_for_add,
-            );
-
-            let result = git::add_worktree(
-                &bare_repo_path,
-                &branch,
-                &worktree_path_for_thread,
-                base_branch_for_add,
-            );
-
-            let copy_outcomes = if result.is_ok() {
-                source_path
-                    .as_ref()
-                    .map(|source| {
-                        copy_configured_files(source, &worktree_path_for_thread, &copy_files)
-                    })
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-
-            let message = match &result {
-                Ok(()) => append_copy_warnings(
-                    format!("Created worktree: {}", display_name_for_thread),
-                    &copy_outcomes,
-                ),
-                Err(e) => format!("Failed to create: {}", e),
-            };
-
-            let _ = tx.send(OpResult {
-                kind: OpKind::Add,
-                success: result.is_ok(),
-                message,
-                cmd_detail,
-                worktree_path: worktree_path_for_thread.clone(),
-                affected_paths: vec![worktree_path_for_thread.clone()],
-                display_name: display_name_for_thread,
-            });
-        });
-
-        self.state = AppState::List;
-        self.message = Some(AppMessage::info(format!(
-            "Creating worktree: {}{}...",
-            display_name,
-            format!(" (base: {})", self.add_base_branch)
-        )));
-        self.input_buffer.clear();
-        self.active_op = Some((OpKind::Add, rx));
-        self.active_op_info = Some(ActiveOp {
-            kind: OpKind::Add,
-            worktree_path: worktree_path_for_state.clone(),
-            worktree_paths: vec![worktree_path_for_state.clone()],
-            display_name: display_name_for_state,
-        });
-    }
-
-    fn run_post_add_script(&mut self, worktree_path: &PathBuf) {
+    fn run_post_add_script(&mut self, worktree_path: &Path) {
         let script_path = self
             .config
             .resolved_post_add_script_path(&self.project_root_path);
@@ -1515,7 +1432,6 @@ impl App {
                 cmd_detail,
                 worktree_path,
                 affected_paths: deleted,
-                display_name: display_name_for_thread,
             });
         });
 
@@ -1599,7 +1515,9 @@ impl App {
                 return;
             }
 
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             let path = wt.path.clone();
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             let terminal = self.config.get_terminal();
 
             #[cfg(target_os = "macos")]
@@ -1627,9 +1545,8 @@ impl App {
             };
 
             #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-            let result: Result<std::process::ExitStatus, std::io::Error> = Err(
-                std::io::Error::new(std::io::ErrorKind::Other, "Unsupported platform"),
-            );
+            let result: Result<std::process::ExitStatus, std::io::Error> =
+                Err(std::io::Error::other("Unsupported platform"));
 
             match result {
                 Ok(s) if s.success() => {
@@ -1686,7 +1603,6 @@ impl App {
                 cmd_detail: cmd_detail_for_thread,
                 worktree_path: worktree_path_for_thread.clone(),
                 affected_paths: vec![worktree_path_for_thread.clone()],
-                display_name: display_name_for_thread,
             });
         });
 
@@ -1705,12 +1621,12 @@ impl App {
                 self.message = Some(AppMessage::error("Cannot enter bare repository"));
                 return;
             }
-            if self.config.tmux_worktree_mode {
-                if tmux::focus_pane_named(&wt.display_name()).unwrap_or(false) {
-                    self.exit_action = ExitAction::Quit;
-                    self.should_quit = true;
-                    return;
-                }
+            if self.config.tmux_worktree_mode
+                && tmux::focus_pane_named(&wt.display_name()).unwrap_or(false)
+            {
+                self.exit_action = ExitAction::Quit;
+                self.should_quit = true;
+                return;
             }
             // Always allow enter - even without shell integration, we print the path
             // The shell wrapper function (from `owt setup`) will handle the cd
@@ -1762,11 +1678,9 @@ impl App {
             };
 
             #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-            let result: Result<std::process::ExitStatus, std::io::Error> =
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Clipboard not supported on this platform",
-                ));
+            let result: Result<std::process::ExitStatus, std::io::Error> = Err(
+                std::io::Error::other("Clipboard not supported on this platform"),
+            );
 
             match result {
                 Ok(status) if status.success() => {
@@ -1862,7 +1776,6 @@ impl App {
                 cmd_detail,
                 worktree_path,
                 affected_paths: pulled,
-                display_name: display_name_for_thread,
             });
         });
 
@@ -1924,7 +1837,6 @@ impl App {
                 cmd_detail: cmd_detail_for_thread,
                 worktree_path: worktree_path_for_thread.clone(),
                 affected_paths: vec![worktree_path_for_thread.clone()],
-                display_name: display_name_for_thread,
             });
         });
 
@@ -2048,7 +1960,6 @@ impl App {
         }
 
         let display_name = wt.display_name();
-        let display_name_for_thread = display_name.clone();
         let display_name_for_state = display_name.clone();
         let worktree_path = wt.path.clone();
         let worktree_path_for_thread = worktree_path.clone();
@@ -2094,7 +2005,6 @@ impl App {
                 cmd_detail: cmd_detail_for_thread,
                 worktree_path: worktree_path_for_thread.clone(),
                 affected_paths: vec![worktree_path_for_thread.clone()],
-                display_name: display_name_for_thread,
             });
         });
 
@@ -2105,85 +2015,6 @@ impl App {
             worktree_paths: vec![worktree_path_for_state.clone()],
             display_name: display_name_for_state,
         });
-    }
-}
-
-#[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
-enum CopyFileOutcome {
-    Copied { file: String },
-    Warning { file: String, reason: String },
-}
-
-#[cfg(test)]
-fn copy_configured_files(
-    source: &Path,
-    destination: &Path,
-    files: &[String],
-) -> Vec<CopyFileOutcome> {
-    files
-        .iter()
-        .map(|file| copy_configured_file(source, destination, file))
-        .collect()
-}
-
-#[cfg(test)]
-fn copy_configured_file(source: &Path, destination: &Path, file: &str) -> CopyFileOutcome {
-    let src = source.join(file);
-    let dst = destination.join(file);
-
-    if !src.exists() {
-        return CopyFileOutcome::Warning {
-            file: file.to_string(),
-            reason: format!("source file missing at {}", src.display()),
-        };
-    }
-
-    if !src.is_file() {
-        return CopyFileOutcome::Warning {
-            file: file.to_string(),
-            reason: format!("source is not a file at {}", src.display()),
-        };
-    }
-
-    if let Some(parent) = dst.parent() {
-        if let Err(error) = fs::create_dir_all(parent) {
-            return CopyFileOutcome::Warning {
-                file: file.to_string(),
-                reason: format!(
-                    "could not create destination parent {}: {}",
-                    parent.display(),
-                    error
-                ),
-            };
-        }
-    }
-
-    match fs::copy(&src, &dst) {
-        Ok(_) => CopyFileOutcome::Copied {
-            file: file.to_string(),
-        },
-        Err(error) => CopyFileOutcome::Warning {
-            file: file.to_string(),
-            reason: format!("could not copy to {}: {}", dst.display(), error),
-        },
-    }
-}
-
-#[cfg(test)]
-fn append_copy_warnings(message: String, outcomes: &[CopyFileOutcome]) -> String {
-    let warnings: Vec<String> = outcomes
-        .iter()
-        .filter_map(|outcome| match outcome {
-            CopyFileOutcome::Warning { file, reason } => Some(format!("{} ({})", file, reason)),
-            CopyFileOutcome::Copied { .. } => None,
-        })
-        .collect();
-
-    if warnings.is_empty() {
-        message
-    } else {
-        format!("{}\nCopy warnings:\n- {}", message, warnings.join("\n- "))
     }
 }
 
@@ -2221,7 +2052,7 @@ fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::test_support::{acquire_test_env_lock, EnvVarGuard};
-    use std::time::{Duration as StdDuration, Instant, SystemTime, UNIX_EPOCH};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     fn temp_dir(name: &str) -> PathBuf {
         let id = std::process::id();
@@ -2343,18 +2174,6 @@ mod tests {
         (bare_path, main_path)
     }
 
-    fn wait_for_background_op(app: &mut App) {
-        let deadline = Instant::now() + StdDuration::from_secs(5);
-        while app.active_op.is_some() {
-            app.poll_background_op();
-            if app.active_op.is_none() {
-                break;
-            }
-            assert!(Instant::now() < deadline, "background operation timed out");
-            std::thread::sleep(StdDuration::from_millis(20));
-        }
-    }
-
     fn test_app(worktrees: Vec<Worktree>, selected_index: usize, bare_repo_path: &str) -> App {
         App {
             worktrees,
@@ -2375,6 +2194,7 @@ mod tests {
             filter_text: String::new(),
             is_filtering: false,
             last_key: None,
+            pending_g_since: None,
             sort_mode: SortMode::default(),
             verbose: false,
             last_command_detail: None,
@@ -2399,9 +2219,65 @@ mod tests {
             is_bare: false,
             status,
             last_commit_time: None,
+            last_commit_timestamp: None,
             ahead_behind: None,
             github_pr_status: None,
         }
+    }
+
+    #[test]
+    fn recent_sort_uses_numeric_commit_timestamp() {
+        let mut older = test_worktree("older", WorktreeStatus::Clean);
+        older.last_commit_time = Some("1 hour ago".to_string());
+        older.last_commit_timestamp = Some(100);
+        let mut newer = test_worktree("newer", WorktreeStatus::Clean);
+        newer.last_commit_time = Some("2 days ago".to_string());
+        newer.last_commit_timestamp = Some(200);
+        let mut app = test_app(vec![older, newer], 0, "/repo/.bare");
+        app.sort_mode = SortMode::Recent;
+
+        app.apply_sort();
+
+        assert_eq!(app.worktrees[0].branch.as_deref(), Some("newer"));
+        assert_eq!(app.worktrees[1].branch.as_deref(), Some("older"));
+    }
+
+    #[test]
+    fn single_g_jumps_to_current_worktree_after_timeout() {
+        let mut app = test_app(
+            vec![
+                test_worktree("current", WorktreeStatus::Clean),
+                test_worktree("other", WorktreeStatus::Clean),
+            ],
+            1,
+            "/repo/.bare",
+        );
+        app.current_worktree_path = Some(PathBuf::from("/repo/current"));
+
+        app.handle_list_input(KeyCode::Char('g'), KeyModifiers::NONE);
+        app.pending_g_since = Some(Instant::now() - G_SEQUENCE_TIMEOUT);
+        app.resolve_pending_g_if_expired();
+
+        assert_eq!(app.selected_index, 0);
+        assert!(app.last_key.is_none());
+    }
+
+    #[test]
+    fn timely_gg_moves_to_top() {
+        let mut app = test_app(
+            vec![
+                test_worktree("first", WorktreeStatus::Clean),
+                test_worktree("second", WorktreeStatus::Clean),
+            ],
+            1,
+            "/repo/.bare",
+        );
+
+        app.handle_list_input(KeyCode::Char('g'), KeyModifiers::NONE);
+        app.handle_list_input(KeyCode::Char('g'), KeyModifiers::NONE);
+
+        assert_eq!(app.selected_index, 0);
+        assert!(app.last_key.is_none());
     }
 
     #[test]
@@ -2604,6 +2480,7 @@ mod tests {
                 is_bare: false,
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],
@@ -2629,6 +2506,7 @@ mod tests {
                 is_bare: false,
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],
@@ -2737,7 +2615,6 @@ mod tests {
             cmd_detail: String::new(),
             worktree_path: feature_path.clone(),
             affected_paths: vec![feature_path.clone()],
-            display_name: "feature/enter-after-create".to_string(),
         });
         app.enter_worktree();
 
@@ -2754,82 +2631,6 @@ mod tests {
     }
 
     #[test]
-    fn copy_files_nested_branch() {
-        let base = temp_dir("copy_files_nested_branch");
-        let (bare_path, main_path) = create_test_project(&base);
-        let project_root = bare_path.parent().unwrap().to_path_buf();
-        let branch = "feature/copy-files-nested";
-        let worktree_path = project_root.join("feature").join("copy-files-nested");
-
-        fs::create_dir_all(main_path.join("config")).unwrap();
-        fs::write(main_path.join("config/local.env"), "TOKEN=secret\n").unwrap();
-
-        let mut app = App::new(
-            bare_path.clone(),
-            project_root.clone(),
-            true,
-            Some(main_path.clone()),
-            true,
-        )
-        .unwrap();
-        app.config.copy_files = vec!["config/local.env".to_string()];
-        app.input_buffer = branch.to_string();
-
-        app.add_worktree();
-        wait_for_background_op(&mut app);
-
-        assert!(worktree_path.exists());
-        assert_eq!(
-            fs::read_to_string(worktree_path.join("config/local.env")).unwrap(),
-            "TOKEN=secret\n"
-        );
-        let message = app.message.as_ref().unwrap();
-        assert!(!message.is_error);
-        assert!(message
-            .text
-            .contains("Created worktree: feature/copy-files-nested"));
-        assert!(!message.text.contains("Copy warnings:"));
-
-        let _ = fs::remove_dir_all(base);
-    }
-
-    #[test]
-    fn copy_files_missing() {
-        let base = temp_dir("copy_files_missing");
-        let (bare_path, main_path) = create_test_project(&base);
-        let project_root = bare_path.parent().unwrap().to_path_buf();
-        let branch = "feature/copy-files-missing";
-        let worktree_path = project_root.join("feature").join("copy-files-missing");
-
-        let mut app = App::new(
-            bare_path.clone(),
-            project_root.clone(),
-            true,
-            Some(main_path),
-            true,
-        )
-        .unwrap();
-        app.config.copy_files = vec![".env.missing".to_string()];
-        app.input_buffer = branch.to_string();
-
-        app.add_worktree();
-        wait_for_background_op(&mut app);
-
-        assert!(worktree_path.exists());
-        assert!(!worktree_path.join(".env.missing").exists());
-        let message = app.message.as_ref().unwrap();
-        assert!(!message.is_error);
-        assert!(message
-            .text
-            .contains("Created worktree: feature/copy-files-missing"));
-        assert!(message.text.contains("Copy warnings:"));
-        assert!(message.text.contains(".env.missing"));
-        assert!(message.text.contains("source file missing"));
-
-        let _ = fs::remove_dir_all(base);
-    }
-
-    #[test]
     fn enter_is_blocked_while_background_operation_is_running() {
         let (_tx, rx) = mpsc::channel();
         let mut app = test_app(
@@ -2839,6 +2640,7 @@ mod tests {
                 is_bare: false,
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],
@@ -2866,6 +2668,7 @@ mod tests {
                 is_bare: true,
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],
@@ -2892,6 +2695,7 @@ mod tests {
                 is_bare: false,
                 status: WorktreeStatus::Unstaged,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],
@@ -3030,6 +2834,7 @@ mod tests {
                     is_bare: false,
                     status: WorktreeStatus::Clean,
                     last_commit_time: None,
+                    last_commit_timestamp: None,
                     ahead_behind: None,
                     github_pr_status: None,
                 },
@@ -3039,6 +2844,7 @@ mod tests {
                     is_bare: false,
                     status: WorktreeStatus::Clean,
                     last_commit_time: None,
+                    last_commit_timestamp: None,
                     ahead_behind: None,
                     github_pr_status: None,
                 },
@@ -3072,6 +2878,7 @@ mod tests {
                 is_bare: false,
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],
@@ -3102,6 +2909,7 @@ mod tests {
                 is_bare: false,
                 status: WorktreeStatus::Clean,
                 last_commit_time: None,
+                last_commit_timestamp: None,
                 ahead_behind: None,
                 github_pr_status: None,
             }],

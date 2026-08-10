@@ -46,7 +46,7 @@ run_post_add_script_in_tmux = false
 | `editor` | string | Editor command to open worktrees |
 | `terminal` | string | Terminal app name (macOS) or command (Linux) |
 | `worktree_root` | string | Root directory for new worktrees from regular non-bare repositories. Defaults to `~/.owt/worktree` |
-| `copy_files` | array | Files to copy to new worktrees. Only files are copied. Missing files, directories, and copy errors become warnings after the worktree is created. |
+| `copy_files` | array | Relative file paths to copy to new worktrees. Absolute paths, `..` components, source escapes, and destination symlinks are rejected. Missing files, directories, and copy errors become warnings after creation. |
 | `post_add_script` | string | Script to run after creating a worktree. Relative paths resolve from the current effective project root. Absolute paths are used as-is after path expansion. |
 | `tmux_worktree_mode` | boolean | Open a tmux pane in each new worktree and, on `Enter`, focus an existing pane whose title matches the worktree name. Project config may enable or disable this. |
 | `run_post_add_script_in_tmux` | boolean | Run the post-add script in tmux after creating a worktree. This must be enabled from global config; project config cannot enable script auto-run. |

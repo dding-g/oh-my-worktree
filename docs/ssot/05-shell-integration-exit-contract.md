@@ -50,12 +50,15 @@ output_file_policy:
 
 # 4. TTY 정책
 
-TUI는 shell integration과 함께 동작해야 하므로 stdin/stdout redirection에 의존하지 않고 `/dev/tty`를 사용한다.
+TUI는 shell integration과 함께 동작해야 한다. Unix에서는 stdin/stdout redirection과 분리된 `/dev/tty`를 사용하고, Windows에서는 crossterm이 지원하는 console stdout writer를 사용한다.
 
 ```yaml
 tty_policy:
-  tui_io: /dev/tty
+  tui_io:
+    unix: /dev/tty
+    windows: console_stdout
   reason: "shell function이 stdout을 path handoff에 사용할 수 있으므로 TUI drawing은 real terminal에 붙어야 한다."
+  cleanup: "RAII guard가 startup/runtime error를 포함한 모든 return path에서 alternate screen과 raw mode를 복구한다."
 ```
 
 # 5. `owt setup` 정책
