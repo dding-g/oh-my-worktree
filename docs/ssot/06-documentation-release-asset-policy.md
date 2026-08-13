@@ -26,6 +26,7 @@ document_contract:
     - documentation_sync_policy
     - package_readme_positioning_policy
     - homepage_asset_policy
+    - homepage_language_policy
     - release_version_file_policy
   not_source_of_truth_for:
     - changelog prose
@@ -95,3 +96,7 @@ release_version_files:
 - GitHub Pages/Jekyll local build는 dependency가 설치된 경우에만 필수로 본다.
 - release asset을 옮기면 `docs/index.html`, `docs/site.webmanifest`, favicon references를 함께 확인한다.
 - homepage screenshot이나 favicon 변경은 source archive와 published asset의 목적을 commit message나 compound doc에 남긴다.
+- `docs/index.html` homepage는 English와 Korean을 모두 제공한다. 초기 언어는 저장된 사용자 선택을 우선하고, 선택이 없을 때 browser language를 사용한다.
+- 언어 전환은 URL reload 없이 `html[lang]`과 접근 가능한 toggle label을 함께 갱신해야 하며, 사용자가 명시적으로 선택한 언어는 `localStorage`에 유지한다.
+- homepage의 핵심 navigation, hero, primary CTA, screenshot caption, section heading은 한·영 동일한 product claim을 제공해야 한다. command, path, option, code identifier는 번역하지 않는다.
+- homepage 문구나 release version을 변경하면 English/Korean 전환 상태, dark/light theme toggle, copy button, mobile header에서 함께 동작하는지 확인한다.
