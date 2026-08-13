@@ -20,12 +20,12 @@ The release workflow verifies version mirrors on every release target. Windows c
 
 ## Rule
 
-Any `Cargo.lock` parser in `scripts/sync-release-version.js` must accept both `\n` and `\r\n`. Use `\r?\n` in structural regexes rather than assuming an LF-only checkout.
+Any `Cargo.lock` parser in `scripts/sync-release-version.js` must accept both `\n` and `\r\n`. Use `\r?\n` in structural regexes rather than assuming an LF-only checkout. JSON version serialization must preserve the source file's line ending as well; otherwise a Windows `--check` falsely reports a synchronized JSON file as stale.
 
 ## Validation
 
 - Run `node scripts/sync-release-version.js v<version> --check` locally.
-- Run an in-memory CRLF variant of the `Cargo.lock` package-header pattern.
+- Run an in-memory CRLF variant of the `Cargo.lock` package-header pattern and JSON serializer.
 - Keep the Windows target in `.github/workflows/release.yml`; release verification must happen before compilation.
 
 ## Related

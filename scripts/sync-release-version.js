@@ -43,7 +43,8 @@ function updateJsonVersion(relativePath) {
   stage(relativePath, (current) => {
     const value = JSON.parse(current);
     value.version = version;
-    return `${JSON.stringify(value, null, 2)}\n`;
+    const lineEnding = current.includes('\r\n') ? '\r\n' : '\n';
+    return `${JSON.stringify(value, null, 2).replace(/\n/g, lineEnding)}${lineEnding}`;
   });
 }
 

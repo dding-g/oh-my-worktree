@@ -100,4 +100,4 @@ release_version_files:
 - 언어 전환은 URL reload 없이 `html[lang]`과 접근 가능한 toggle label을 함께 갱신해야 하며, 사용자가 명시적으로 선택한 언어는 `localStorage`에 유지한다.
 - homepage의 핵심 navigation, hero, primary CTA, screenshot caption, section heading은 한·영 동일한 product claim을 제공해야 한다. command, path, option, code identifier는 번역하지 않는다.
 - homepage 문구나 release version을 변경하면 English/Korean 전환 상태, dark/light theme toggle, copy button, mobile header에서 함께 동작하는지 확인한다.
-- `scripts/sync-release-version.js`는 Windows CRLF checkout에서도 `Cargo.lock` package version을 검사해야 한다. release workflow의 Windows verify step은 cross-platform release contract의 일부다.
+- `scripts/sync-release-version.js`는 Windows CRLF checkout에서도 `Cargo.lock` package version을 검사하고 JSON version file의 원래 line ending을 보존해야 한다. release workflow의 Windows verify step은 cross-platform release contract의 일부다.
