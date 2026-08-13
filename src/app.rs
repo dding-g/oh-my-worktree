@@ -74,6 +74,9 @@ pub struct App {
     pub add_modal_field: AddModalField,
     pub add_worktree_path: String,
     pub add_tmux_override: Option<bool>,
+    pub clone_url: String,
+    pub clone_path: String,
+    pub clone_path_editing: bool,
     pub cleanup_preview: Option<crate::worktree_prune::PruneReport>,
 }
 
@@ -170,6 +173,9 @@ impl App {
             add_modal_field: AddModalField::default(),
             add_worktree_path: String::new(),
             add_tmux_override: None,
+            clone_url: String::new(),
+            clone_path: String::new(),
+            clone_path_editing: false,
             cleanup_preview: None,
         };
         app.update_selected_details();
@@ -585,6 +591,14 @@ impl App {
                 main_view::render(frame, self);
                 help_modal::render(frame, self);
             }
+            AppState::CloneModal => {
+                main_view::render(frame, self);
+                crate::ui::clone_modal::render(frame, self);
+            }
+            AppState::AboutModal => {
+                main_view::render(frame, self);
+                crate::ui::about_modal::render(frame, self);
+            }
             AppState::PrStatusModal => {
                 main_view::render(frame, self);
                 crate::ui::pr_status_modal::render(frame, self);
@@ -625,6 +639,8 @@ impl App {
                             editing,
                         } => self.handle_config_modal_input(key.code, selected_index, editing),
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
+                        AppState::CloneModal => self.handle_clone_modal_input(key.code),
+                        AppState::AboutModal => self.handle_about_modal_input(key.code),
                         AppState::PrStatusModal => self.handle_pr_status_modal_input(key.code),
                         AppState::CommitTreeModal => self.handle_commit_tree_modal_input(key.code),
                         AppState::MergeBranchSelect { branches, selected } => {
@@ -727,6 +743,27 @@ impl App {
             KeyCode::Char('a') => {
                 self.state = AppState::AddModal;
                 self.input_buffer.clear();
+                self.last_key = None;
+            }
+            KeyCode::Char('N') => {
+                self.clone_url.clear();
+                self.clone_path.clear();
+                self.clone_path_editing = false;
+                self.state = AppState::CloneModal;
+                self.last_key = None;
+            }
+            KeyCode::Char('I') => {
+                self.exit_action = ExitAction::ShowInitGuide(self.project_root_path.clone());
+                self.should_quit = true;
+                self.last_key = None;
+            }
+            KeyCode::Char('S') => {
+                self.exit_action = ExitAction::InstallShellSetup;
+                self.should_quit = true;
+                self.last_key = None;
+            }
+            KeyCode::Char('V') => {
+                self.state = AppState::AboutModal;
                 self.last_key = None;
             }
             KeyCode::Char('d') => {
@@ -929,6 +966,42 @@ impl App {
         match self.add_modal_field {
             AddModalField::Branch => &mut self.input_buffer,
             AddModalField::WorktreePath => &mut self.add_worktree_path,
+        }
+    }
+
+    fn handle_clone_modal_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => self.state = AppState::List,
+            KeyCode::Tab => self.clone_path_editing = !self.clone_path_editing,
+            KeyCode::Enter if !self.clone_url.trim().is_empty() => {
+                self.exit_action = ExitAction::CloneWorkspace {
+                    url: self.clone_url.trim().to_string(),
+                    path: (!self.clone_path.trim().is_empty())
+                        .then(|| PathBuf::from(self.clone_path.trim())),
+                };
+                self.should_quit = true;
+            }
+            KeyCode::Backspace => {
+                if self.clone_path_editing {
+                    self.clone_path.pop();
+                } else {
+                    self.clone_url.pop();
+                }
+            }
+            KeyCode::Char(value) => {
+                if self.clone_path_editing {
+                    self.clone_path.push(value);
+                } else {
+                    self.clone_url.push(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_about_modal_input(&mut self, code: KeyCode) {
+        if matches!(code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('V')) {
+            self.state = AppState::List;
         }
     }
 
@@ -2572,6 +2645,9 @@ mod tests {
             add_modal_field: AddModalField::default(),
             add_worktree_path: String::new(),
             add_tmux_override: None,
+            clone_url: String::new(),
+            clone_path: String::new(),
+            clone_path_editing: false,
             cleanup_preview: None,
         }
     }
@@ -2957,6 +3033,34 @@ mod tests {
     }
 
     #[test]
+    fn repository_tui_exposes_clone_init_setup_and_about_entry_points() {
+        let mut app = test_app(
+            vec![test_worktree("main", WorktreeStatus::Clean)],
+            0,
+            "/repo/.bare",
+        );
+
+        app.handle_list_input(KeyCode::Char('N'), KeyModifiers::NONE);
+        assert!(matches!(app.state, AppState::CloneModal));
+        app.handle_clone_modal_input(KeyCode::Char('h'));
+        app.handle_clone_modal_input(KeyCode::Enter);
+        assert!(matches!(app.exit_action, ExitAction::CloneWorkspace { .. }));
+
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.handle_list_input(KeyCode::Char('I'), KeyModifiers::NONE);
+        assert!(matches!(app.exit_action, ExitAction::ShowInitGuide(_)));
+        assert!(app.should_quit);
+
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.handle_list_input(KeyCode::Char('S'), KeyModifiers::NONE);
+        assert!(matches!(app.exit_action, ExitAction::InstallShellSetup));
+
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.handle_list_input(KeyCode::Char('V'), KeyModifiers::NONE);
+        assert!(matches!(app.state, AppState::AboutModal));
+    }
+
+    #[test]
     fn non_bare_worktree_path_uses_configurable_root_and_repo_namespace() {
         let mut app = test_app(vec![], 0, "/repo");
         app.repo_is_bare = false;
@@ -3034,6 +3138,7 @@ mod tests {
             ExitAction::CloneWorkspace { .. } | ExitAction::InstallShellSetup => {
                 panic!("enter should not trigger a global action")
             }
+            ExitAction::ShowInitGuide(_) => panic!("enter should not trigger an init guide"),
         }
         assert!(app.should_quit);
 
@@ -3275,6 +3380,9 @@ mod tests {
             ExitAction::CreateWorktree(_) => panic!("filter enter should not create a worktree"),
             ExitAction::CloneWorkspace { .. } | ExitAction::InstallShellSetup => {
                 panic!("filter enter should not trigger a global action")
+            }
+            ExitAction::ShowInitGuide(_) => {
+                panic!("filter enter should not trigger an init guide")
             }
         }
         assert!(!app.is_filtering);

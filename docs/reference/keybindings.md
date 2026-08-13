@@ -45,6 +45,9 @@ Complete list of keyboard shortcuts.
 | `M` | Merge branch (select) |
 | `R` | Query PR status for selected worktree, all worktrees, or an arbitrary branch |
 | `C` | Browse selected worktree commit tree; `+`/`-` changes the limit |
+| `N` | Clone a `.bare` workspace after terminal restore |
+| `I` / `S` | Show the current repository init guide / run shell setup after terminal restore |
+| `V` | Show About/version |
 
 ## External Apps
 

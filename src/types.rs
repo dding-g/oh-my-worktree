@@ -128,6 +128,8 @@ pub enum AppState {
         editing: bool,
     },
     HelpModal,
+    CloneModal,
+    AboutModal,
     PrStatusModal,
     CommitTreeModal,
     /// Branch selection for merge
@@ -145,6 +147,7 @@ pub enum ExitAction {
     CreateWorktree(WorktreeCreateRequest),
     CloneWorkspace { url: String, path: Option<PathBuf> },
     InstallShellSetup,
+    ShowInitGuide(PathBuf),
 }
 
 #[derive(Debug, Clone)]

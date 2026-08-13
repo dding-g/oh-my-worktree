@@ -91,19 +91,19 @@ No other GA CLI command is exempt without owner, rationale, and review condition
 | ID | CLI semantic capability | Current TUI state | Target TUI equivalent | Horizon |
 |---|---|---|---|---|
 | C01 | Open/list repository worktrees | Full | list view and refresh | H0 |
-| C02 | Clone `.bare` workspace | Full in working tree | global home → clone flow | H5 |
-| C03 | Show init conversion guide | Full in working tree | global home → guide entry | H5 |
-| C04 | Install shell setup | Full in working tree | global home → setup execute/result | H5 |
+| C02 | Clone `.bare` workspace | Full in working tree | Global Home or repository `N` → clone flow | H5 |
+| C03 | Show init conversion guide | Full in working tree | Global Home entry or repository `I` → current repo guide | H5 |
+| C04 | Install shell setup | Full in working tree | Global Home or repository `S` → setup execute/result | H5 |
 | C05 | Create with base/path/tmux | Full in working tree | progressive add flow; explicit path and per-create tmux override | H3 |
 | C06 | Delete with force/branch | Full | batch-capable confirm flow | H0 |
 | C07 | Prune completed-PR worktrees | Full in working tree | cleanup preview + confirm | H1 |
 | C08 | Check PR status by selected/arbitrary/all branch | Full in working tree | PR detail/query modal | H4 |
 | C09 | Browse commit tree with limit | Full in working tree | full-screen tree with adjustable limit | H4 |
 | C10 | Search path/name/branch/status/PR | Full in working tree | unified search mode | H2 |
-| C11 | Browse CLI help | Full in working tree | global CLI help browser | H5 |
-| C12 | Show version/about | Full in working tree | Global Home About modal | H5 |
+| C11 | Browse CLI help | Full in working tree | contextual TUI help plus Global Home CLI command browser | H5 |
+| C12 | Show version/about | Full in working tree | Global Home or repository `V` About modal | H5 |
 
-Target state after H5: C01–C12 are Full, and C05/C07 are committed rather than only present locally.
+Target state after H5: C01–C12 are Full. This is reached in the working tree; final release audit verifies all documented entry points and gates.
 
 ## 7. Architecture decision
 

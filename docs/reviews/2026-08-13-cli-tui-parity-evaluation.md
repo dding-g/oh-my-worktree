@@ -87,27 +87,27 @@ status: additional-validation-with-architecture-decision
 | CLI capability | CLI surface | TUI equivalent | 판정 | Gap |
 |---|---|---|---|---|
 | repository context/list | `owt [PATH]`, `worktree list [--pr]` | launch context, table, automatic PR refresh | Full | output shape는 surface-specific |
-| clone `.bare` workspace | `owt clone` | 없음 | Missing | repo 밖에서도 열리는 global home/clone flow 필요 |
-| init conversion guide | `owt init` | 없음 | Missing | read-only guide modal/action 필요 |
-| shell setup | `owt setup` | tip message만 있음 | Partial | setup 실행/preview/결과 UI 없음 |
+| clone `.bare` workspace | `owt clone` | Global Home 또는 repository `N` clone modal | Full in working tree | terminal 복원 뒤 shared CLI clone action |
+| init conversion guide | `owt init` | Global Home entry 또는 repository `I` | Full in working tree | repository entry는 current project root로 CLI guide 실행 |
+| shell setup | `owt setup` | Global Home 또는 repository `S` | Full in working tree | terminal 복원 뒤 CLI setup action |
 | worktree create | `worktree create --base --worktree-path --tmux` | add modal + base/path/tmux override | Full in working tree | `Ctrl+p` explicit path, `Ctrl+t` default/on/off; shared orchestration extraction은 후속 |
 | worktree delete | `delete --force --branch` | confirm modal의 force/branch toggle, batch 확장 | Full | TUI가 batch superset 제공 |
 | completed-PR prune | `prune [--dry-run]` | `x` cleanup preview + confirm | **Full** | shared core와 live safety recheck를 사용; CLI dry-run의 terminal prompt는 TUI explicit confirm으로 표현 |
 | PR status | `pr status --branch/--all` | `R` PR detail/query modal | Full in working tree | selected/all/arbitrary branch를 background query |
 | commit graph | `commit tree -n` | `C` full-screen commit tree | Full in working tree | background query, `+`/`-` limit 조절 |
 | search | `search [--pr]` across path/name/branch/status/PR | `/` unified filter | Full in working tree | shared matcher가 path/name/branch/status/PR label을 처리 |
-| help | `--help`와 command/action help | keybinding help | Partial | CLI command help를 탐색하는 UI 없음 |
-| version | `--version` | 없음 | Missing | About/version UI 없음 |
+| help | `--help`와 command/action help | contextual keybinding help + Global Home command browser | Full in working tree | command group과 `owt <command> --help` route 제공 |
+| version | `--version` | Global Home/repository About modal | Full in working tree | package version 표시 |
 | debug shell handoff | `test-cd` | 없음 | Exempt | internal debug command, product capability 아님 |
 | serialization | TSV, 향후 JSON/color flags | visual widgets | Exempt | transport parity가 아니라 semantic parity 적용 |
 
 현재 user-facing semantic capability 기준:
 
-- Full: 7
-- Partial: 2
-- Missing: 3
-- Parity coverage: `Full / (Full + Partial + Missing) = 58%`
-- Weighted coverage(`Full=1`, `Partial=0.5`): `67%`
+- Full: 12
+- Partial: 0
+- Missing: 0
+- Parity coverage: `Full / (Full + Partial + Missing) = 100%`
+- Weighted coverage(`Full=1`, `Partial=0.5`): `100%`
 
 ## 7. 주요 리스크
 

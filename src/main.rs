@@ -298,6 +298,7 @@ fn run_tui(path: PathBuf) -> Result<()> {
         }
         types::ExitAction::CloneWorkspace { url, path } => run_clone(url, path.clone())?,
         types::ExitAction::InstallShellSetup => run_setup()?,
+        types::ExitAction::ShowInitGuide(path) => run_init_at(path)?,
     }
 
     result
@@ -890,21 +891,24 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
 
 fn run_init() -> Result<()> {
     let current_dir = env::current_dir()?;
+    run_init_at(&current_dir)
+}
 
+fn run_init_at(current_dir: &Path) -> Result<()> {
     // Check if already a bare repo
-    if git::is_bare_repo(&current_dir)? {
+    if git::is_bare_repo(current_dir)? {
         println!("Already a bare repository. Run 'owt' to start.");
         return Ok(());
     }
 
     // Check if it's a git repo
-    if !git::is_git_repo(&current_dir) {
+    if !git::is_git_repo(current_dir) {
         eprintln!("Error: Not a git repository");
         std::process::exit(1);
     }
 
     // Check if it's inside a worktree
-    let common_dir = git::get_git_common_dir(&current_dir)?;
+    let common_dir = git::get_git_common_dir(current_dir)?;
     if git::is_bare_repo(&common_dir)? {
         println!("This is a worktree of a bare repository.");
         println!("Bare repo: {}", common_dir.display());

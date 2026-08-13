@@ -108,6 +108,8 @@ Then use the TUI:
 | `r` / `x` | Refresh the list / preview stale-metadata and completed-PR cleanup |
 | `R` | Query PR status (selected, all, or arbitrary branch) |
 | `C` | Browse selected worktree commit tree |
+| `N` | Clone a `.bare` workspace |
+| `I` / `S` / `V` | Show init guide / run shell setup / show About |
 | `f` | Fetch remotes |
 | `p` / `P` | Pull selected worktree(s) / push the selected worktree |
 | `m` / `M` | Merge upstream / merge selected branch |

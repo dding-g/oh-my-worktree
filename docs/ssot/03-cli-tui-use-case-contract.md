@@ -85,6 +85,8 @@ Agent-facing install prompt와 skills는 `.agents/`에 둔다. 이 asset들은 a
 | `HelpModal` | `?` | scroll, close | return to list |
 | `PrStatusModal` | `R` | `s`/`Enter` selected, `a` all, `b` arbitrary branch, `Esc` | return to list |
 | `CommitTreeModal` | `C` | `+`/`-` limit, `r` refresh, `Esc` | return to list |
+| `CloneModal` | `N` | URL/path 입력, `Tab`, `Enter`, `Esc` | terminal 복원 뒤 `owt clone`과 같은 action 실행 또는 list |
+| `AboutModal` | `V` | version 확인, `Esc` | return to list |
 | `GlobalHome` | repo 밖에서 `owt` 실행 | `c` clone, `i` init guide, `s` setup, `?` help, `v` about | clone/setup은 terminal 복원 뒤 shared CLI action 실행 |
 | `MergeBranchSelect` | `M` | `j`/`k`, `Enter`, `Esc` | merge/cancel |
 
@@ -106,6 +108,7 @@ Agent-facing install prompt와 skills는 `.agents/`에 둔다. 이 asset들은 a
 | git | `f`, `p`, `P`, `m`, `M` | fetch/pull/push/merge upstream/merge branch. 체크된 worktree가 있으면 pull은 체크된 대상 전체에 적용 |
 | git | `R` | CLI `owt pr status`와 같이 selected worktree, all worktrees, arbitrary branch의 GitHub PR 상태를 background query한다 |
 | git | `C` | CLI `owt commit tree -n`과 같이 선택 worktree의 commit graph를 background query하고 `+`/`-`로 limit을 조절한다 |
+| lifecycle | `N`, `I`, `S`, `V` | clone modal, 현재 repo `owt init` guide, shell setup, About/version. Init/setup/clone은 terminal 복원 뒤 CLI 동작을 실행한다 |
 | external | `o`, `t`, `y` | editor/terminal 열기, path copy |
 | config/help | `c`, `?` | config modal/help modal |
 | lifecycle | `q`, `Ctrl+c` | quit |
@@ -206,3 +209,4 @@ user_cases:
 - `src/capability_registry.rs`는 C01–C12 GA capability를 누락·중복 없이 기록하고, `Full` 항목은 추적 가능한 scenario를, `Partial`/`Missing` 항목은 delivery horizon과 release-blocker reason을 가져야 한다.
 - `PrStatusModal`은 selected/all/arbitrary branch query를 TUI thread 밖에서 실행하고, `gh` 실패 또는 비-GitHub remote에서는 `-`를 표시하는 test로 고정한다.
 - `CommitTreeModal`은 선택 non-bare worktree에서 background commit graph query를 하고 limit 변경이 CLI `-n` request로 전달되는 test로 고정한다.
+- repository TUI와 Global Home 모두 clone/init/setup/about entry를 제공하며, repository TUI의 init은 `project_root_path`를 CLI `owt init`과 같은 validation 대상으로 넘기는 test로 고정한다.
