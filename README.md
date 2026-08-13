@@ -88,6 +88,8 @@ repo/
 
 `owt init` prints a conversion guide if you want to move an existing repository into this layout manually.
 
+Outside a Git repository, `owt` opens Global Home: `c` clones a workspace (URL and optional base path), `i` shows the conversion-guide entry, `s` runs shell setup after the TUI restores the terminal, `?` shows CLI commands, and `v` shows the version.
+
 ## Daily workflow
 
 ```bash

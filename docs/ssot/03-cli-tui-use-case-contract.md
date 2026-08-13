@@ -85,6 +85,7 @@ Agent-facing install prompt와 skills는 `.agents/`에 둔다. 이 asset들은 a
 | `HelpModal` | `?` | scroll, close | return to list |
 | `PrStatusModal` | `R` | `s`/`Enter` selected, `a` all, `b` arbitrary branch, `Esc` | return to list |
 | `CommitTreeModal` | `C` | `+`/`-` limit, `r` refresh, `Esc` | return to list |
+| `GlobalHome` | repo 밖에서 `owt` 실행 | `c` clone, `i` init guide, `s` setup, `?` help, `v` about | clone/setup은 terminal 복원 뒤 shared CLI action 실행 |
 | `MergeBranchSelect` | `M` | `j`/`k`, `Enter`, `Esc` | merge/cancel |
 
 `List`는 worktree row 또는 list metadata에 PR column을 둘 수 있다. 이 column은 GitHub remote에서 확인한 PR 상태만 표시하며, 허용 값은 `open`, `closed`, `merged`, `draft`뿐이다. PR이 없거나, remote가 GitHub가 아니거나, auth/network/lookup 실패가 있거나, provider가 지원되지 않거나, 알 수 없는 값 또는 그 밖의 값이면 `-`를 표시한다. PR 조회는 보조 metadata이며 worktree 목록 표시를 실패시키거나 block하면 안 된다.
@@ -163,6 +164,22 @@ user_cases:
     actor: reviewer
     trigger: "TUI에서 `C`를 누른다"
     success: "선택 worktree의 CLI `owt commit tree -n`과 같은 graph를 비차단으로 보고 limit을 조절한다"
+  - id: UC_GLOBAL_CLONE
+    actor: dot_bare_user
+    trigger: "Git repository 밖에서 `owt`를 실행하고 Global Home의 `c`를 누른다"
+    success: "URL과 optional base path를 입력하고 terminal 복원 뒤 CLI `owt clone`과 같은 `.bare` workspace 생성 흐름을 실행한다"
+  - id: UC_GLOBAL_INIT
+    actor: regular_repo_user
+    trigger: "Global Home의 `i`를 누른다"
+    success: "regular repository에서 실행할 `owt init` conversion guide 진입을 확인한다"
+  - id: UC_GLOBAL_SETUP
+    actor: regular_repo_user
+    trigger: "Global Home의 `s`를 누른다"
+    success: "terminal 복원 뒤 CLI `owt setup`과 같은 shell detection 및 confirmation 흐름을 실행한다"
+  - id: UC_ABOUT
+    actor: regular_repo_user
+    trigger: "Global Home의 `v`를 누른다"
+    success: "현재 package version과 제품 설명을 확인한다"
 ```
 
 사용자가 수락한 구현 범위는 GitHub-only PR 상태 표시까지다. `UC_PR_REVIEW`는 GitHub PR 상태를 빠르게 확인하는 보조 경험을 포함하지만, non-GitHub provider 지원이나 repository layout 변경을 포함하지 않는다.

@@ -88,6 +88,8 @@ repo/
 
 기존 repository를 이 layout으로 옮기고 싶다면 `owt init`이 수동 변환 guide를 출력합니다.
 
+Git repository 밖에서 `owt`를 실행하면 Global Home이 열립니다. `c`는 URL과 선택 path로 clone을 시작하고, `i`는 변환 guide 진입점을, `s`는 terminal 복원 뒤 shell setup을, `?`는 CLI 명령을, `v`는 버전을 보여 줍니다.
+
 ## 매일 쓰는 흐름
 
 ```bash
