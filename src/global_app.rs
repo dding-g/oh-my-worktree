@@ -12,7 +12,7 @@ use ratatui::{
 
 use crate::types::ExitAction;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Screen {
     Home,
     Clone,
@@ -165,8 +165,9 @@ impl GlobalApp {
                 Line::from("Esc close"),
             ],
             Screen::Help => vec![
-                Line::from("CLI: clone, init, setup, worktree, pr, commit, search"),
-                Line::from("Run `owt <command> --help` for command-specific options."),
+                Line::from("clone <URL> [PATH]   init   setup"),
+                Line::from("worktree list/create/delete/prune   pr status   commit tree   search"),
+                Line::from("TUI keys: c clone, i init guide, s setup, ? help, v about."),
                 Line::from("Esc close"),
             ],
             Screen::About => vec![
@@ -176,5 +177,53 @@ impl GlobalApp {
             ],
         };
         frame.render_widget(Paragraph::new(lines), inner);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::KeyCode;
+
+    use super::{GlobalApp, Screen};
+    use crate::types::ExitAction;
+
+    #[test]
+    fn clone_form_preserves_url_and_optional_path_for_post_tui_execution() {
+        let mut app = GlobalApp::new("/tmp".into());
+        app.handle(KeyCode::Char('c'));
+        for value in "https://github.com/acme/demo.git".chars() {
+            app.handle(KeyCode::Char(value));
+        }
+        app.handle(KeyCode::Tab);
+        for value in "/tmp/projects".chars() {
+            app.handle(KeyCode::Char(value));
+        }
+        app.handle(KeyCode::Enter);
+
+        assert!(app.should_quit);
+        match app.exit_action {
+            ExitAction::CloneWorkspace { url, path } => {
+                assert_eq!(url, "https://github.com/acme/demo.git");
+                assert_eq!(path.unwrap(), std::path::PathBuf::from("/tmp/projects"));
+            }
+            _ => panic!("expected clone handoff"),
+        }
+    }
+
+    #[test]
+    fn home_exposes_init_setup_help_and_about() {
+        let mut app = GlobalApp::new("/tmp".into());
+        for (key, expected) in [
+            ('i', Screen::InitGuide),
+            ('?', Screen::Help),
+            ('v', Screen::About),
+        ] {
+            app.screen = Screen::Home;
+            app.handle(KeyCode::Char(key));
+            assert_eq!(app.screen, expected);
+        }
+        app.screen = Screen::Home;
+        app.handle(KeyCode::Char('s'));
+        assert!(matches!(app.exit_action, ExitAction::InstallShellSetup));
     }
 }

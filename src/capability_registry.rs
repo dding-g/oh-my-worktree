@@ -7,7 +7,9 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParityStatus {
     Full,
+    #[allow(dead_code)]
     Partial,
+    #[allow(dead_code)]
     Missing,
 }
 
@@ -36,28 +38,28 @@ pub(crate) const CAPABILITIES: &[Capability] = &[
         id: "C02",
         cli_contract: "Clone .bare workspace",
         tui_surface: "Global home clone flow",
-        status: ParityStatus::Missing,
-        scenario: None,
-        delivery_horizon: Some("H5"),
-        gap_reason: Some("TUI requires an existing repository at launch"),
+        status: ParityStatus::Full,
+        scenario: Some("UC_GLOBAL_CLONE"),
+        delivery_horizon: None,
+        gap_reason: None,
     },
     Capability {
         id: "C03",
         cli_contract: "Show init conversion guide",
         tui_surface: "Global home init guide",
-        status: ParityStatus::Missing,
-        scenario: None,
-        delivery_horizon: Some("H5"),
-        gap_reason: Some("No global TUI home"),
+        status: ParityStatus::Full,
+        scenario: Some("UC_GLOBAL_INIT"),
+        delivery_horizon: None,
+        gap_reason: None,
     },
     Capability {
         id: "C04",
         cli_contract: "Install shell setup",
         tui_surface: "Global home setup preview and execute",
-        status: ParityStatus::Partial,
-        scenario: None,
-        delivery_horizon: Some("H5"),
-        gap_reason: Some("TUI can use shell handoff but cannot install setup"),
+        status: ParityStatus::Full,
+        scenario: Some("UC_GLOBAL_SETUP"),
+        delivery_horizon: None,
+        gap_reason: None,
     },
     Capability {
         id: "C05",
@@ -117,19 +119,19 @@ pub(crate) const CAPABILITIES: &[Capability] = &[
         id: "C11",
         cli_contract: "Browse CLI help",
         tui_surface: "Command help browser",
-        status: ParityStatus::Partial,
+        status: ParityStatus::Full,
         scenario: Some("UC_HELP"),
-        delivery_horizon: Some("H5"),
-        gap_reason: Some("TUI help is keybinding-only"),
+        delivery_horizon: None,
+        gap_reason: None,
     },
     Capability {
         id: "C12",
         cli_contract: "Show version/about",
         tui_surface: "About modal",
-        status: ParityStatus::Missing,
-        scenario: None,
-        delivery_horizon: Some("H5"),
-        gap_reason: Some("No about modal"),
+        status: ParityStatus::Full,
+        scenario: Some("UC_ABOUT"),
+        delivery_horizon: None,
+        gap_reason: None,
     },
 ];
 
