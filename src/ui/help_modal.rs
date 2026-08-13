@@ -34,6 +34,7 @@ pub fn render(frame: &mut Frame, app: &App) {
                 ("Ctrl+d/u", "Half page down/up"),
                 ("g", "Jump to current worktree"),
                 ("/", "Search path/name/branch/status/PR"),
+                ("R", "Query PR status (selected/all/branch)"),
                 ("Space", "Select/unselect worktree"),
                 ("Enter", "Enter worktree (cd)"),
             ],

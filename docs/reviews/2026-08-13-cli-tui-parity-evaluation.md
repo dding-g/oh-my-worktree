@@ -93,7 +93,7 @@ status: additional-validation-with-architecture-decision
 | worktree create | `worktree create --base --worktree-path --tmux` | add modal + base/path/tmux override | Full in working tree | `Ctrl+p` explicit path, `Ctrl+t` default/on/off; shared orchestration extraction은 후속 |
 | worktree delete | `delete --force --branch` | confirm modal의 force/branch toggle, batch 확장 | Full | TUI가 batch superset 제공 |
 | completed-PR prune | `prune [--dry-run]` | `x` cleanup preview + confirm | **Full** | shared core와 live safety recheck를 사용; CLI dry-run의 terminal prompt는 TUI explicit confirm으로 표현 |
-| PR status | `pr status --branch/--all` | checked-out worktree PR column | Partial | arbitrary non-worktree branch query와 explicit detail 없음 |
+| PR status | `pr status --branch/--all` | `R` PR detail/query modal | Full in working tree | selected/all/arbitrary branch를 background query |
 | commit graph | `commit tree -n` | selected detail에 고정된 최근 commit 일부 | Partial | full-screen/paging/limit 선택 없음 |
 | search | `search [--pr]` across path/name/branch/status/PR | `/` unified filter | Full in working tree | shared matcher가 path/name/branch/status/PR label을 처리 |
 | help | `--help`와 command/action help | keybinding help | Partial | CLI command help를 탐색하는 UI 없음 |
@@ -103,11 +103,11 @@ status: additional-validation-with-architecture-decision
 
 현재 user-facing semantic capability 기준:
 
-- Full: 5
-- Partial: 4
+- Full: 6
+- Partial: 3
 - Missing: 3
-- Parity coverage: `Full / (Full + Partial + Missing) = 42%`
-- Weighted coverage(`Full=1`, `Partial=0.5`): `58%`
+- Parity coverage: `Full / (Full + Partial + Missing) = 50%`
+- Weighted coverage(`Full=1`, `Partial=0.5`): `62%`
 
 ## 7. 주요 리스크
 

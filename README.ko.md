@@ -104,6 +104,7 @@ TUI에서 다음 키를 사용합니다.
 | `a` | worktree 추가 |
 | `d` | 선택한 worktree 삭제. 체크된 worktree가 있으면 여러 개 삭제 |
 | `r` / `x` | 목록 새로고침 / stale metadata와 완료된 PR worktree 정리 preview |
+| `R` | 선택 항목·전체·임의 branch의 PR 상태 조회 |
 | `f` | remote fetch |
 | `p` / `P` | 선택한 worktree pull / 커서로 선택한 worktree push |
 | `m` / `M` | upstream merge / 선택 branch merge |

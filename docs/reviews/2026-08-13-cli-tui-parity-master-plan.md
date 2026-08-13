@@ -97,7 +97,7 @@ No other GA CLI command is exempt without owner, rationale, and review condition
 | C05 | Create with base/path/tmux | Full in working tree | progressive add flow; explicit path and per-create tmux override | H3 |
 | C06 | Delete with force/branch | Full | batch-capable confirm flow | H0 |
 | C07 | Prune completed-PR worktrees | Full in working tree | cleanup preview + confirm | H1 |
-| C08 | Check PR status by selected/arbitrary/all branch | Partial | PR detail/query modal | H4 |
+| C08 | Check PR status by selected/arbitrary/all branch | Full in working tree | PR detail/query modal | H4 |
 | C09 | Browse commit tree with limit | Partial | full-screen tree with paging/limit | H4 |
 | C10 | Search path/name/branch/status/PR | Full in working tree | unified search mode | H2 |
 | C11 | Browse CLI help | Partial | command help browser | H5 |

@@ -21,6 +21,7 @@ use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
 
 const G_SEQUENCE_TIMEOUT: Duration = Duration::from_millis(300);
 type PrStatusResults = Vec<(PathBuf, Option<GithubPrStatus>)>;
+type PrQueryResults = Vec<(String, PathBuf, Option<GithubPrStatus>)>;
 
 pub struct ScriptResult {
     pub success: bool,
@@ -57,6 +58,10 @@ pub struct App {
     pub script_status: ScriptStatus,         // Background script status
     pub script_receiver: Option<mpsc::Receiver<ScriptResult>>, // Channel for script completion
     pub pr_status_receiver: Option<mpsc::Receiver<PrStatusResults>>,
+    pub pr_query_receiver: Option<mpsc::Receiver<PrQueryResults>>,
+    pub pr_query_input: String,
+    pub pr_query_editing: bool,
+    pub pr_query_results: Vec<(String, PathBuf, Option<GithubPrStatus>)>,
     pub active_op: Option<(OpKind, mpsc::Receiver<OpResult>)>,
     pub active_op_info: Option<ActiveOp>,
     pub selected_details: Option<WorktreeDetails>,
@@ -145,6 +150,10 @@ impl App {
             script_status: ScriptStatus::Idle,
             script_receiver: None,
             pr_status_receiver: None,
+            pr_query_receiver: None,
+            pr_query_input: String::new(),
+            pr_query_editing: false,
+            pr_query_results: Vec::new(),
             active_op: None,
             active_op_info: None,
             selected_details: None,
@@ -165,6 +174,7 @@ impl App {
             terminal.draw(|frame| self.draw(frame))?;
             self.poll_script_status();
             self.poll_pr_status();
+            self.poll_pr_query();
             self.poll_background_op();
 
             self.handle_events(terminal)?;
@@ -224,6 +234,117 @@ impl App {
                 self.pr_status_receiver = None;
             }
             Option::None => {}
+        }
+    }
+
+    fn poll_pr_query(&mut self) {
+        let result = self
+            .pr_query_receiver
+            .as_ref()
+            .and_then(|receiver| receiver.try_recv().ok());
+        if let Some(results) = result {
+            self.pr_query_results = results;
+            self.pr_query_receiver = None;
+        }
+    }
+
+    fn open_pr_status_modal(&mut self) {
+        self.pr_query_input.clear();
+        self.pr_query_editing = false;
+        self.pr_query_results.clear();
+        self.state = AppState::PrStatusModal;
+        self.query_pr_statuses(self.selected_pr_targets());
+    }
+
+    fn selected_pr_targets(&self) -> Vec<(PathBuf, String)> {
+        self.selected_worktree()
+            .filter(|worktree| !worktree.is_bare)
+            .and_then(|worktree| {
+                worktree
+                    .branch
+                    .as_ref()
+                    .map(|branch| vec![(worktree.path.clone(), branch.clone())])
+            })
+            .unwrap_or_default()
+    }
+
+    fn pr_query_anchor_path(&self) -> Option<PathBuf> {
+        self.selected_worktree()
+            .filter(|worktree| !worktree.is_bare)
+            .or_else(|| self.worktrees.iter().find(|worktree| !worktree.is_bare))
+            .map(|worktree| worktree.path.clone())
+    }
+
+    fn all_pr_targets(&self) -> Vec<(PathBuf, String)> {
+        self.worktrees
+            .iter()
+            .filter(|worktree| !worktree.is_bare)
+            .filter_map(|worktree| {
+                worktree
+                    .branch
+                    .as_ref()
+                    .map(|branch| (worktree.path.clone(), branch.clone()))
+            })
+            .collect()
+    }
+
+    fn query_pr_statuses(&mut self, targets: Vec<(PathBuf, String)>) {
+        if targets.is_empty() {
+            self.pr_query_results.clear();
+            return;
+        }
+        let repo_path = self.bare_repo_path.clone();
+        let targets_for_thread = targets.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let statuses = git::github_pr_statuses_for_worktrees(&repo_path, &targets_for_thread);
+            let results = targets
+                .into_iter()
+                .zip(statuses)
+                .map(|((_, branch), (path, status))| (branch, path, status))
+                .collect();
+            let _ = sender.send(results);
+        });
+        self.pr_query_results.clear();
+        self.pr_query_receiver = Some(receiver);
+    }
+
+    fn handle_pr_status_modal_input(&mut self, code: KeyCode) {
+        if self.pr_query_editing {
+            match code {
+                KeyCode::Esc => {
+                    self.pr_query_editing = false;
+                    self.pr_query_input.clear();
+                }
+                KeyCode::Enter => {
+                    let branch = self.pr_query_input.trim().to_string();
+                    self.pr_query_editing = false;
+                    if !branch.is_empty() {
+                        if let Some(path) = self.pr_query_anchor_path() {
+                            self.query_pr_statuses(vec![(path, branch)]);
+                        }
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.pr_query_input.pop();
+                }
+                KeyCode::Char(character) => self.pr_query_input.push(character),
+                _ => {}
+            }
+            return;
+        }
+
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => self.state = AppState::List,
+            KeyCode::Char('a') => self.query_pr_statuses(self.all_pr_targets()),
+            KeyCode::Char('b') => {
+                self.pr_query_editing = true;
+                self.pr_query_input.clear();
+            }
+            KeyCode::Char('s') | KeyCode::Enter => {
+                self.query_pr_statuses(self.selected_pr_targets())
+            }
+            _ => {}
         }
     }
 
@@ -392,6 +513,10 @@ impl App {
                 main_view::render(frame, self);
                 help_modal::render(frame, self);
             }
+            AppState::PrStatusModal => {
+                main_view::render(frame, self);
+                crate::ui::pr_status_modal::render(frame, self);
+            }
             AppState::MergeBranchSelect { .. } => {
                 main_view::render(frame, self);
                 crate::ui::merge_modal::render(frame, self);
@@ -424,6 +549,7 @@ impl App {
                             editing,
                         } => self.handle_config_modal_input(key.code, selected_index, editing),
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
+                        AppState::PrStatusModal => self.handle_pr_status_modal_input(key.code),
                         AppState::MergeBranchSelect { branches, selected } => {
                             self.handle_merge_branch_select_input(key.code, branches, selected)
                         }
@@ -570,6 +696,10 @@ impl App {
             }
             KeyCode::Char('M') => {
                 self.open_merge_branch_select();
+                self.last_key = None;
+            }
+            KeyCode::Char('R') => {
+                self.open_pr_status_modal();
                 self.last_key = None;
             }
             KeyCode::Char('r') => {
@@ -2346,6 +2476,10 @@ mod tests {
             script_status: ScriptStatus::Idle,
             script_receiver: None,
             pr_status_receiver: None,
+            pr_query_receiver: None,
+            pr_query_input: String::new(),
+            pr_query_editing: false,
+            pr_query_results: Vec::new(),
             active_op: None,
             active_op_info: None,
             selected_details: None,
@@ -3093,6 +3227,30 @@ mod tests {
         app.filter_text = "unstaged".to_string();
         app.select_first_filtered_worktree();
         assert_eq!(app.selected_index, 1);
+    }
+
+    #[test]
+    fn pr_status_modal_supports_arbitrary_branch_input_with_a_non_bare_anchor() {
+        let mut bare = test_worktree(".bare", WorktreeStatus::Clean);
+        bare.is_bare = true;
+        let mut app = test_app(
+            vec![bare, test_worktree("main", WorktreeStatus::Clean)],
+            0,
+            "/repo/.bare",
+        );
+        app.state = AppState::PrStatusModal;
+
+        assert_eq!(
+            app.pr_query_anchor_path(),
+            Some(PathBuf::from("/repo/main"))
+        );
+        app.handle_pr_status_modal_input(KeyCode::Char('b'));
+        for character in "review/123".chars() {
+            app.handle_pr_status_modal_input(KeyCode::Char(character));
+        }
+
+        assert!(app.pr_query_editing);
+        assert_eq!(app.pr_query_input, "review/123");
     }
 
     #[test]

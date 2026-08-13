@@ -43,6 +43,7 @@ Complete list of keyboard shortcuts.
 | `P` | Push to remote |
 | `m` | Merge upstream |
 | `M` | Merge branch (select) |
+| `R` | Query PR status for selected worktree, all worktrees, or an arbitrary branch |
 
 ## External Apps
 

@@ -128,6 +128,7 @@ pub enum AppState {
         editing: bool,
     },
     HelpModal,
+    PrStatusModal,
     /// Branch selection for merge
     MergeBranchSelect {
         branches: Vec<String>,
