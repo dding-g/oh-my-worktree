@@ -3,6 +3,7 @@ mod capability_registry;
 mod config;
 mod copy_files;
 mod git;
+mod global_app;
 mod tmux;
 mod types;
 mod ui;
@@ -248,32 +249,32 @@ fn run_tui(path: PathBuf) -> Result<()> {
     // Check if we should write result to a file (for shell integration)
     let output_file = env::var("OWT_OUTPUT_FILE").ok();
 
-    let repo_context = match resolve_repository_context(&path) {
-        Ok(context) => context,
-        Err(_) => {
-            print_not_git_repo_error();
-            std::process::exit(1);
-        }
-    };
-
     let terminal_mode = TerminalModeGuard::enter()?;
     let backend = ratatui::backend::CrosstermBackend::new(open_tui_writer()?);
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let has_shell_integration = output_file.is_some();
-    let mut app = app::App::new(
-        repo_context.repo_path,
-        repo_context.project_root_path,
-        repo_context.repo_is_bare,
-        Some(path),
-        has_shell_integration,
-    )?;
-    let result = app.run(&mut terminal);
+    let (result, exit_action, config) = match resolve_repository_context(&path) {
+        Ok(repo_context) => {
+            let mut app = app::App::new(
+                repo_context.repo_path,
+                repo_context.project_root_path,
+                repo_context.repo_is_bare,
+                Some(path),
+                has_shell_integration,
+            )?;
+            let result = app.run(&mut terminal);
+            (result, app.exit_action.clone(), app.config.clone())
+        }
+        Err(_) => {
+            let mut app = global_app::GlobalApp::new(path);
+            let result = app.run(&mut terminal);
+            (result, app.exit_action.clone(), Config::default())
+        }
+    };
 
     drop(terminal);
     drop(terminal_mode);
-
-    let exit_action = app.exit_action.clone();
 
     // Handle exit action - write path for shell integration
     match &exit_action {
@@ -293,8 +294,10 @@ fn run_tui(path: PathBuf) -> Result<()> {
             // Normal quit, no directory change
         }
         types::ExitAction::CreateWorktree(request) => {
-            run_post_tui_create_worktree(request, &app.config, output_file.as_deref())?;
+            run_post_tui_create_worktree(request, &config, output_file.as_deref())?;
         }
+        types::ExitAction::CloneWorkspace { url, path } => run_clone(url, path.clone())?,
+        types::ExitAction::InstallShellSetup => run_setup()?,
     }
 
     result
@@ -1664,6 +1667,7 @@ OUTPUT:
     );
 }
 
+#[allow(dead_code)]
 fn print_not_git_repo_error() {
     eprintln!(
         r#"Error: Not a git repository

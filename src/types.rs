@@ -143,6 +143,8 @@ pub enum ExitAction {
     Quit,
     ChangeDirectory(PathBuf),
     CreateWorktree(WorktreeCreateRequest),
+    CloneWorkspace { url: String, path: Option<PathBuf> },
+    InstallShellSetup,
 }
 
 #[derive(Debug, Clone)]

@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Config {
     pub editor: Option<String>,
     pub terminal: Option<String>,

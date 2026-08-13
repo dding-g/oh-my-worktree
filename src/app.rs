@@ -3031,6 +3031,9 @@ mod tests {
             }
             ExitAction::Quit => panic!("enter should request directory change"),
             ExitAction::CreateWorktree(_) => panic!("enter should not create a worktree"),
+            ExitAction::CloneWorkspace { .. } | ExitAction::InstallShellSetup => {
+                panic!("enter should not trigger a global action")
+            }
         }
         assert!(app.should_quit);
 
@@ -3270,6 +3273,9 @@ mod tests {
             }
             ExitAction::Quit => panic!("filter enter should request directory change"),
             ExitAction::CreateWorktree(_) => panic!("filter enter should not create a worktree"),
+            ExitAction::CloneWorkspace { .. } | ExitAction::InstallShellSetup => {
+                panic!("filter enter should not trigger a global action")
+            }
         }
         assert!(!app.is_filtering);
         assert!(app.should_quit);
