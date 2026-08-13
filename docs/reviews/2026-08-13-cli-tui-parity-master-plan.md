@@ -289,10 +289,9 @@ The initiative is complete only when:
 
 ## 14. Immediate next actions
 
-1. Commit the completed cleanup, registry, search, and create parity work with planning documents.
-2. Implement PR status and commit-tree read-context parity (H4).
-3. Measure startup baseline before fast-loader work.
-4. Implement global clone/init/setup/help/about parity (H5).
+1. Run the capability-registry no-blocker test and full release gates before a release.
+2. Measure startup baseline before H4P fast-loader work.
+3. Keep every newly introduced GA CLI capability paired with a TUI scenario in the same change.
 
 ## SSOT 변경 작업 계약
 

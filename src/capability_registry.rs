@@ -221,4 +221,9 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn parity_release_has_no_remaining_ga_blockers() {
+        assert_eq!(release_blockers().count(), 0);
+    }
 }
