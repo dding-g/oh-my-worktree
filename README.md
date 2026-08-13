@@ -27,10 +27,10 @@ Open `owt`, pick a worktree, create another one, delete the stale ones, fetch, p
 
 ## Install
 
-Current release with Cargo (`v0.14.4`):
+Current release with Cargo (`v0.15.0`):
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.14.4 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0 --force
 ```
 
 Prebuilt binaries are attached to the latest [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest).

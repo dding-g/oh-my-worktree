@@ -27,10 +27,10 @@ Git worktree는 이 문제의 정답에 가깝습니다. `owt`는 그 정답을 
 
 ## 설치
 
-현재 릴리즈(`v0.14.4`)를 Cargo로 설치:
+현재 릴리즈(`v0.15.0`)를 Cargo로 설치:
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.14.4 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0 --force
 ```
 
 Prebuilt 바이너리는 최신 [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest)에 첨부됩니다.
