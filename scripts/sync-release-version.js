@@ -58,7 +58,7 @@ stage('Cargo.toml', (current) =>
 stage('Cargo.lock', (current) =>
   replaceRequired(
     current,
-    /(\[\[package\]\]\nname = "oh-my-worktree"\nversion = ")[^"]+"/,
+    /(\[\[package\]\]\r?\nname = "oh-my-worktree"\r?\nversion = ")[^"]+"/,
     `$1${version}"`,
     'oh-my-worktree package version in Cargo.lock'
   )
