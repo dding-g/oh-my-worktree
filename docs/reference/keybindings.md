@@ -44,6 +44,7 @@ Complete list of keyboard shortcuts.
 | `m` | Merge upstream |
 | `M` | Merge branch (select) |
 | `R` | Query PR status for selected worktree, all worktrees, or an arbitrary branch |
+| `C` | Browse selected worktree commit tree; `+`/`-` changes the limit |
 
 ## External Apps
 

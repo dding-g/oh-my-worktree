@@ -105,6 +105,7 @@ Then use the TUI:
 | `d` | Delete the selected worktree, or selected worktrees when any are checked |
 | `r` / `x` | Refresh the list / preview stale-metadata and completed-PR cleanup |
 | `R` | Query PR status (selected, all, or arbitrary branch) |
+| `C` | Browse selected worktree commit tree |
 | `f` | Fetch remotes |
 | `p` / `P` | Pull selected worktree(s) / push the selected worktree |
 | `m` / `M` | Merge upstream / merge selected branch |

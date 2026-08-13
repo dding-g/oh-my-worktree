@@ -22,6 +22,7 @@ use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
 const G_SEQUENCE_TIMEOUT: Duration = Duration::from_millis(300);
 type PrStatusResults = Vec<(PathBuf, Option<GithubPrStatus>)>;
 type PrQueryResults = Vec<(String, PathBuf, Option<GithubPrStatus>)>;
+type CommitTreeResult = std::result::Result<Vec<String>, String>;
 
 pub struct ScriptResult {
     pub success: bool,
@@ -62,6 +63,10 @@ pub struct App {
     pub pr_query_input: String,
     pub pr_query_editing: bool,
     pub pr_query_results: Vec<(String, PathBuf, Option<GithubPrStatus>)>,
+    pub commit_tree_receiver: Option<mpsc::Receiver<CommitTreeResult>>,
+    pub commit_tree_limit: usize,
+    pub commit_tree_lines: Vec<String>,
+    pub commit_tree_error: Option<String>,
     pub active_op: Option<(OpKind, mpsc::Receiver<OpResult>)>,
     pub active_op_info: Option<ActiveOp>,
     pub selected_details: Option<WorktreeDetails>,
@@ -154,6 +159,10 @@ impl App {
             pr_query_input: String::new(),
             pr_query_editing: false,
             pr_query_results: Vec::new(),
+            commit_tree_receiver: None,
+            commit_tree_limit: 50,
+            commit_tree_lines: Vec::new(),
+            commit_tree_error: None,
             active_op: None,
             active_op_info: None,
             selected_details: None,
@@ -175,6 +184,7 @@ impl App {
             self.poll_script_status();
             self.poll_pr_status();
             self.poll_pr_query();
+            self.poll_commit_tree();
             self.poll_background_op();
 
             self.handle_events(terminal)?;
@@ -348,6 +358,68 @@ impl App {
         }
     }
 
+    fn poll_commit_tree(&mut self) {
+        let result = self
+            .commit_tree_receiver
+            .as_ref()
+            .and_then(|receiver| receiver.try_recv().ok());
+        if let Some(result) = result {
+            match result {
+                Ok(lines) => {
+                    self.commit_tree_lines = lines;
+                    self.commit_tree_error = None;
+                }
+                Err(error) => self.commit_tree_error = Some(error),
+            }
+            self.commit_tree_receiver = None;
+        }
+    }
+
+    fn open_commit_tree_modal(&mut self) {
+        self.commit_tree_limit = 50;
+        self.commit_tree_lines.clear();
+        self.commit_tree_error = None;
+        self.state = AppState::CommitTreeModal;
+        self.load_commit_tree();
+    }
+
+    fn load_commit_tree(&mut self) {
+        let Some(path) = self
+            .selected_worktree()
+            .filter(|worktree| !worktree.is_bare)
+            .map(|worktree| worktree.path.clone())
+        else {
+            self.commit_tree_error = Some("Select a non-bare worktree first".to_string());
+            return;
+        };
+        let limit = self.commit_tree_limit;
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result =
+                git::get_recent_commit_graph(&path, limit).map_err(|error| error.to_string());
+            let _ = sender.send(result);
+        });
+        self.commit_tree_lines.clear();
+        self.commit_tree_error = None;
+        self.commit_tree_receiver = Some(receiver);
+    }
+
+    fn handle_commit_tree_modal_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => self.state = AppState::List,
+            KeyCode::Char('+') | KeyCode::Char('=') => {
+                self.commit_tree_limit = (self.commit_tree_limit + 25).min(200);
+                self.load_commit_tree();
+            }
+            KeyCode::Char('-') => {
+                self.commit_tree_limit = self.commit_tree_limit.saturating_sub(25).max(25);
+                self.load_commit_tree();
+            }
+            KeyCode::Char('r') => self.load_commit_tree(),
+            _ => {}
+        }
+    }
+
     fn poll_script_status(&mut self) {
         if let Some(ref rx) = self.script_receiver {
             match rx.try_recv() {
@@ -517,6 +589,10 @@ impl App {
                 main_view::render(frame, self);
                 crate::ui::pr_status_modal::render(frame, self);
             }
+            AppState::CommitTreeModal => {
+                main_view::render(frame, self);
+                crate::ui::commit_tree_modal::render(frame, self);
+            }
             AppState::MergeBranchSelect { .. } => {
                 main_view::render(frame, self);
                 crate::ui::merge_modal::render(frame, self);
@@ -550,6 +626,7 @@ impl App {
                         } => self.handle_config_modal_input(key.code, selected_index, editing),
                         AppState::HelpModal => self.handle_help_modal_input(key.code),
                         AppState::PrStatusModal => self.handle_pr_status_modal_input(key.code),
+                        AppState::CommitTreeModal => self.handle_commit_tree_modal_input(key.code),
                         AppState::MergeBranchSelect { branches, selected } => {
                             self.handle_merge_branch_select_input(key.code, branches, selected)
                         }
@@ -700,6 +777,10 @@ impl App {
             }
             KeyCode::Char('R') => {
                 self.open_pr_status_modal();
+                self.last_key = None;
+            }
+            KeyCode::Char('C') => {
+                self.open_commit_tree_modal();
                 self.last_key = None;
             }
             KeyCode::Char('r') => {
@@ -2480,6 +2561,10 @@ mod tests {
             pr_query_input: String::new(),
             pr_query_editing: false,
             pr_query_results: Vec::new(),
+            commit_tree_receiver: None,
+            commit_tree_limit: 50,
+            commit_tree_lines: Vec::new(),
+            commit_tree_error: None,
             active_op: None,
             active_op_info: None,
             selected_details: None,
@@ -3251,6 +3336,21 @@ mod tests {
 
         assert!(app.pr_query_editing);
         assert_eq!(app.pr_query_input, "review/123");
+    }
+
+    #[test]
+    fn commit_tree_modal_adjusts_the_cli_equivalent_limit() {
+        let mut app = test_app(
+            vec![test_worktree("main", WorktreeStatus::Clean)],
+            0,
+            "/repo/.bare",
+        );
+        app.state = AppState::CommitTreeModal;
+
+        app.handle_commit_tree_modal_input(KeyCode::Char('+'));
+        assert_eq!(app.commit_tree_limit, 75);
+        app.handle_commit_tree_modal_input(KeyCode::Char('-'));
+        assert_eq!(app.commit_tree_limit, 50);
     }
 
     #[test]

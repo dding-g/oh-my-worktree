@@ -1,5 +1,6 @@
 pub mod add_modal;
 pub mod cleanup_modal;
+pub mod commit_tree_modal;
 pub mod config_modal;
 pub mod confirm_modal;
 pub mod help_modal;

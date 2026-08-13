@@ -129,6 +129,7 @@ pub enum AppState {
     },
     HelpModal,
     PrStatusModal,
+    CommitTreeModal,
     /// Branch selection for merge
     MergeBranchSelect {
         branches: Vec<String>,

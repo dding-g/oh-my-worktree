@@ -35,6 +35,7 @@ pub fn render(frame: &mut Frame, app: &App) {
                 ("g", "Jump to current worktree"),
                 ("/", "Search path/name/branch/status/PR"),
                 ("R", "Query PR status (selected/all/branch)"),
+                ("C", "Browse selected worktree commit tree"),
                 ("Space", "Select/unselect worktree"),
                 ("Enter", "Enter worktree (cd)"),
             ],

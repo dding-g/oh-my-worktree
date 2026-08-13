@@ -98,7 +98,7 @@ No other GA CLI command is exempt without owner, rationale, and review condition
 | C06 | Delete with force/branch | Full | batch-capable confirm flow | H0 |
 | C07 | Prune completed-PR worktrees | Full in working tree | cleanup preview + confirm | H1 |
 | C08 | Check PR status by selected/arbitrary/all branch | Full in working tree | PR detail/query modal | H4 |
-| C09 | Browse commit tree with limit | Partial | full-screen tree with paging/limit | H4 |
+| C09 | Browse commit tree with limit | Full in working tree | full-screen tree with adjustable limit | H4 |
 | C10 | Search path/name/branch/status/PR | Full in working tree | unified search mode | H2 |
 | C11 | Browse CLI help | Partial | command help browser | H5 |
 | C12 | Show version/about | Missing | About modal | H5 |

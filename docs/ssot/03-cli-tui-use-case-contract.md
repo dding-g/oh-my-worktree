@@ -84,6 +84,7 @@ Agent-facing install prompt와 skills는 `.agents/`에 둔다. 이 asset들은 a
 | `ConfigModal` | `c` | `j`/`k`, `Enter`, `s`, `Esc`/`q` | edit/save/close |
 | `HelpModal` | `?` | scroll, close | return to list |
 | `PrStatusModal` | `R` | `s`/`Enter` selected, `a` all, `b` arbitrary branch, `Esc` | return to list |
+| `CommitTreeModal` | `C` | `+`/`-` limit, `r` refresh, `Esc` | return to list |
 | `MergeBranchSelect` | `M` | `j`/`k`, `Enter`, `Esc` | merge/cancel |
 
 `List`는 worktree row 또는 list metadata에 PR column을 둘 수 있다. 이 column은 GitHub remote에서 확인한 PR 상태만 표시하며, 허용 값은 `open`, `closed`, `merged`, `draft`뿐이다. PR이 없거나, remote가 GitHub가 아니거나, auth/network/lookup 실패가 있거나, provider가 지원되지 않거나, 알 수 없는 값 또는 그 밖의 값이면 `-`를 표시한다. PR 조회는 보조 metadata이며 worktree 목록 표시를 실패시키거나 block하면 안 된다.
@@ -103,6 +104,7 @@ Agent-facing install prompt와 skills는 `.agents/`에 둔다. 이 asset들은 a
 | worktree | `x` | `owt worktree prune`과 같은 cleanup 후보/제외 사유 preview; 확인 후 실행 |
 | git | `f`, `p`, `P`, `m`, `M` | fetch/pull/push/merge upstream/merge branch. 체크된 worktree가 있으면 pull은 체크된 대상 전체에 적용 |
 | git | `R` | CLI `owt pr status`와 같이 selected worktree, all worktrees, arbitrary branch의 GitHub PR 상태를 background query한다 |
+| git | `C` | CLI `owt commit tree -n`과 같이 선택 worktree의 commit graph를 background query하고 `+`/`-`로 limit을 조절한다 |
 | external | `o`, `t`, `y` | editor/terminal 열기, path copy |
 | config/help | `c`, `?` | config modal/help modal |
 | lifecycle | `q`, `Ctrl+c` | quit |
@@ -157,6 +159,10 @@ user_cases:
     actor: reviewer
     trigger: "TUI에서 `R`을 누르고 selected/all/arbitrary branch query를 선택한다"
     success: "CLI `owt pr status`와 같은 `open`, `closed`, `merged`, `draft`, `-` status model을 비차단으로 확인한다"
+  - id: UC_COMMIT_TREE
+    actor: reviewer
+    trigger: "TUI에서 `C`를 누른다"
+    success: "선택 worktree의 CLI `owt commit tree -n`과 같은 graph를 비차단으로 보고 limit을 조절한다"
 ```
 
 사용자가 수락한 구현 범위는 GitHub-only PR 상태 표시까지다. `UC_PR_REVIEW`는 GitHub PR 상태를 빠르게 확인하는 보조 경험을 포함하지만, non-GitHub provider 지원이나 repository layout 변경을 포함하지 않는다.
@@ -182,3 +188,4 @@ user_cases:
 - `owt search`와 `/` filter는 path/name/branch/status/PR label matcher를 공유하고, status/PR/path fixture의 match set이 같은 test로 고정한다.
 - `src/capability_registry.rs`는 C01–C12 GA capability를 누락·중복 없이 기록하고, `Full` 항목은 추적 가능한 scenario를, `Partial`/`Missing` 항목은 delivery horizon과 release-blocker reason을 가져야 한다.
 - `PrStatusModal`은 selected/all/arbitrary branch query를 TUI thread 밖에서 실행하고, `gh` 실패 또는 비-GitHub remote에서는 `-`를 표시하는 test로 고정한다.
+- `CommitTreeModal`은 선택 non-bare worktree에서 background commit graph query를 하고 limit 변경이 CLI `-n` request로 전달되는 test로 고정한다.
