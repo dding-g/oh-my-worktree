@@ -28,7 +28,7 @@ Branch types are [configurable](/oh-my-worktree/reference/configuration).
 
 ### Step 2: Enter Branch Name
 
-Type your branch name. Use `Tab` to cycle the base branch for the new worktree. The first default is `main`; after you choose a different base branch, that branch remains the default for later worktrees in the same session.
+Type your branch name. Use `Tab` to cycle the base branch for the new worktree. The first default is `main`; after you choose a different base branch, that branch remains the default for later worktrees in the same session. The default destination follows the repository layout policy. Use `Ctrl+p` to switch to an explicit destination path when needed, and `Ctrl+t` to choose the tmux behavior for this creation without changing saved config.
 
 **Keyboard shortcuts in this screen:**
 
@@ -36,6 +36,8 @@ Type your branch name. Use `Tab` to cycle the base branch for the new worktree. 
 |:----|:-------|
 | `Enter` | Exit TUI, then create worktree |
 | `Tab` | Cycle base branch |
+| `Ctrl+p` | Switch branch / explicit destination path input |
+| `Ctrl+t` | Cycle tmux override: default → on → off |
 | `Esc` | Cancel |
 
 ### What Happens

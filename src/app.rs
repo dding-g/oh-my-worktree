@@ -13,8 +13,8 @@ use crate::config::Config;
 use crate::git;
 use crate::tmux;
 use crate::types::{
-    ActiveOp, AppMessage, AppState, ExitAction, GithubPrStatus, OpKind, OpResult, ScriptStatus,
-    SortMode, Worktree, WorktreeCreateRequest, WorktreeDetails, WorktreeStatus,
+    ActiveOp, AddModalField, AppMessage, AppState, ExitAction, GithubPrStatus, OpKind, OpResult,
+    ScriptStatus, SortMode, Worktree, WorktreeCreateRequest, WorktreeDetails, WorktreeStatus,
 };
 use crate::ui::theme::Theme;
 use crate::ui::{add_modal, config_modal, confirm_modal, help_modal, main_view};
@@ -61,6 +61,10 @@ pub struct App {
     pub active_op_info: Option<ActiveOp>,
     pub selected_details: Option<WorktreeDetails>,
     pub add_base_branch: String,
+    pub add_modal_field: AddModalField,
+    pub add_worktree_path: String,
+    pub add_tmux_override: Option<bool>,
+    pub cleanup_preview: Option<crate::worktree_prune::PruneReport>,
 }
 
 impl App {
@@ -145,6 +149,10 @@ impl App {
             active_op_info: None,
             selected_details: None,
             add_base_branch: "main".to_string(),
+            add_modal_field: AddModalField::default(),
+            add_worktree_path: String::new(),
+            add_tmux_override: None,
+            cleanup_preview: None,
         };
         app.update_selected_details();
         app.start_pr_status_refresh();
@@ -332,7 +340,7 @@ impl App {
                         }
                     }
                 }
-                OpKind::Fetch | OpKind::Pull | OpKind::Push | OpKind::Merge => {
+                OpKind::Fetch | OpKind::Pull | OpKind::Push | OpKind::Prune | OpKind::Merge => {
                     self.refresh_worktrees();
                     self.update_selected_details();
                 }
@@ -364,6 +372,10 @@ impl App {
     fn draw(&self, frame: &mut Frame) {
         match self.state {
             AppState::List => main_view::render(frame, self),
+            AppState::CleanupPreview => {
+                main_view::render(frame, self);
+                crate::ui::cleanup_modal::render(frame, self);
+            }
             AppState::AddModal => {
                 main_view::render(frame, self);
                 add_modal::render(frame, self);
@@ -401,7 +413,8 @@ impl App {
 
                     match self.state.clone() {
                         AppState::List => self.handle_list_input(key.code, key.modifiers),
-                        AppState::AddModal => self.handle_add_modal_input(key.code),
+                        AppState::CleanupPreview => self.handle_cleanup_preview_input(key.code),
+                        AppState::AddModal => self.handle_add_modal_input(key.code, key.modifiers),
                         AppState::ConfirmDelete {
                             delete_branch,
                             force,
@@ -564,7 +577,7 @@ impl App {
                 self.last_key = None;
             }
             KeyCode::Char('x') => {
-                self.prune_worktrees();
+                self.open_cleanup_preview();
                 self.last_key = None;
             }
             KeyCode::Char('s') => {
@@ -652,20 +665,23 @@ impl App {
         if self.filter_text.is_empty() {
             return;
         }
-        let filter_lower = self.filter_text.to_lowercase();
-        if let Some(idx) = self.worktrees.iter().position(|wt| {
-            wt.display_name().to_lowercase().contains(&filter_lower)
-                || wt.branch_display().to_lowercase().contains(&filter_lower)
-        }) {
+        if let Some(idx) = self
+            .worktrees
+            .iter()
+            .position(|wt| crate::worktree_query::matches(wt, &self.filter_text))
+        {
             self.selected_index = idx;
         }
     }
 
-    fn handle_add_modal_input(&mut self, code: KeyCode) {
+    fn handle_add_modal_input(&mut self, code: KeyCode, modifiers: KeyModifiers) {
         match code {
             KeyCode::Esc => {
                 self.state = AppState::List;
                 self.input_buffer.clear();
+                self.add_worktree_path.clear();
+                self.add_modal_field = AddModalField::Branch;
+                self.add_tmux_override = None;
             }
             KeyCode::Enter => {
                 if !self.input_buffer.trim().is_empty() {
@@ -675,13 +691,33 @@ impl App {
             KeyCode::Tab => {
                 self.cycle_add_base_branch();
             }
+            KeyCode::Char('p') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.add_modal_field = match self.add_modal_field {
+                    AddModalField::Branch => AddModalField::WorktreePath,
+                    AddModalField::WorktreePath => AddModalField::Branch,
+                };
+            }
+            KeyCode::Char('t') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.add_tmux_override = match self.add_tmux_override {
+                    None => Some(true),
+                    Some(true) => Some(false),
+                    Some(false) => None,
+                };
+            }
             KeyCode::Backspace => {
-                self.input_buffer.pop();
+                self.active_add_input().pop();
             }
             KeyCode::Char(c) => {
-                self.input_buffer.push(c);
+                self.active_add_input().push(c);
             }
             _ => {}
+        }
+    }
+
+    fn active_add_input(&mut self) -> &mut String {
+        match self.add_modal_field {
+            AddModalField::Branch => &mut self.input_buffer,
+            AddModalField::WorktreePath => &mut self.add_worktree_path,
         }
     }
 
@@ -1061,6 +1097,14 @@ impl App {
         format!("Base branch: {}", self.add_base_branch)
     }
 
+    pub fn add_modal_tmux_label(&self) -> &'static str {
+        match self.add_tmux_override {
+            None => "default",
+            Some(true) => "on",
+            Some(false) => "off",
+        }
+    }
+
     fn cycle_add_base_branch(&mut self) {
         match git::list_local_branches(&self.bare_repo_path) {
             Ok(branches) if branches.is_empty() => {
@@ -1227,7 +1271,11 @@ impl App {
             return;
         }
 
-        let worktree_path = self.worktree_path_for_branch(&branch);
+        let worktree_path = if self.add_worktree_path.trim().is_empty() {
+            self.worktree_path_for_branch(&branch)
+        } else {
+            PathBuf::from(self.add_worktree_path.trim())
+        };
         if let Some(existing) = self.conflicting_worktree_for_branch(&branch, &worktree_path) {
             self.message = Some(AppMessage::error(format!(
                 "Branch '{}' is already checked out at {}. Remove or move that worktree first.",
@@ -1252,10 +1300,14 @@ impl App {
             base_branch: self.add_base_branch.clone(),
             worktree_path,
             source_path,
+            tmux: self.add_tmux_override,
         });
         self.should_quit = true;
         self.state = AppState::List;
         self.input_buffer.clear();
+        self.add_worktree_path.clear();
+        self.add_modal_field = AddModalField::Branch;
+        self.add_tmux_override = None;
     }
 
     fn run_post_add_script(&mut self, worktree_path: &Path) {
@@ -1444,32 +1496,121 @@ impl App {
         });
     }
 
-    fn prune_worktrees(&mut self) {
-        let cmd_detail = format!("git -C {} worktree prune -v", self.bare_repo_path.display());
+    fn open_cleanup_preview(&mut self) {
+        if self.active_op.is_some() {
+            self.message = Some(AppMessage::info("Operation still in progress"));
+            return;
+        }
 
-        match git::prune_worktrees(&self.bare_repo_path) {
-            Ok(output) => {
-                let mut msg = if output.is_empty() {
-                    "Prune completed: nothing to prune".to_string()
-                } else {
-                    format!("Pruned: {}", output)
-                };
-                if self.verbose {
-                    msg = format!("{}\n$ {}", msg, cmd_detail);
-                    self.last_command_detail = Some(cmd_detail);
-                }
-                self.message = Some(AppMessage::info(msg));
-                self.refresh_worktrees();
+        let launch_path = self
+            .current_worktree_path
+            .clone()
+            .unwrap_or_else(|| self.project_root_path.clone());
+        match crate::worktree_prune::run_prune(
+            &self.bare_repo_path,
+            &launch_path,
+            crate::worktree_prune::PruneMode::Preview,
+        ) {
+            Ok(report) => {
+                self.cleanup_preview = Some(report);
+                self.state = AppState::CleanupPreview;
             }
-            Err(e) => {
-                let mut msg = format!("Prune failed: {}", e);
-                if self.verbose {
-                    msg = format!("{}\n$ {}", msg, cmd_detail);
-                    self.last_command_detail = Some(cmd_detail);
-                }
-                self.message = Some(AppMessage::error(msg));
+            Err(error) => {
+                self.message = Some(AppMessage::error(format!(
+                    "Cleanup preview failed: {}",
+                    error
+                )));
             }
         }
+    }
+
+    fn handle_cleanup_preview_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc | KeyCode::Char('n') => {
+                self.cleanup_preview = None;
+                self.state = AppState::List;
+            }
+            KeyCode::Char('y') | KeyCode::Enter => self.execute_cleanup(),
+            _ => {}
+        }
+    }
+
+    fn execute_cleanup(&mut self) {
+        if self.active_op.is_some() {
+            self.message = Some(AppMessage::info("Operation still in progress"));
+            return;
+        }
+
+        let candidate_count = self
+            .cleanup_preview
+            .as_ref()
+            .map(crate::worktree_prune::PruneReport::candidate_count)
+            .unwrap_or(0);
+        let bare_repo_path = self.bare_repo_path.clone();
+        let launch_path = self
+            .current_worktree_path
+            .clone()
+            .unwrap_or_else(|| self.project_root_path.clone());
+        let display_name = format!("{} cleanup candidate(s)", candidate_count);
+        let display_name_for_state = display_name.clone();
+        let cmd_detail = format!("owt worktree prune --path {}", bare_repo_path.display());
+        let cmd_detail_for_thread = cmd_detail.clone();
+        let (tx, rx) = mpsc::channel();
+
+        std::thread::spawn(move || {
+            let result = crate::worktree_prune::run_prune(
+                &bare_repo_path,
+                &launch_path,
+                crate::worktree_prune::PruneMode::Execute,
+            );
+            let (success, message, affected_paths) = match result {
+                Ok(report) => {
+                    let removed_paths = report
+                        .logs
+                        .iter()
+                        .filter(|log| {
+                            matches!(
+                                log.action,
+                                crate::worktree_prune::PruneWorktreeAction::Removed
+                            )
+                        })
+                        .map(|log| log.path.clone())
+                        .collect::<Vec<_>>();
+                    (
+                        true,
+                        format!(
+                            "Cleanup completed: removed {} worktree(s)",
+                            report.removed_count()
+                        ),
+                        removed_paths,
+                    )
+                }
+                Err(error) => (false, error.to_string(), Vec::new()),
+            };
+            let worktree_path = affected_paths
+                .first()
+                .cloned()
+                .unwrap_or_else(|| PathBuf::from("."));
+            let _ = tx.send(OpResult {
+                kind: OpKind::Prune,
+                success,
+                message,
+                cmd_detail: cmd_detail_for_thread,
+                worktree_path,
+                affected_paths,
+            });
+        });
+
+        self.cleanup_preview = None;
+        self.state = AppState::List;
+        self.message = Some(AppMessage::info(format!("Cleaning up: {}", display_name)));
+        self.active_op = Some((OpKind::Prune, rx));
+        self.active_op_info = Some(ActiveOp {
+            kind: OpKind::Prune,
+            worktree_path: PathBuf::from("."),
+            worktree_paths: Vec::new(),
+            display_name: display_name_for_state,
+        });
     }
 
     fn open_editor(&mut self) {
@@ -2209,6 +2350,10 @@ mod tests {
             active_op_info: None,
             selected_details: None,
             add_base_branch: "main".to_string(),
+            add_modal_field: AddModalField::default(),
+            add_worktree_path: String::new(),
+            add_tmux_override: None,
+            cleanup_preview: None,
         }
     }
 
@@ -2278,6 +2423,22 @@ mod tests {
 
         assert_eq!(app.selected_index, 0);
         assert!(app.last_key.is_none());
+    }
+
+    #[test]
+    fn cleanup_preview_cancels_without_starting_a_mutation() {
+        let mut app = test_app(vec![], 0, "/repo/.bare");
+        app.state = AppState::CleanupPreview;
+        app.cleanup_preview = Some(crate::worktree_prune::PruneReport {
+            metadata_output: String::new(),
+            logs: vec![],
+        });
+
+        app.handle_cleanup_preview_input(KeyCode::Esc);
+
+        assert!(matches!(app.state, AppState::List));
+        assert!(app.cleanup_preview.is_none());
+        assert!(app.active_op.is_none());
     }
 
     #[test]
@@ -2527,7 +2688,7 @@ mod tests {
         app.current_worktree_path = Some(PathBuf::from("/repo/main"));
         app.input_buffer = "feature/post-tui".to_string();
 
-        app.handle_add_modal_input(KeyCode::Enter);
+        app.handle_add_modal_input(KeyCode::Enter, KeyModifiers::NONE);
 
         assert!(app.should_quit);
         assert!(app.active_op.is_none());
@@ -2544,8 +2705,35 @@ mod tests {
                     PathBuf::from("/repo/feature/post-tui")
                 );
                 assert_eq!(request.source_path, Some(PathBuf::from("/repo/main")));
+                assert_eq!(request.tmux, None);
             }
             other => panic!("expected post-TUI create request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn add_modal_queues_explicit_path_and_tmux_override() {
+        let mut app = test_app(
+            vec![test_worktree("main", WorktreeStatus::Clean)],
+            0,
+            "/repo/.bare",
+        );
+        app.input_buffer = "feature/advanced".to_string();
+
+        app.handle_add_modal_input(KeyCode::Char('p'), KeyModifiers::CONTROL);
+        app.handle_add_modal_input(KeyCode::Char('/'), KeyModifiers::NONE);
+        for character in "tmp/owt-advanced".chars() {
+            app.handle_add_modal_input(KeyCode::Char(character), KeyModifiers::NONE);
+        }
+        app.handle_add_modal_input(KeyCode::Char('t'), KeyModifiers::CONTROL);
+        app.handle_add_modal_input(KeyCode::Enter, KeyModifiers::NONE);
+
+        match app.exit_action {
+            ExitAction::CreateWorktree(request) => {
+                assert_eq!(request.worktree_path, PathBuf::from("/tmp/owt-advanced"));
+                assert_eq!(request.tmux, Some(true));
+            }
+            _ => panic!("add modal should queue a create request"),
         }
     }
 
@@ -2866,6 +3054,45 @@ mod tests {
         }
         assert!(!app.is_filtering);
         assert!(app.should_quit);
+    }
+
+    #[test]
+    fn filter_selects_status_and_pr_matches_with_cli_semantics() {
+        let mut app = test_app(
+            vec![
+                Worktree {
+                    path: PathBuf::from("/repo/main"),
+                    branch: Some("main".to_string()),
+                    is_bare: false,
+                    status: WorktreeStatus::Clean,
+                    last_commit_time: None,
+                    last_commit_timestamp: None,
+                    ahead_behind: None,
+                    github_pr_status: None,
+                },
+                Worktree {
+                    path: PathBuf::from("/repo/review-42"),
+                    branch: Some("review/42".to_string()),
+                    is_bare: false,
+                    status: WorktreeStatus::Unstaged,
+                    last_commit_time: None,
+                    last_commit_timestamp: None,
+                    ahead_behind: None,
+                    github_pr_status: Some(crate::types::GithubPrStatus::Closed),
+                },
+            ],
+            0,
+            "/repo/.bare",
+        );
+
+        app.filter_text = "closed".to_string();
+        app.select_first_filtered_worktree();
+        assert_eq!(app.selected_index, 1);
+
+        app.selected_index = 0;
+        app.filter_text = "unstaged".to_string();
+        app.select_first_filtered_worktree();
+        assert_eq!(app.selected_index, 1);
     }
 
     #[test]

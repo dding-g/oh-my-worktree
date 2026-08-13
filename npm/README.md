@@ -103,13 +103,13 @@ Then use the TUI:
 | `Enter` | Enter the selected worktree |
 | `a` | Add a worktree |
 | `d` | Delete the selected worktree, or selected worktrees when any are checked |
-| `r` / `x` | Refresh the list / prune stale worktree metadata |
+| `r` / `x` | Refresh the list / preview stale-metadata and completed-PR cleanup |
 | `f` | Fetch remotes |
 | `p` / `P` | Pull selected worktree(s) / push the selected worktree |
 | `m` / `M` | Merge upstream / merge selected branch |
 | `o` / `t` | Open in editor / terminal |
 | `y` | Copy path |
-| `/` | Filter |
+| `/` | Filter by path, name, branch, status, or PR |
 | `s` | Cycle sort mode |
 | `c` | View config |
 | `v` | Toggle verbose Git command details |

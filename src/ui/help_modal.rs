@@ -33,7 +33,7 @@ pub fn render(frame: &mut Frame, app: &App) {
                 ("G / End", "Go to bottom"),
                 ("Ctrl+d/u", "Half page down/up"),
                 ("g", "Jump to current worktree"),
-                ("/", "Search worktrees"),
+                ("/", "Search path/name/branch/status/PR"),
                 ("Space", "Select/unselect worktree"),
                 ("Enter", "Enter worktree (cd)"),
             ],
@@ -43,7 +43,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             vec![
                 ("a", "Add new worktree"),
                 ("d", "Delete selected worktree(s)"),
-                ("x", "Prune stale worktrees"),
+                ("x", "Preview completed-PR cleanup"),
                 ("r", "Refresh list"),
                 ("s", "Sort (name/recent/status)"),
             ],

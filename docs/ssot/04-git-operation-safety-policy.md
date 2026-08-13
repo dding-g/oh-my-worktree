@@ -49,7 +49,7 @@ git_command_policy:
 | list | TUI load/refresh | `git worktree list --porcelain` + optional GitHub/gh-style PR lookup | bare entry와 non-bare worktree를 구분하고, GitHub PR 상태가 확인되면 list metadata로 표시한다 | status 조회 실패는 `unknown`이며 PR lookup 실패는 list를 실패시키거나 block하지 않는다 |
 | add | `a` modal confirm | remote base fetch + `git worktree add` | branch/base 정책에 맞는 worktree 생성 | origin base 조회/fetch 실패를 무시하지 않으며 생성 후 usable worktree인지 확인/repair한다 |
 | delete | `d` confirm | live status recheck + `git worktree remove` + optional branch delete | 선택 worktree 제거. `Space`로 체크한 worktree가 있으면 체크된 대상 전체에 적용 | force가 아니면 live status가 `clean`으로 확인된 대상만 삭제한다 |
-| prune | `owt worktree prune` | `git worktree prune -v` + `gh pr list` 단일 조회 기반 completed PR worktree scan; `--dry-run`은 `git worktree prune --dry-run -v`와 serial candidate review | stale metadata를 정리하고 완료된 worktree를 병렬 제거하며 모든 worktree 판단 로그를 출력한다. `--dry-run`은 삭제 없이 selected candidate를 기록한다 | candidate 판단과 제거 직전 live status가 모두 `clean`이어야 한다. status `unknown`, `HEAD` branch worktree와 branch는 삭제하지 않는다 |
+| prune | `owt worktree prune`, TUI `x` | shared prune use-case: `git worktree prune -v` + `gh pr list` 단일 조회 기반 completed PR worktree scan; CLI `--dry-run`은 serial candidate review, TUI는 non-interactive preview 후 explicit confirm | stale metadata를 정리하고 완료된 worktree를 병렬 제거하며 모든 worktree 판단 로그를 출력한다. preview는 삭제 없이 eligible/excluded reason을 표시한다 | candidate 판단과 제거 직전 live status가 모두 `clean`이어야 한다. status `unknown`, `HEAD` branch worktree와 branch는 삭제하지 않는다 |
 | fetch | `f` | selected worktree/repo remote fetch | remote refs와 ahead/behind 갱신 | long operation은 background op로 처리한다 |
 | pull | `p` | selected worktree `git pull` | remote 변경 merge. `Space`로 체크한 worktree가 있으면 체크된 대상 전체에 적용 | clean worktree expectation을 문서에 노출한다 |
 | push | `P` | selected branch push | remote에 현재 branch push | 실패는 status bar/message로 표시한다 |
@@ -129,6 +129,7 @@ PR status는 worktree row의 보조 표시다. GitHub remote에서 확인된 `op
 - Remote base branch fetch는 새 branch 생성 시 최신 `origin/<base>` commit을 기준으로 worktree를 만들 수 있어야 한다.
 - Remote base branch 조회/fetch 실패는 create를 중단하며 stale `origin/<base>`로 조용히 fallback하지 않는다.
 - CLI prune은 dirty, PR 미완료, current, HEAD-branch, bare, detached worktree를 삭제하지 않고 `--dry-run`이 삭제를 수행하지 않는 regression test로 고정한다.
+- CLI prune과 TUI cleanup preview는 같은 candidate/reason model을 사용하며 TUI confirm 실행은 preview 결과를 신뢰하지 않고 live status를 다시 확인하는 regression test로 고정한다.
 - Worktree status 조회 실패는 `unknown`으로 표시하고 delete/prune을 허용하지 않는 regression test로 고정한다.
 - PR status lookup은 GitHub-only 보조 조회다. 실패, 누락, non-GitHub remote, unsupported provider는 모두 `-` 표시로 수렴해야 하며 list operation의 성공 여부를 바꾸면 안 된다.
 

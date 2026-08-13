@@ -125,3 +125,30 @@ fn prune_action_keeps_worktree_with_unknown_status() {
         PruneWorktreeAction::Kept("status-unknown".to_string())
     );
 }
+
+#[test]
+fn prune_report_counts_only_eligible_and_removed_worktrees() {
+    let report = PruneReport {
+        metadata_output: String::new(),
+        logs: vec![
+            PruneWorktreeLog {
+                branch: Some("feature/eligible".to_string()),
+                path: PathBuf::from("/worktrees/eligible"),
+                action: PruneWorktreeAction::WouldRemove,
+            },
+            PruneWorktreeLog {
+                branch: Some("feature/removed".to_string()),
+                path: PathBuf::from("/worktrees/removed"),
+                action: PruneWorktreeAction::Removed,
+            },
+            PruneWorktreeLog {
+                branch: Some("main".to_string()),
+                path: PathBuf::from("/worktrees/main"),
+                action: PruneWorktreeAction::Kept("head".to_string()),
+            },
+        ],
+    };
+
+    assert_eq!(report.candidate_count(), 1);
+    assert_eq!(report.removed_count(), 1);
+}

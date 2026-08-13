@@ -1,4 +1,5 @@
 mod app;
+mod capability_registry;
 mod config;
 mod copy_files;
 mod git;
@@ -6,6 +7,7 @@ mod tmux;
 mod types;
 mod ui;
 mod worktree_prune;
+mod worktree_query;
 
 #[cfg(test)]
 mod test_support {
@@ -169,6 +171,8 @@ owt() {
 "#;
 
 fn main() -> Result<()> {
+    debug_assert!(capability_registry::invariant_holds());
+
     match parse_args() {
         Command::Help(topic) => {
             print_help(topic);
@@ -371,7 +375,7 @@ fn run_post_tui_create_worktree(
         }
     }
 
-    if config.tmux_worktree_mode {
+    if request.tmux.unwrap_or(config.tmux_worktree_mode) {
         let worktree_name = worktree_name_from_path(&request.worktree_path);
         match tmux::open_worktree_pane(&request.worktree_path, &worktree_name) {
             Ok(()) => eprintln!("tmux\topened\t{}", plain_field(&worktree_name)),
@@ -550,14 +554,13 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
         }
         WorktreeCommand::Prune { path, dry_run } => {
             let context = resolve_repository_context(&path)?;
-            let metadata_output = if dry_run {
-                git::preview_prune_worktrees(&context.repo_path)?
+            let mode = if dry_run {
+                worktree_prune::PruneMode::InteractiveDryRun
             } else {
-                git::prune_worktrees(&context.repo_path)?
+                worktree_prune::PruneMode::Execute
             };
-            let logs =
-                worktree_prune::prune_completed_pr_worktrees(&context.repo_path, &path, dry_run)?;
-            worktree_prune::print_prune_output(&metadata_output, &logs);
+            let report = worktree_prune::run_prune(&context.repo_path, &path, mode)?;
+            worktree_prune::print_prune_output(&report);
             Ok(())
         }
     }
@@ -611,9 +614,8 @@ fn run_search_command(command: SearchCommand) -> Result<()> {
             if include_pr {
                 refresh_pr_statuses(&context.repo_path, &mut worktrees);
             }
-            let needle = query.to_lowercase();
             for worktree in &worktrees {
-                if worktree_matches(worktree, &needle) {
+                if worktree_query::matches(worktree, &query) {
                     print_worktree_record(worktree);
                 }
             }
@@ -794,19 +796,6 @@ fn pr_status_targets(
         })
         .into_iter()
         .collect()
-}
-
-fn worktree_matches(worktree: &types::Worktree, needle: &str) -> bool {
-    let pr_status = worktree.github_pr_status.map(|status| status.label());
-    [
-        worktree.path.display().to_string(),
-        worktree.display_name(),
-        worktree.branch_display(),
-        worktree.status.label().to_string(),
-        pr_status.unwrap_or("-").to_string(),
-    ]
-    .iter()
-    .any(|value| value.to_lowercase().contains(needle))
 }
 
 fn print_worktree_record(worktree: &types::Worktree) {
@@ -2303,6 +2292,7 @@ mod tests {
             base_branch: "main".to_string(),
             worktree_path: worktree_path.clone(),
             source_path: Some(source.clone()),
+            tmux: Some(false),
         };
         let mut config = Config::default();
         config.copy_files = vec!["config/local.env".to_string()];

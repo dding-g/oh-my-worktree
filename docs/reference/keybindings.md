@@ -30,7 +30,7 @@ Complete list of keyboard shortcuts.
 |:----|:-------|
 | `a` | Add new worktree |
 | `d` | Delete selected worktree(s) |
-| `x` | Prune stale worktree metadata |
+| `x` | Preview the same stale-metadata and completed-PR cleanup as `owt worktree prune`; confirm before removal |
 | `r` | Refresh list |
 | `s` | Cycle sort mode |
 
@@ -69,6 +69,8 @@ Complete list of keyboard shortcuts.
 |:----|:-------|
 | `Enter` | Create worktree |
 | `Tab` | Cycle base branch |
+| `Ctrl+p` | Switch between branch and explicit destination path input |
+| `Ctrl+t` | Cycle this create's tmux override: default → on → off |
 | `Esc` | Cancel |
 
 ## Delete Confirmation
@@ -93,7 +95,7 @@ Complete list of keyboard shortcuts.
 
 | Key | Action |
 |:----|:-------|
-| (any text) | Filter worktrees |
+| (any text) | Filter by path, name, branch, status, or PR |
 | `Enter` | Enter selected worktree |
 | `Esc` | Cancel search |
 | `Backspace` | Delete character |

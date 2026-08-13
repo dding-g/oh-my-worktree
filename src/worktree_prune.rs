@@ -5,17 +5,47 @@ use std::path::{Path, PathBuf};
 
 use crate::{git, types};
 
-#[derive(Debug, PartialEq, Eq)]
-enum PruneWorktreeAction {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PruneWorktreeAction {
     Removed,
     WouldRemove,
     Kept(String),
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct PruneWorktreeLog {
-    branch: Option<String>,
-    path: PathBuf,
-    action: PruneWorktreeAction,
+    pub(crate) branch: Option<String>,
+    pub(crate) path: PathBuf,
+    pub(crate) action: PruneWorktreeAction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PruneMode {
+    Execute,
+    Preview,
+    InteractiveDryRun,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PruneReport {
+    pub(crate) metadata_output: String,
+    pub(crate) logs: Vec<PruneWorktreeLog>,
+}
+
+impl PruneReport {
+    pub(crate) fn candidate_count(&self) -> usize {
+        self.logs
+            .iter()
+            .filter(|log| matches!(log.action, PruneWorktreeAction::WouldRemove))
+            .count()
+    }
+
+    pub(crate) fn removed_count(&self) -> usize {
+        self.logs
+            .iter()
+            .filter(|log| matches!(log.action, PruneWorktreeAction::Removed))
+            .count()
+    }
 }
 
 struct PruneWorktreeDecision<'a> {
@@ -24,11 +54,17 @@ struct PruneWorktreeDecision<'a> {
     pr_status: Option<types::GithubPrStatus>,
 }
 
-pub(crate) fn prune_completed_pr_worktrees(
+pub(crate) fn run_prune(
     repo_path: &Path,
     launch_path: &Path,
-    dry_run: bool,
-) -> Result<Vec<PruneWorktreeLog>> {
+    mode: PruneMode,
+) -> Result<PruneReport> {
+    let dry_run = mode != PruneMode::Execute;
+    let metadata_output = if dry_run {
+        git::preview_prune_worktrees(repo_path)?
+    } else {
+        git::prune_worktrees(repo_path)?
+    };
     let worktrees = git::list_worktrees(repo_path)?;
     let current_path = current_worktree_path(&worktrees, launch_path);
     let head_branch = git::get_default_branch(repo_path).ok();
@@ -47,7 +83,7 @@ pub(crate) fn prune_completed_pr_worktrees(
             },
         );
         let action = match action {
-            PruneWorktreeAction::WouldRemove if dry_run => {
+            PruneWorktreeAction::WouldRemove if mode == PruneMode::InteractiveDryRun => {
                 if confirm_dry_run_prune(&worktree)? {
                     PruneWorktreeAction::WouldRemove
                 } else {
@@ -64,11 +100,14 @@ pub(crate) fn prune_completed_pr_worktrees(
         });
     }
 
-    if !dry_run {
+    if mode == PruneMode::Execute {
         remove_prune_candidates(repo_path, &mut logs)?;
     }
 
-    Ok(logs)
+    Ok(PruneReport {
+        metadata_output,
+        logs,
+    })
 }
 
 fn prune_pr_statuses(
@@ -186,8 +225,9 @@ fn confirm_dry_run_prune(worktree: &types::Worktree) -> Result<bool> {
     Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "YES"))
 }
 
-pub(crate) fn print_prune_output(metadata_output: &str, logs: &[PruneWorktreeLog]) {
-    let removed_or_selected = logs
+pub(crate) fn print_prune_output(report: &PruneReport) {
+    let removed_or_selected = report
+        .logs
         .iter()
         .filter(|log| {
             matches!(
@@ -197,11 +237,11 @@ pub(crate) fn print_prune_output(metadata_output: &str, logs: &[PruneWorktreeLog
         })
         .count();
 
-    if metadata_output.is_empty() && removed_or_selected == 0 {
+    if report.metadata_output.is_empty() && removed_or_selected == 0 {
         println!("pruned\t0");
     }
 
-    for log in logs {
+    for log in &report.logs {
         let branch = plain_field(log.branch.as_deref().unwrap_or("-"));
         let path = plain_field(&log.path.display().to_string());
         match &log.action {
@@ -222,7 +262,7 @@ pub(crate) fn print_prune_output(metadata_output: &str, logs: &[PruneWorktreeLog
         }
     }
 
-    for line in metadata_output.lines() {
+    for line in report.metadata_output.lines() {
         println!("pruned\tmetadata\t{}", plain_field(line));
     }
 }

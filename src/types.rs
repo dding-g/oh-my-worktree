@@ -117,6 +117,7 @@ impl Worktree {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppState {
     List,
+    CleanupPreview,
     AddModal,
     ConfirmDelete {
         delete_branch: bool,
@@ -150,6 +151,14 @@ pub struct WorktreeCreateRequest {
     pub base_branch: String,
     pub worktree_path: PathBuf,
     pub source_path: Option<PathBuf>,
+    pub tmux: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AddModalField {
+    #[default]
+    Branch,
+    WorktreePath,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -215,6 +224,7 @@ pub enum OpKind {
     #[allow(dead_code)]
     Add,
     Delete,
+    Prune,
     Merge,
 }
 

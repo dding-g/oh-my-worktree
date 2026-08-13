@@ -103,13 +103,13 @@ TUI에서 다음 키를 사용합니다.
 | `Enter` | 선택한 worktree로 이동 |
 | `a` | worktree 추가 |
 | `d` | 선택한 worktree 삭제. 체크된 worktree가 있으면 여러 개 삭제 |
-| `r` / `x` | 목록 새로고침 / stale worktree metadata 정리 |
+| `r` / `x` | 목록 새로고침 / stale metadata와 완료된 PR worktree 정리 preview |
 | `f` | remote fetch |
 | `p` / `P` | 선택한 worktree pull / 커서로 선택한 worktree push |
 | `m` / `M` | upstream merge / 선택 branch merge |
 | `o` / `t` | editor / terminal에서 열기 |
 | `y` | path 복사 |
-| `/` | filter |
+| `/` | path, name, branch, status, PR로 filter |
 | `s` | sort mode 전환 |
 | `c` | config 보기 |
 | `v` | verbose Git command detail 표시 전환 |
