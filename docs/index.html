@@ -16,7 +16,7 @@
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after {
       margin: 0;
@@ -1221,11 +1221,12 @@
     .delay-3 { animation-delay: 0.3s; opacity: 0; }
     .delay-4 { animation-delay: 0.4s; opacity: 0; }
   </style>
+  <link rel="stylesheet" href="homepage.css">
 </head>
 <body>
   <div class="bg-gradient"></div>
 
-  <header>
+  <header class="nav-term">
     <div class="container header-inner">
       <a href="#" class="logo">
         <div class="logo-icon">&gt;_</div>
@@ -1277,8 +1278,8 @@
           </div>
 
           <div class="install-cmd animate-in delay-4">
-            <code><span>$</span> cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0</code>
-            <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0" aria-label="Copy to clipboard">
+            <code><span>$</span> npm i -g oh-my-worktree</code>
+            <button class="copy-btn" data-copy="npm i -g oh-my-worktree" aria-label="Copy to clipboard">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
