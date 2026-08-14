@@ -8,5 +8,6 @@ Read these before changing architecture, repository-layout behavior, documentati
 - `documentation-gaps/repository-layout-documentation-contract.md` - regular repo / `.bare` policy sync rules
 - `developer-experience/compound-engineering-workflow.md` - how to keep project knowledge compounding over time
 - `performance/worktree-loading-performance-plan.md` - plan for fast TUI startup and scalable worktree metadata loading
+- `security/fail-closed-worktree-mutation-boundaries.md` - path confinement and live-status rules for safe copies, deletion, and prune
 
 These docs complement `AGENTS.md` and the SSOT set under `docs/ssot/`. `AGENTS.md` is the operational entrypoint; `docs/ssot/00-ssot-index.md` is the policy-contract map; `docs/solutions/` records reusable context and lessons.

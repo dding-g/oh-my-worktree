@@ -3,6 +3,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorktreeStatus {
     Clean,
+    Unknown,
     Staged,
     Unstaged,
     Conflict,
@@ -32,6 +33,7 @@ impl WorktreeStatus {
     pub fn symbol(&self) -> &'static str {
         match self {
             WorktreeStatus::Clean => "✓",
+            WorktreeStatus::Unknown => "?",
             WorktreeStatus::Staged => "+",
             WorktreeStatus::Unstaged => "~",
             WorktreeStatus::Conflict => "!",
@@ -42,6 +44,7 @@ impl WorktreeStatus {
     pub fn label(&self) -> &'static str {
         match self {
             WorktreeStatus::Clean => "clean",
+            WorktreeStatus::Unknown => "unknown",
             WorktreeStatus::Staged => "staged",
             WorktreeStatus::Unstaged => "unstaged",
             WorktreeStatus::Conflict => "conflict",
@@ -77,6 +80,7 @@ pub struct Worktree {
     pub is_bare: bool,
     pub status: WorktreeStatus,
     pub last_commit_time: Option<String>,
+    pub last_commit_timestamp: Option<i64>,
     pub ahead_behind: Option<AheadBehind>,
     pub github_pr_status: Option<GithubPrStatus>,
 }
@@ -113,6 +117,7 @@ impl Worktree {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppState {
     List,
+    CleanupPreview,
     AddModal,
     ConfirmDelete {
         delete_branch: bool,
@@ -123,6 +128,10 @@ pub enum AppState {
         editing: bool,
     },
     HelpModal,
+    CloneModal,
+    AboutModal,
+    PrStatusModal,
+    CommitTreeModal,
     /// Branch selection for merge
     MergeBranchSelect {
         branches: Vec<String>,
@@ -136,6 +145,9 @@ pub enum ExitAction {
     Quit,
     ChangeDirectory(PathBuf),
     CreateWorktree(WorktreeCreateRequest),
+    CloneWorkspace { url: String, path: Option<PathBuf> },
+    InstallShellSetup,
+    ShowInitGuide(PathBuf),
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +158,14 @@ pub struct WorktreeCreateRequest {
     pub base_branch: String,
     pub worktree_path: PathBuf,
     pub source_path: Option<PathBuf>,
+    pub tmux: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AddModalField {
+    #[default]
+    Branch,
+    WorktreePath,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -211,6 +231,7 @@ pub enum OpKind {
     #[allow(dead_code)]
     Add,
     Delete,
+    Prune,
     Merge,
 }
 
@@ -221,7 +242,6 @@ pub struct OpResult {
     pub cmd_detail: String,
     pub worktree_path: PathBuf,
     pub affected_paths: Vec<PathBuf>,
-    pub display_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +260,7 @@ mod tests {
     fn worktree_status_symbols_and_labels_match_contract() {
         let cases = [
             (WorktreeStatus::Clean, "✓", "clean"),
+            (WorktreeStatus::Unknown, "?", "unknown"),
             (WorktreeStatus::Staged, "+", "staged"),
             (WorktreeStatus::Unstaged, "~", "unstaged"),
             (WorktreeStatus::Conflict, "!", "conflict"),
@@ -296,6 +317,7 @@ mod tests {
             is_bare: false,
             status: WorktreeStatus::Clean,
             last_commit_time: None,
+            last_commit_timestamp: None,
             ahead_behind: None,
             github_pr_status: None,
         };

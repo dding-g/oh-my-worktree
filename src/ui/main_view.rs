@@ -93,7 +93,6 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
     .height(1);
 
     // Check if filter matches a worktree
-    let filter_lower = app.filter_text.to_lowercase();
     let has_filter = !app.filter_text.is_empty();
 
     // Get current spinner frame
@@ -113,12 +112,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             let is_marked = app.is_worktree_marked(&wt.path);
 
             // Check if this row matches filter
-            let matches_filter = if has_filter {
-                wt.display_name().to_lowercase().contains(&filter_lower)
-                    || wt.branch_display().to_lowercase().contains(&filter_lower)
-            } else {
-                true
-            };
+            let matches_filter = crate::worktree_query::matches(wt, &app.filter_text);
 
             // Modern indicator: dot for selection, filled dot for current
             let cursor = if is_marked {
@@ -141,6 +135,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 
             let status_color = match wt.status {
                 WorktreeStatus::Clean => t.accent,
+                WorktreeStatus::Unknown => t.text_muted,
                 WorktreeStatus::Staged => t.amber,
                 WorktreeStatus::Unstaged => t.amber,
                 WorktreeStatus::Conflict => t.red,
@@ -184,6 +179,7 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
                     OpKind::Push => "Pushing...",
                     OpKind::Add => "Adding...",
                     OpKind::Delete => "Deleting...",
+                    OpKind::Prune => "Cleaning...",
                     OpKind::Merge => "Merging...",
                 };
                 let color = if op.kind == OpKind::Delete {
@@ -473,6 +469,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
             OpKind::Push => "Pushing",
             OpKind::Add => "Creating",
             OpKind::Delete => "Deleting",
+            OpKind::Prune => "Cleaning",
             OpKind::Merge => "Merging",
         };
         vec![
@@ -524,26 +521,6 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled("Filter: ", Style::default().fg(t.text_muted)),
                 Span::styled(&app.filter_text, Style::default().fg(t.amber)),
                 Span::styled(" (Esc to clear)", Style::default().fg(t.text_muted)),
-            ]),
-        ]
-    } else if let Some(ref op) = app.active_op_info {
-        let spinner = SPINNER_FRAMES[app.spinner_tick % SPINNER_FRAMES.len()];
-        let label = match &op.kind {
-            OpKind::Fetch => "Fetching",
-            OpKind::Pull => "Pulling",
-            OpKind::Push => "Pushing",
-            OpKind::Add => "Adding",
-            OpKind::Delete => "Deleting",
-            OpKind::Merge => "Merging",
-        };
-        vec![
-            Line::from(binding_spans),
-            Line::from(vec![
-                Span::styled(spinner, Style::default().fg(t.amber)),
-                Span::styled(
-                    format!(" {} {}...", label, op.display_name),
-                    Style::default().fg(t.amber),
-                ),
             ]),
         ]
     } else if let Some(warning) = integration_warning {

@@ -1,10 +1,14 @@
 mod app;
+mod capability_registry;
 mod config;
+mod copy_files;
 mod git;
+mod global_app;
 mod tmux;
 mod types;
 mod ui;
 mod worktree_prune;
+mod worktree_query;
 
 #[cfg(test)]
 mod test_support {
@@ -51,6 +55,7 @@ mod test_support {
 
 use anyhow::{Context, Result};
 use config::Config;
+use copy_files::copy_configured_files;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
@@ -167,6 +172,8 @@ owt() {
 "#;
 
 fn main() -> Result<()> {
+    debug_assert!(capability_registry::invariant_holds());
+
     match parse_args() {
         Command::Help(topic) => {
             print_help(topic);
@@ -188,46 +195,86 @@ fn main() -> Result<()> {
     }
 }
 
+#[cfg(unix)]
+type TuiWriter = std::fs::File;
+#[cfg(not(unix))]
+type TuiWriter = std::io::Stdout;
+
+#[cfg(unix)]
+fn open_tui_writer() -> Result<TuiWriter> {
+    Ok(std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")?)
+}
+
+#[cfg(not(unix))]
+fn open_tui_writer() -> Result<TuiWriter> {
+    Ok(std::io::stdout())
+}
+
+struct TerminalModeGuard;
+
+impl TerminalModeGuard {
+    fn enter() -> Result<Self> {
+        crossterm::terminal::enable_raw_mode()?;
+        let mut control = match open_tui_writer() {
+            Ok(control) => control,
+            Err(error) => {
+                let _ = crossterm::terminal::disable_raw_mode();
+                return Err(error);
+            }
+        };
+        if let Err(error) = crossterm::execute!(control, crossterm::terminal::EnterAlternateScreen)
+        {
+            let _ = crossterm::terminal::disable_raw_mode();
+            return Err(error.into());
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalModeGuard {
+    fn drop(&mut self) {
+        if let Ok(mut control) = open_tui_writer() {
+            let _ = crossterm::execute!(control, crossterm::terminal::LeaveAlternateScreen);
+        }
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+}
+
 fn run_tui(path: PathBuf) -> Result<()> {
-    use std::fs::File;
     use std::io::Write;
 
     // Check if we should write result to a file (for shell integration)
     let output_file = env::var("OWT_OUTPUT_FILE").ok();
 
-    let repo_context = match resolve_repository_context(&path) {
-        Ok(context) => context,
-        Err(_) => {
-            print_not_git_repo_error();
-            std::process::exit(1);
-        }
-    };
-
-    // Always use /dev/tty for TUI to support shell integration
-    let tty = File::options().read(true).write(true).open("/dev/tty")?;
-    let mut tty_for_control = tty.try_clone()?;
-
-    crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(tty_for_control, crossterm::terminal::EnterAlternateScreen)?;
-
-    let backend = ratatui::backend::CrosstermBackend::new(tty);
+    let terminal_mode = TerminalModeGuard::enter()?;
+    let backend = ratatui::backend::CrosstermBackend::new(open_tui_writer()?);
     let mut terminal = ratatui::Terminal::new(backend)?;
 
     let has_shell_integration = output_file.is_some();
-    let mut app = app::App::new(
-        repo_context.repo_path,
-        repo_context.project_root_path,
-        repo_context.repo_is_bare,
-        Some(path),
-        has_shell_integration,
-    )?;
-    let result = app.run(&mut terminal);
+    let (result, exit_action, config) = match resolve_repository_context(&path) {
+        Ok(repo_context) => {
+            let mut app = app::App::new(
+                repo_context.repo_path,
+                repo_context.project_root_path,
+                repo_context.repo_is_bare,
+                Some(path),
+                has_shell_integration,
+            )?;
+            let result = app.run(&mut terminal);
+            (result, app.exit_action.clone(), app.config.clone())
+        }
+        Err(_) => {
+            let mut app = global_app::GlobalApp::new(path);
+            let result = app.run(&mut terminal);
+            (result, app.exit_action.clone(), Config::default())
+        }
+    };
 
-    // Restore terminal
-    crossterm::execute!(tty_for_control, crossterm::terminal::LeaveAlternateScreen)?;
-    crossterm::terminal::disable_raw_mode()?;
-
-    let exit_action = app.exit_action.clone();
+    drop(terminal);
+    drop(terminal_mode);
 
     // Handle exit action - write path for shell integration
     match &exit_action {
@@ -247,8 +294,11 @@ fn run_tui(path: PathBuf) -> Result<()> {
             // Normal quit, no directory change
         }
         types::ExitAction::CreateWorktree(request) => {
-            run_post_tui_create_worktree(request, &app.config, output_file.as_deref())?;
+            run_post_tui_create_worktree(request, &config, output_file.as_deref())?;
         }
+        types::ExitAction::CloneWorkspace { url, path } => run_clone(url, path.clone())?,
+        types::ExitAction::InstallShellSetup => run_setup()?,
+        types::ExitAction::ShowInitGuide(path) => run_init_at(path)?,
     }
 
     result
@@ -312,7 +362,7 @@ fn run_post_tui_create_worktree(
     );
 
     let base_branch = Some(request.base_branch.as_str());
-    let _ = git::fetch_remote_branch(&request.bare_repo_path, &request.base_branch);
+    git::fetch_remote_branch(&request.bare_repo_path, &request.base_branch)?;
     git::add_worktree(
         &request.bare_repo_path,
         &request.branch,
@@ -329,7 +379,7 @@ fn run_post_tui_create_worktree(
         }
     }
 
-    if config.tmux_worktree_mode {
+    if request.tmux.unwrap_or(config.tmux_worktree_mode) {
         let worktree_name = worktree_name_from_path(&request.worktree_path);
         match tmux::open_worktree_pane(&request.worktree_path, &worktree_name) {
             Ok(()) => eprintln!("tmux\topened\t{}", plain_field(&worktree_name)),
@@ -431,7 +481,7 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
             }
 
             if let Some(base_branch) = base.as_deref() {
-                let _ = git::fetch_remote_branch(&context.repo_path, base_branch);
+                git::fetch_remote_branch(&context.repo_path, base_branch)?;
             }
 
             git::add_worktree(&context.repo_path, &branch, &target_path, base.as_deref())?;
@@ -508,14 +558,13 @@ fn run_worktree_command(command: WorktreeCommand) -> Result<()> {
         }
         WorktreeCommand::Prune { path, dry_run } => {
             let context = resolve_repository_context(&path)?;
-            let metadata_output = if dry_run {
-                git::preview_prune_worktrees(&context.repo_path)?
+            let mode = if dry_run {
+                worktree_prune::PruneMode::InteractiveDryRun
             } else {
-                git::prune_worktrees(&context.repo_path)?
+                worktree_prune::PruneMode::Execute
             };
-            let logs =
-                worktree_prune::prune_completed_pr_worktrees(&context.repo_path, &path, dry_run)?;
-            worktree_prune::print_prune_output(&metadata_output, &logs);
+            let report = worktree_prune::run_prune(&context.repo_path, &path, mode)?;
+            worktree_prune::print_prune_output(&report);
             Ok(())
         }
     }
@@ -530,7 +579,7 @@ fn run_pr_command(command: PrCommand) -> Result<()> {
             let statuses = git::github_pr_statuses_for_worktrees(&context.repo_path, &targets);
 
             for ((target_path, status), (_, branch)) in
-                statuses.into_iter().zip(targets.into_iter())
+                statuses.into_iter().zip(targets)
             {
                 println!(
                     "{}\t{}\t{}",
@@ -569,9 +618,8 @@ fn run_search_command(command: SearchCommand) -> Result<()> {
             if include_pr {
                 refresh_pr_statuses(&context.repo_path, &mut worktrees);
             }
-            let needle = query.to_lowercase();
             for worktree in &worktrees {
-                if worktree_matches(worktree, &needle) {
+                if worktree_query::matches(worktree, &query) {
                     print_worktree_record(worktree);
                 }
             }
@@ -754,19 +802,6 @@ fn pr_status_targets(
         .collect()
 }
 
-fn worktree_matches(worktree: &types::Worktree, needle: &str) -> bool {
-    let pr_status = worktree.github_pr_status.map(|status| status.label());
-    [
-        worktree.path.display().to_string(),
-        worktree.display_name(),
-        worktree.branch_display(),
-        worktree.status.label().to_string(),
-        pr_status.unwrap_or("-").to_string(),
-    ]
-    .iter()
-    .any(|value| value.to_lowercase().contains(needle))
-}
-
 fn print_worktree_record(worktree: &types::Worktree) {
     let (ahead, behind) = worktree
         .ahead_behind
@@ -790,36 +825,6 @@ fn print_worktree_record(worktree: &types::Worktree) {
         behind,
         worktree.github_pr_display()
     );
-}
-
-fn copy_configured_files(source: &Path, destination: &Path, files: &[String]) -> Vec<String> {
-    files
-        .iter()
-        .filter_map(|file| {
-            copy_configured_file(source, destination, file)
-                .err()
-                .map(|error| error.to_string())
-        })
-        .collect()
-}
-
-fn copy_configured_file(source: &Path, destination: &Path, file: &str) -> Result<()> {
-    let src = source.join(file);
-    let dst = destination.join(file);
-
-    if !src.exists() {
-        anyhow::bail!("{} source file missing at {}", file, src.display());
-    }
-    if !src.is_file() {
-        anyhow::bail!("{} source is not a file at {}", file, src.display());
-    }
-    if let Some(parent) = dst.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("could not create {}", parent.display()))?;
-    }
-    std::fs::copy(&src, &dst)
-        .with_context(|| format!("could not copy {} to {}", src.display(), dst.display()))?;
-    Ok(())
 }
 
 fn paths_refer_to_same_location(left: &Path, right: &Path) -> bool {
@@ -886,21 +891,24 @@ fn run_clone(url: &str, target_path: Option<PathBuf>) -> Result<()> {
 
 fn run_init() -> Result<()> {
     let current_dir = env::current_dir()?;
+    run_init_at(&current_dir)
+}
 
+fn run_init_at(current_dir: &Path) -> Result<()> {
     // Check if already a bare repo
-    if git::is_bare_repo(&current_dir)? {
+    if git::is_bare_repo(current_dir)? {
         println!("Already a bare repository. Run 'owt' to start.");
         return Ok(());
     }
 
     // Check if it's a git repo
-    if !git::is_git_repo(&current_dir) {
+    if !git::is_git_repo(current_dir) {
         eprintln!("Error: Not a git repository");
         std::process::exit(1);
     }
 
     // Check if it's inside a worktree
-    let common_dir = git::get_git_common_dir(&current_dir)?;
+    let common_dir = git::get_git_common_dir(current_dir)?;
     if git::is_bare_repo(&common_dir)? {
         println!("This is a worktree of a bare repository.");
         println!("Bare repo: {}", common_dir.display());
@@ -1663,6 +1671,7 @@ OUTPUT:
     );
 }
 
+#[allow(dead_code)]
 fn print_not_git_repo_error() {
     eprintln!(
         r#"Error: Not a git repository
@@ -1899,7 +1908,7 @@ mod tests {
                 || PathBuf::from("/cwd")
             ),
             Command::Worktree(WorktreeCommand::List { path, include_pr })
-                if path == PathBuf::from("/repo") && include_pr
+                if path == Path::new("/repo") && include_pr
         ));
         assert!(matches!(
             parse_args_from(
@@ -1922,7 +1931,7 @@ mod tests {
                 base,
                 worktree_path,
                 tmux
-            }) if path == PathBuf::from("/cwd")
+            }) if path == Path::new("/cwd")
                 && branch == "feature/login"
                 && base == Some("main".to_string())
                 && worktree_path == Some(PathBuf::from("/tmp/login"))
@@ -2062,7 +2071,7 @@ mod tests {
                 || PathBuf::from("/repo")
             ),
             Command::Pr(PrCommand::Status { path, branch, all: true })
-                if path == PathBuf::from("/repo") && branch == Some("feature/login".to_string())
+                if path == Path::new("/repo") && branch == Some("feature/login".to_string())
         ));
         assert!(matches!(
             parse_args_from(
@@ -2076,7 +2085,7 @@ mod tests {
                 || PathBuf::from("/repo")
             ),
             Command::Commit(CommitCommand::Tree { path, limit: 12 })
-                if path == PathBuf::from("/repo")
+                if path == Path::new("/repo")
         ));
         assert!(matches!(
             parse_args_from(
@@ -2092,7 +2101,7 @@ mod tests {
                 path,
                 query,
                 include_pr: true
-            }) if path == PathBuf::from("/repo") && query == "login"
+            }) if path == Path::new("/repo") && query == "login"
         ));
     }
 
@@ -2291,6 +2300,7 @@ mod tests {
             base_branch: "main".to_string(),
             worktree_path: worktree_path.clone(),
             source_path: Some(source.clone()),
+            tmux: Some(false),
         };
         let mut config = Config::default();
         config.copy_files = vec!["config/local.env".to_string()];
@@ -2308,6 +2318,39 @@ mod tests {
             format!("{}\n", worktree_path.display())
         );
 
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn worktree_create_stops_when_base_branch_fetch_fails() {
+        let base = temp_dir("create_fetch_failure");
+        let source = base.join("source-repo");
+        let worktree_path = base.join("feature-fetch-failure");
+        create_source_repo(&source);
+        assert_git_success(
+            git_cmd()
+                .current_dir(&source)
+                .args([
+                    "remote",
+                    "add",
+                    "origin",
+                    "file:///definitely/missing/owt-review.git",
+                ])
+                .output()
+                .unwrap(),
+            "git remote add failed",
+        );
+
+        let result = run_worktree_command(WorktreeCommand::Create {
+            path: source.clone(),
+            branch: "feature/fetch-failure".to_string(),
+            base: Some("main".to_string()),
+            worktree_path: Some(worktree_path.clone()),
+            tmux: Some(false),
+        });
+
+        assert!(result.is_err());
+        assert!(!worktree_path.exists());
         let _ = fs::remove_dir_all(base);
     }
 

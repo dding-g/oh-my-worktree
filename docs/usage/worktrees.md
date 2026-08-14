@@ -28,7 +28,7 @@ Branch types are [configurable](/oh-my-worktree/reference/configuration).
 
 ### Step 2: Enter Branch Name
 
-Type your branch name. Use `Tab` to cycle the base branch for the new worktree. The first default is `main`; after you choose a different base branch, that branch remains the default for later worktrees in the same session.
+Type your branch name. Use `Tab` to cycle the base branch for the new worktree. The first default is `main`; after you choose a different base branch, that branch remains the default for later worktrees in the same session. The default destination follows the repository layout policy. Use `Ctrl+p` to switch to an explicit destination path when needed, and `Ctrl+t` to choose the tmux behavior for this creation without changing saved config.
 
 **Keyboard shortcuts in this screen:**
 
@@ -36,6 +36,8 @@ Type your branch name. Use `Tab` to cycle the base branch for the new worktree. 
 |:----|:-------|
 | `Enter` | Exit TUI, then create worktree |
 | `Tab` | Cycle base branch |
+| `Ctrl+p` | Switch branch / explicit destination path input |
+| `Ctrl+t` | Cycle tmux override: default → on → off |
 | `Esc` | Cancel |
 
 ### What Happens
@@ -100,7 +102,7 @@ owt worktree prune
 owt worktree prune --dry-run
 ```
 
-This logs every worktree decision as tab-separated output. Normal mode removes non-current worktrees only when they are clean and their GitHub PR status is `merged` or `closed`, except the `HEAD` branch worktree itself. Removal runs in parallel and does not delete branches. `--dry-run` previews stale metadata pruning, reviews removable worktrees one at a time, and records selected candidates without deleting them. Dirty worktrees, worktrees without a completed PR status, bare entries, detached worktrees, the current worktree, and the `HEAD` branch worktree are left in place.
+This logs every worktree decision as tab-separated output. Normal mode removes non-current worktrees only when their live status is verified as clean and their GitHub PR status is `merged` or `closed`, except the `HEAD` branch worktree itself. Removal runs in parallel and does not delete branches. `--dry-run` previews stale metadata pruning, reviews removable worktrees one at a time, and records selected candidates without deleting them. Dirty or unknown-status worktrees, worktrees without a completed PR status, bare entries, detached worktrees, the current worktree, and the `HEAD` branch worktree are left in place.
 
 ## Commands
 

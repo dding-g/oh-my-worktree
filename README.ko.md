@@ -27,10 +27,10 @@ Git worktree는 이 문제의 정답에 가깝습니다. `owt`는 그 정답을 
 
 ## 설치
 
-현재 릴리즈(`v0.13.0`)를 Cargo로 설치:
+현재 릴리즈(`v0.15.0`)를 Cargo로 설치:
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0 --force
 ```
 
 Prebuilt 바이너리는 최신 [GitHub Release](https://github.com/dding-g/oh-my-worktree/releases/latest)에 첨부됩니다.
@@ -88,6 +88,8 @@ repo/
 
 기존 repository를 이 layout으로 옮기고 싶다면 `owt init`이 수동 변환 guide를 출력합니다.
 
+Git repository 밖에서 `owt`를 실행하면 Global Home이 열립니다. `c`는 URL과 선택 path로 clone을 시작하고, `i`는 변환 guide 진입점을, `s`는 terminal 복원 뒤 shell setup을, `?`는 CLI 명령을, `v`는 버전을 보여 줍니다.
+
 ## 매일 쓰는 흐름
 
 ```bash
@@ -103,14 +105,20 @@ TUI에서 다음 키를 사용합니다.
 | `Enter` | 선택한 worktree로 이동 |
 | `a` | worktree 추가 |
 | `d` | 선택한 worktree 삭제. 체크된 worktree가 있으면 여러 개 삭제 |
+| `r` / `x` | 목록 새로고침 / stale metadata와 완료된 PR worktree 정리 preview |
+| `R` | 선택 항목·전체·임의 branch의 PR 상태 조회 |
+| `C` | 선택 worktree의 commit tree 조회 |
+| `N` | `.bare` workspace clone |
+| `I` / `S` / `V` | 현재 repository init guide / shell setup / About 표시 |
 | `f` | remote fetch |
-| `p` / `P` | 선택한 worktree pull / 현재 worktree push |
+| `p` / `P` | 선택한 worktree pull / 커서로 선택한 worktree push |
 | `m` / `M` | upstream merge / 선택 branch merge |
 | `o` / `t` | editor / terminal에서 열기 |
 | `y` | path 복사 |
-| `/` | filter |
+| `/` | path, name, branch, status, PR로 filter |
 | `s` | sort mode 전환 |
 | `c` | config 보기 |
+| `v` | verbose Git command detail 표시 전환 |
 | `?` | help |
 | `q` | 종료 |
 
@@ -119,6 +127,7 @@ TUI에서 다음 키를 사용합니다.
 | Signal | Meaning |
 | --- | --- |
 | `✓ clean` | local 변경 없음 |
+| `? unknown` | Git status를 확인하지 못함. destructive cleanup에서는 unsafe로 처리 |
 | `+ staged` | staged 변경 있음 |
 | `~ unstaged` | unstaged 변경 있음 |
 | `! conflict` | merge conflict |
@@ -190,7 +199,7 @@ run_post_add_script_in_tmux = false
 | `editor` | `o` 키에서 사용할 command |
 | `terminal` | `t` 키에서 사용할 terminal app |
 | `worktree_root` | regular repository에서 새 worktree를 만들 root |
-| `copy_files` | 새 worktree로 복사할 파일. 파일만 복사하며 복사 문제는 생성 후 warning으로 표시됩니다. |
+| `copy_files` | 새 worktree로 복사할 상대 파일 path. 절대 path, `..`, destination symlink는 거부하며 복사 문제는 생성 후 warning으로 표시됩니다. |
 | `post_add_script` | post-add setup script path. 상대 path는 현재 effective project root 기준입니다. |
 | `tmux_worktree_mode` | 새 worktree 생성 후 tmux pane을 열고, `Enter` 시 같은 이름의 pane이 있으면 focus합니다. |
 | `run_post_add_script_in_tmux` | worktree 생성 후 post-add script를 detached tmux에서 실행. 이 값은 global config에서만 켤 수 있습니다. |

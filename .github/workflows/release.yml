@@ -34,6 +34,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify release version mirrors
+        run: node scripts/sync-release-version.js "${{ github.ref_name }}" --check
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:

@@ -20,7 +20,7 @@ owt worktree --help
 2. If missing or stale, install the verified current release:
 
 ```bash
-cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force
+cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0 --force
 ```
 
 Use the npm wrapper only after confirming the registry package matches the current release:

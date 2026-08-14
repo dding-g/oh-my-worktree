@@ -21,6 +21,7 @@ Complete list of keyboard shortcuts.
 | `Ctrl+u` | Half page up |
 | `g` | Jump to current worktree |
 | `/` | Search worktrees |
+| `Space` | Select/unselect a worktree for batch actions |
 | `Enter` | Enter worktree (cd) |
 
 ## Worktree Actions
@@ -28,7 +29,8 @@ Complete list of keyboard shortcuts.
 | Key | Action |
 |:----|:-------|
 | `a` | Add new worktree |
-| `d` | Delete worktree |
+| `d` | Delete selected worktree(s) |
+| `x` | Preview the same stale-metadata and completed-PR cleanup as `owt worktree prune`; confirm before removal |
 | `r` | Refresh list |
 | `s` | Cycle sort mode |
 
@@ -37,10 +39,15 @@ Complete list of keyboard shortcuts.
 | Key | Action |
 |:----|:-------|
 | `f` | Fetch remotes |
-| `p` | Pull from remote |
+| `p` | Pull selected worktree(s) from remote |
 | `P` | Push to remote |
 | `m` | Merge upstream |
 | `M` | Merge branch (select) |
+| `R` | Query PR status for selected worktree, all worktrees, or an arbitrary branch |
+| `C` | Browse selected worktree commit tree; `+`/`-` changes the limit |
+| `N` | Clone a `.bare` workspace after terminal restore |
+| `I` / `S` | Show the current repository init guide / run shell setup after terminal restore |
+| `V` | Show About/version |
 
 ## External Apps
 
@@ -54,6 +61,7 @@ Complete list of keyboard shortcuts.
 | Key | Action |
 |:----|:-------|
 | `y` | Copy path to clipboard |
+| `v` | Toggle verbose Git command details |
 | `c` | Open config modal |
 | `?` | Show help |
 | `q` | Quit |
@@ -66,6 +74,8 @@ Complete list of keyboard shortcuts.
 |:----|:-------|
 | `Enter` | Create worktree |
 | `Tab` | Cycle base branch |
+| `Ctrl+p` | Switch between branch and explicit destination path input |
+| `Ctrl+t` | Cycle this create's tmux override: default → on → off |
 | `Esc` | Cancel |
 
 ## Delete Confirmation
@@ -75,6 +85,7 @@ Complete list of keyboard shortcuts.
 | `y` / `Enter` | Confirm delete |
 | `n` / `Esc` | Cancel |
 | `b` | Toggle delete branch |
+| `f` | Toggle force delete for dirty worktrees |
 
 ## Config Modal
 
@@ -89,7 +100,7 @@ Complete list of keyboard shortcuts.
 
 | Key | Action |
 |:----|:-------|
-| (any text) | Filter worktrees |
+| (any text) | Filter by path, name, branch, status, or PR |
 | `Enter` | Enter selected worktree |
 | `Esc` | Cancel search |
 | `Backspace` | Delete character |

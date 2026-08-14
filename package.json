@@ -1,8 +1,9 @@
 {
   "name": "oh-my-worktree-dev",
-  "version": "0.14.4",
+  "version": "0.15.0",
   "private": true,
   "scripts": {
+    "check:release-version": "node scripts/sync-release-version.js --check",
     "release": "release-it",
     "release:patch": "release-it patch",
     "release:minor": "release-it minor",

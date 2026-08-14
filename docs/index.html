@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after {
       margin: 0;
@@ -109,6 +109,10 @@
       transition: background 0.2s ease, color 0.2s ease;
     }
 
+    :root[data-lang="ko"] body {
+      word-break: keep-all;
+    }
+
     .bg-gradient {
       position: fixed;
       top: 0;
@@ -197,6 +201,12 @@
       font-weight: 500;
       cursor: pointer;
       transition: all 0.15s ease;
+    }
+
+    .language-toggle {
+      min-width: 44px;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
     }
 
     .theme-toggle:hover {
@@ -1138,6 +1148,10 @@
         padding: 8px 10px;
       }
 
+      .language-toggle {
+        display: inline-flex !important;
+      }
+
       .theme-toggle-label {
         display: none;
       }
@@ -1207,20 +1221,22 @@
     .delay-3 { animation-delay: 0.3s; opacity: 0; }
     .delay-4 { animation-delay: 0.4s; opacity: 0; }
   </style>
+  <link rel="stylesheet" href="homepage.css">
 </head>
 <body>
   <div class="bg-gradient"></div>
 
-  <header>
+  <header class="nav-term">
     <div class="container header-inner">
       <a href="#" class="logo">
         <div class="logo-icon">&gt;_</div>
         <span>owt</span>
       </a>
       <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#installation">Install</a>
-        <a href="#keybindings">Keys</a>
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#installation" data-i18n="nav.install">Install</a>
+        <a href="#keybindings" data-i18n="nav.keys">Keys</a>
+        <button class="theme-toggle language-toggle" type="button" aria-label="Switch language to Korean" aria-pressed="false" data-language-toggle>KO</button>
         <button class="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="false" data-theme-toggle>
           <span class="theme-toggle-icon" aria-hidden="true">☾</span>
           <span class="theme-toggle-label">Dark</span>
@@ -1236,34 +1252,34 @@
         <div class="hero-content">
           <div class="badge animate-in delay-1">
             <span class="badge-dot"></span>
-            v0.13.0 · regular repos first-class
+            <span data-i18n="hero.badge">v0.15.0 · safe PR-aware pruning</span>
           </div>
 
-          <h1 class="animate-in delay-2">Branches are working contexts.</h1>
+          <h1 class="animate-in delay-2" data-i18n="hero.title">Branches are working contexts.</h1>
 
           <p class="hero-description animate-in delay-3">
-            owt makes Git worktrees practical for daily development. Run it in the repo you already have, create isolated branch directories, and move between them without stashing, rebuilding, or losing editor state.
+            <span data-i18n="hero.description">owt makes Git worktrees practical for daily development. Run it in the repo you already have, create isolated branch directories, and move between them without stashing, rebuilding, or losing editor state.</span>
           </p>
 
           <div class="hero-points animate-in delay-3">
-            <span class="hero-point">regular repos supported</span>
-            <span class="hero-point">optional .bare layout</span>
-            <span class="hero-point">PR + git status visible</span>
+            <span class="hero-point" data-i18n="hero.pointRegular">regular repos supported</span>
+            <span class="hero-point" data-i18n="hero.pointBare">optional .bare layout</span>
+            <span class="hero-point" data-i18n="hero.pointPr">PR + git status visible</span>
           </div>
 
           <div class="hero-cta animate-in delay-4">
-            <a href="#installation" class="btn btn-primary">Get Started</a>
+            <a href="#installation" class="btn btn-primary" data-i18n="hero.getStarted">Get Started</a>
             <a href="https://github.com/dding-g/oh-my-worktree" class="btn btn-secondary" target="_blank">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
               </svg>
-              View on GitHub
+              <span data-i18n="hero.github">View on GitHub</span>
             </a>
           </div>
 
           <div class="install-cmd animate-in delay-4">
-            <code><span>$</span> cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0</code>
-            <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0" aria-label="Copy to clipboard">
+            <code><span>$</span> npm i -g oh-my-worktree</code>
+            <button class="copy-btn" data-copy="npm i -g oh-my-worktree" aria-label="Copy to clipboard">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1278,8 +1294,8 @@
               <img data-screenshot src="assets/owt-darkmode.png" width="1536" height="1024" alt="owt terminal UI showing a list of Git worktrees, branch status, and selected worktree details">
             </div>
             <div class="screenshot-caption">
-              <span>real TUI screenshot</span>
-              <span>working contexts, Git status, PR state, and actions in one view</span>
+              <span data-i18n="screenshot.label">real TUI screenshot</span>
+              <span data-i18n="screenshot.description">working contexts, Git status, PR state, and actions in one view</span>
             </div>
           </div>
         </div>
@@ -1428,8 +1444,8 @@
               <h3>Latest <span>Recommended</span></h3>
             </div>
             <div class="code-block">
-              <code><span class="hl">cargo</span> install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force</code>
-              <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.13.0 --force">
+              <code><span class="hl">cargo</span> install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0 --force</code>
+              <button class="copy-btn" data-copy="cargo install --git https://github.com/dding-g/oh-my-worktree --tag v0.15.0 --force">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1639,6 +1655,117 @@
   </footer>
 
   <script>
+    const translations = {
+      en: {
+        "nav.features": "Features", "nav.install": "Install", "nav.keys": "Keys",
+        "hero.badge": "v0.15.0 · safe PR-aware pruning",
+        "hero.title": "Branches are working contexts.",
+        "hero.description": "owt makes Git worktrees practical for daily development. Run it in the repo you already have, create isolated branch directories, and move between them without stashing, rebuilding, or losing editor state.",
+        "hero.pointRegular": "regular repos supported", "hero.pointBare": "optional .bare layout", "hero.pointPr": "PR + git status visible",
+        "hero.getStarted": "Get Started", "hero.github": "View on GitHub",
+        "screenshot.label": "real TUI screenshot", "screenshot.description": "working contexts, Git status, PR state, and actions in one view"
+      },
+      ko: {
+        "nav.features": "기능", "nav.install": "설치", "nav.keys": "키",
+        "hero.badge": "v0.15.0 · PR 상태 기반 안전 정리",
+        "hero.title": "브랜치는 작업 컨텍스트입니다.",
+        "hero.description": "owt는 Git worktree를 일상적인 개발 흐름에 맞게 만듭니다. 지금 사용하는 repository에서 바로 실행하고, branch마다 분리된 directory를 만들어 stash·재빌드·editor 상태 손실 없이 이동하세요.",
+        "hero.pointRegular": "regular repository 지원", "hero.pointBare": "선택 가능한 .bare layout", "hero.pointPr": "PR + Git status 표시",
+        "hero.getStarted": "시작하기", "hero.github": "GitHub에서 보기",
+        "screenshot.label": "실제 TUI 화면", "screenshot.description": "작업 컨텍스트, Git status, PR 상태, action을 한 화면에서 확인"
+      }
+    };
+
+    const textTranslations = {
+      en: {
+        "Why owt exists": "Why owt exists",
+        "Stop treating branches like bookmarks.": "Stop treating branches like bookmarks.",
+        "Features": "Features", "Installation": "Installation", "Keybindings": "Keybindings",
+        "Built for practical worktree use": "Built for practical worktree use",
+        "Daily actions stay on the keyboard": "Daily actions stay on the keyboard",
+        "Shell Integration": "Shell Integration",
+        "Make worktrees your default branch workflow.": "Make worktrees your default branch workflow.",
+        "GitHub": "GitHub", "Issues": "Issues", "View on GitHub": "View on GitHub",
+        "Latest ": "Latest ", "Recommended": "Recommended", "Wrapper": "Wrapper",
+        "Navigation": "Navigation", "Worktree Actions": "Worktree Actions", "Git Operations": "Git Operations", "External Apps": "External Apps"
+      },
+      ko: {
+        "Why owt exists": "owt가 필요한 이유",
+        "Stop treating branches like bookmarks.": "브랜치를 북마크처럼 다루지 마세요.",
+        "Features": "주요 기능", "Installation": "설치", "Keybindings": "키 바인딩",
+        "Built for practical worktree use": "실용적인 worktree 작업을 위해 만들었습니다",
+        "Daily actions stay on the keyboard": "일상 작업을 키보드에서 끝냅니다",
+        "Shell Integration": "Shell 연동",
+        "Make worktrees your default branch workflow.": "worktree를 기본 브랜치 작업 흐름으로 만드세요.",
+        "GitHub": "GitHub", "Issues": "이슈", "View on GitHub": "GitHub에서 보기",
+        "Latest ": "최신 ", "Recommended": "권장", "Wrapper": "래퍼",
+        "Navigation": "탐색", "Worktree Actions": "Worktree 작업", "Git Operations": "Git 작업", "External Apps": "외부 앱"
+        ,"real TUI screenshot": "실제 TUI 화면"
+        ,"working contexts, Git status, PR state, and actions in one view": "작업 컨텍스트, Git status, PR 상태, action을 한 화면에서 확인"
+        ,"Reviewing a PR, testing a hotfix, keeping a feature open, and checking main before release should not all compete for one checkout. With worktrees, each branch gets its own directory. owt gives that model a daily driver.": "PR 검토, hotfix 테스트, 기능 개발, release 전 main 확인이 하나의 checkout을 두고 경쟁할 필요는 없습니다. worktree를 쓰면 branch마다 독립 directory를 갖고, owt가 이를 일상적인 작업 흐름으로 만듭니다."
+        ,"Plain Git flow": "일반 Git 흐름", "owt flow": "owt 흐름"
+        ,"Visual list with status and PR state": "status와 PR 상태를 보여주는 시각적 목록"
+        ,"Press": "", ", pick the branch context": "로 branch 컨텍스트 선택", " to move your shell": "로 shell 이동", "or": "또는"
+        ,"Supported layouts": "지원하는 layout"
+        ,"The fast path for creating, reading, switching, and cleaning up branch contexts.": "branch 컨텍스트를 생성·확인·전환·정리하는 가장 빠른 경로입니다."
+        ,"Branches as contexts": "컨텍스트로 쓰는 branch", "Keep a PR review, hotfix, feature, and main checkout open at the same time without stashing.": "stash 없이 PR review, hotfix, feature, main checkout을 동시에 열어 두세요."
+        ,"Fast TUI workflows": "빠른 TUI 작업 흐름", "Create, delete, fetch, pull, push, merge, filter, and sort worktrees with single keystrokes.": "한 번의 키 입력으로 worktree 생성·삭제·fetch·pull·push·merge·filter·정렬을 수행합니다."
+        ,"Regular repos first": "regular repository 우선", "Optional .bare layout": "선택 가능한 .bare layout"
+        ,"Status and PR visibility": "Status와 PR 가시성", "See dirty state, ahead/behind counts, last commit, and best-effort GitHub PR state before you switch.": "전환 전에 dirty 상태, ahead/behind 수, 마지막 commit, best-effort GitHub PR 상태를 확인합니다."
+        ,"Shell and app handoff": "Shell과 앱 handoff"
+        ,"Install, then open your current repo": "설치한 뒤 현재 repository에서 시작하세요."
+        ,"Use Cargo or GitHub Release binaries for the latest release; use npm when the registry package is current.": "최신 release는 Cargo 또는 GitHub Release binary로 설치하세요. npm registry package가 최신일 때 npm을 사용하세요."
+        ,"Install the shell helper once. After that, pressing": "shell helper를 한 번 설치하면, 이후", "exits the TUI and moves your current shell into the selected worktree.": "를 눌러 TUI를 종료하고 현재 shell을 선택한 worktree로 이동할 수 있습니다."
+        ,"The common path is fast: move, add, delete, sync, merge, open, copy, and leave.": "일상 경로는 빠릅니다. 이동, 생성, 삭제, 동기화, merge, 열기, 복사, 전환을 키보드로 수행하세요."
+        ,"Search worktrees": "worktree 검색", "Move up / down": "위 / 아래 이동", "Jump to top / bottom": "처음 / 끝으로 이동", "Enter worktree (cd)": "worktree 진입 (cd)"
+        ,"Add new worktree": "새 worktree 생성", "Delete worktree": "worktree 삭제", "Refresh list": "목록 새로고침", "Cycle sort mode": "정렬 방식 전환"
+        ,"Fetch remotes": "remote fetch", "Pull from remote": "remote에서 pull", "Push to remote": "remote로 push", "Merge upstream": "upstream merge"
+        ,"Open in editor": "editor에서 열기", "Open in terminal": "terminal에서 열기", "Copy path to clipboard": "path를 clipboard에 복사", "Open config": "config 열기"
+        ,"Start in your existing repository, or clone into the optional .bare layout when sibling worktrees fit the project.": "기존 repository에서 바로 시작하거나, sibling worktree가 잘 맞는 project라면 선택 가능한 .bare layout으로 clone하세요."
+        ,"Get Started": "시작하기", "Star on GitHub": "GitHub Star", "MIT License · Built with Rust": "MIT License · Rust로 제작"
+      }
+    };
+
+    const languageToggle = document.querySelector('[data-language-toggle]');
+    const originalText = new WeakMap();
+
+    function applyLanguage(language) {
+      const locale = language === 'ko' ? 'ko' : 'en';
+      document.documentElement.lang = locale;
+      document.documentElement.dataset.lang = locale;
+      localStorage.setItem('owt-language', locale);
+      document.querySelectorAll('[data-i18n]').forEach(element => {
+        element.textContent = translations[locale][element.dataset.i18n] || element.textContent;
+      });
+      document.querySelectorAll('body *').forEach(element => {
+        [...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim()).forEach(node => {
+          if (!originalText.has(node)) originalText.set(node, node.textContent);
+          const source = originalText.get(node);
+          const trimmed = source.trim();
+          const translated = textTranslations[locale][trimmed];
+          if (translated) node.textContent = source.replace(trimmed, translated);
+          else node.textContent = source;
+        });
+      });
+      document.title = locale === 'ko' ? 'owt — Git Worktree 관리자' : 'owt — Git Worktree Manager';
+      document.querySelector('meta[name="description"]')?.setAttribute('content', locale === 'ko'
+        ? 'Git 브랜치를 북마크가 아닌 작업 컨텍스트로 사용하는 개발자를 위한 빠른 터미널 UI입니다.'
+        : 'A fast terminal UI for developers who use Git branches as working contexts, not bookmarks.');
+      if (languageToggle) {
+        const next = locale === 'ko' ? 'English' : '한국어';
+        languageToggle.textContent = locale === 'ko' ? 'EN' : 'KO';
+        languageToggle.setAttribute('aria-label', `Switch language to ${next}`);
+        languageToggle.setAttribute('aria-pressed', String(locale === 'ko'));
+      }
+    }
+
+    const storedLanguage = localStorage.getItem('owt-language');
+    const preferredLanguage = navigator.language?.toLowerCase().startsWith('ko') ? 'ko' : 'en';
+    applyLanguage(storedLanguage || preferredLanguage);
+    languageToggle?.addEventListener('click', () => {
+      applyLanguage(document.documentElement.dataset.lang === 'ko' ? 'en' : 'ko');
+    });
+
     const themeToggle = document.querySelector('[data-theme-toggle]');
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     const screenshot = document.querySelector('[data-screenshot]');

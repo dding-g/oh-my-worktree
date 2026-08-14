@@ -85,71 +85,85 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_config_item(
         frame,
         chunks[5],
-        "editor",
-        &get_editor_display(app),
-        selected_index == 0,
-        editing && selected_index == 0,
-        &app.input_buffer,
+        ConfigItem {
+            label: "editor",
+            value: &get_editor_display(app),
+            is_selected: selected_index == 0,
+            is_editing: editing && selected_index == 0,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
     render_config_item(
         frame,
         chunks[6],
-        "terminal",
-        &get_terminal_display(app),
-        selected_index == 1,
-        editing && selected_index == 1,
-        &app.input_buffer,
+        ConfigItem {
+            label: "terminal",
+            value: &get_terminal_display(app),
+            is_selected: selected_index == 1,
+            is_editing: editing && selected_index == 1,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
     render_config_item(
         frame,
         chunks[7],
-        "worktree_root",
-        &get_worktree_root_display(app),
-        selected_index == 2,
-        editing && selected_index == 2,
-        &app.input_buffer,
+        ConfigItem {
+            label: "worktree_root",
+            value: &get_worktree_root_display(app),
+            is_selected: selected_index == 2,
+            is_editing: editing && selected_index == 2,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
     render_config_item(
         frame,
         chunks[8],
-        "copy_files",
-        &get_copy_files_display(app),
-        selected_index == 3,
-        editing && selected_index == 3,
-        &app.input_buffer,
+        ConfigItem {
+            label: "copy_files",
+            value: &get_copy_files_display(app),
+            is_selected: selected_index == 3,
+            is_editing: editing && selected_index == 3,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
     render_config_item(
         frame,
         chunks[9],
-        "tmux_worktree_mode",
-        &get_tmux_worktree_display(app),
-        selected_index == 4,
-        false,
-        &app.input_buffer,
+        ConfigItem {
+            label: "tmux_worktree_mode",
+            value: &get_tmux_worktree_display(app),
+            is_selected: selected_index == 4,
+            is_editing: false,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
     render_config_item(
         frame,
         chunks[10],
-        "run_post_add_script_in_tmux",
-        &get_tmux_script_display(app),
-        selected_index == 5,
-        false,
-        &app.input_buffer,
+        ConfigItem {
+            label: "run_post_add_script_in_tmux",
+            value: &get_tmux_script_display(app),
+            is_selected: selected_index == 5,
+            is_editing: false,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
     render_config_item(
         frame,
         chunks[11],
-        "post_add_script",
-        &get_script_display(app),
-        selected_index == 6,
-        false,
-        &app.input_buffer,
+        ConfigItem {
+            label: "post_add_script",
+            value: &get_script_display(app),
+            is_selected: selected_index == 6,
+            is_editing: false,
+            input_buffer: &app.input_buffer,
+        },
         t,
     );
 
@@ -177,40 +191,39 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(help, chunks[13]);
 }
 
-fn render_config_item(
-    frame: &mut Frame,
-    area: Rect,
-    label: &str,
-    value: &str,
+struct ConfigItem<'a> {
+    label: &'a str,
+    value: &'a str,
     is_selected: bool,
     is_editing: bool,
-    input_buffer: &str,
-    t: &Theme,
-) {
-    let cursor = if is_selected { "> " } else { "  " };
-    let label_style = if is_selected {
+    input_buffer: &'a str,
+}
+
+fn render_config_item(frame: &mut Frame, area: Rect, item: ConfigItem<'_>, t: &Theme) {
+    let cursor = if item.is_selected { "> " } else { "  " };
+    let label_style = if item.is_selected {
         Style::default().fg(t.cyan).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(t.cyan)
     };
 
-    let spans = if is_editing {
+    let spans = if item.is_editing {
         // Show input buffer with cursor indicator
-        let display_value = format!("[{}█]", input_buffer);
+        let display_value = format!("[{}█]", item.input_buffer);
         vec![
             Span::styled(cursor, label_style),
-            Span::styled(format!("{}: ", label), label_style),
+            Span::styled(format!("{}: ", item.label), label_style),
             Span::styled(display_value, Style::default().fg(t.amber)),
         ]
-    } else if let Some(hint) = selected_config_hint(label).filter(|_| is_selected) {
+    } else if let Some(hint) = selected_config_hint(item.label).filter(|_| item.is_selected) {
         vec![
             Span::styled(cursor, label_style),
-            Span::styled(format!("{}: ", label), label_style),
-            Span::styled(value, Style::default().fg(t.text_primary)),
+            Span::styled(format!("{}: ", item.label), label_style),
+            Span::styled(item.value, Style::default().fg(t.text_primary)),
             Span::styled(format!(" {}", hint), Style::default().fg(t.text_muted)),
         ]
     } else {
-        let value_style = if is_selected {
+        let value_style = if item.is_selected {
             Style::default()
                 .fg(t.text_primary)
                 .add_modifier(Modifier::BOLD)
@@ -219,8 +232,8 @@ fn render_config_item(
         };
         vec![
             Span::styled(cursor, label_style),
-            Span::styled(format!("{}: ", label), label_style),
-            Span::styled(value, value_style),
+            Span::styled(format!("{}: ", item.label), label_style),
+            Span::styled(item.value, value_style),
         ]
     };
 

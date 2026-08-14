@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Config {
     pub editor: Option<String>,
     pub terminal: Option<String>,
@@ -244,6 +244,7 @@ impl Config {
             .unwrap_or_else(|| "vim".to_string())
     }
 
+    #[cfg(any(test, target_os = "macos", target_os = "linux"))]
     pub fn get_terminal(&self) -> Option<String> {
         self.terminal
             .clone()
@@ -565,7 +566,7 @@ run_post_add_script_in_tmux = true
         let xdg_config_home = dir.join("xdg-config");
         let project_dir = dir.join("project");
         fs::create_dir_all(&home_dir).unwrap();
-        fs::create_dir_all(&xdg_config_home.join("owt")).unwrap();
+        fs::create_dir_all(xdg_config_home.join("owt")).unwrap();
         fs::create_dir_all(project_dir.join(".owt")).unwrap();
         fs::write(
             xdg_config_home.join("owt").join("config.toml"),
