@@ -579,7 +579,7 @@ fn run_pr_command(command: PrCommand) -> Result<()> {
             let statuses = git::github_pr_statuses_for_worktrees(&context.repo_path, &targets);
 
             for ((target_path, status), (_, branch)) in
-                statuses.into_iter().zip(targets.into_iter())
+                statuses.into_iter().zip(targets)
             {
                 println!(
                     "{}\t{}\t{}",
